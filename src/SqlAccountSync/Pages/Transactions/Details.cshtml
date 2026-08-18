@@ -1,0 +1,27 @@
+@page "{id:int}"
+@model SqlAccountSync.Pages.Transactions.DetailsModel
+@{
+    ViewData["Title"] = Model.Txn?.TxnId ?? "Transaction";
+    var t = Model.Txn!;
+}
+<div class="card">
+    <p><strong>Source:</strong> @t.SourceName · @t.SrcDocType @t.SrcDocNo (@t.SrcDocKey)</p>
+    <p><strong>Destination:</strong> @t.DestName · @t.DstDocType @t.DstDocNo (@t.DstDocKey)</p>
+    <p><span class="badge badge-@(t.Status.ToLowerInvariant())">@t.Status</span></p>
+    @if (!string.IsNullOrEmpty(t.ErrorMessage))
+    {
+        <p class="flash flash-err">@t.ErrorMessage</p>
+    }
+</div>
+<div class="card">
+    <h3>Timeline</h3>
+    <div class="timeline">
+        @foreach (var e in Model.Events)
+        {
+            <div class="ev">
+                <div class="t">@e.AtUtc.ToString("HH:mm:ss") · @e.Result</div>
+                <div><strong>@e.Step</strong> @e.Detail</div>
+            </div>
+        }
+    </div>
+</div>

@@ -1,0 +1,32 @@
+﻿@page
+@model SqlAccountSync.Pages.IndexModel
+@{
+    ViewData["Title"] = "Dashboard";
+}
+<div class="stats">
+    <div class="stat"><div class="n">@Model.Stats.TotalDatabases</div><div class="l">Databases</div></div>
+    <div class="stat"><div class="n">@Model.Stats.Online</div><div class="l">Online</div></div>
+    <div class="stat"><div class="n">@Model.Stats.Offline</div><div class="l">Offline</div></div>
+    <div class="stat"><div class="n">@Model.Stats.Error</div><div class="l">Error</div></div>
+    <div class="stat"><div class="n">@Model.Stats.Pending</div><div class="l">Pending</div></div>
+    <div class="stat"><div class="n">@Model.Stats.Processing</div><div class="l">Processing</div></div>
+    <div class="stat"><div class="n">@Model.Stats.Failed</div><div class="l">Failed</div></div>
+    <div class="stat"><div class="n">@Model.Stats.CompletedToday</div><div class="l">Completed today</div></div>
+</div>
+<div class="card">
+    <h3>Companies</h3>
+    <table>
+        <thead><tr><th>Company</th><th>Role</th><th>Status</th><th>Last sync</th></tr></thead>
+        <tbody>
+        @foreach (var d in Model.Databases)
+        {
+            <tr>
+                <td><a asp-page="/Databases/Details" asp-route-id="@d.DbId">@d.DisplayName</a></td>
+                <td><span class="badge badge-@(d.DbRole.ToLowerInvariant())">@d.DbRole</span></td>
+                <td><span class="badge badge-@(d.ConnStatus == "ONLINE" ? "online" : "offline")">@d.ConnStatus</span></td>
+                <td>@(d.LastSyncOk?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+</div>

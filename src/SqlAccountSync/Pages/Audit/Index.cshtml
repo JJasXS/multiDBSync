@@ -1,0 +1,23 @@
+@page
+@model SqlAccountSync.Pages.Audit.IndexModel
+@{
+    ViewData["Title"] = "Audit logs";
+}
+<div class="card">
+    <table>
+        <thead><tr><th>When</th><th>User</th><th>Action</th><th>Entity</th><th>Record</th><th>Result</th></tr></thead>
+        <tbody>
+        @foreach (var a in Model.Items)
+        {
+            <tr>
+                <td>@a.AtUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                <td>@a.UserEmail</td>
+                <td>@a.Action</td>
+                <td>@a.Entity</td>
+                <td>@a.RecordId</td>
+                <td>@a.Result</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+</div>

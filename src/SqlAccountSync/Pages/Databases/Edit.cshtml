@@ -1,0 +1,39 @@
+@page "{id:int?}"
+@model SqlAccountSync.Pages.Databases.EditModel
+@{
+    ViewData["Title"] = Model.Db.DbId == 0 ? "Add database" : "Edit database";
+}
+<div class="card">
+    <p class="muted">Store a credential reference (env:, sm:, or dpapi:), never a password. The browser never receives secrets.</p>
+    <form method="post">
+        <input type="hidden" asp-for="Db.DbId" />
+        <div class="form-grid">
+            <div><label>Code</label><input asp-for="Db.DbCode" required /></div>
+            <div><label>Display name</label><input asp-for="Db.DisplayName" required /></div>
+            <div><label>Company name</label><input asp-for="Db.CompanyName" /></div>
+            <div>
+                <label>Role</label>
+                <select asp-for="Db.DbRole">
+                    <option>MASTER</option><option>SUB</option><option>BOTH</option>
+                </select>
+            </div>
+            <div><label>Host</label><input asp-for="Db.FbHost" required /></div>
+            <div><label>Port</label><input asp-for="Db.FbPort" /></div>
+            <div><label>Database path</label><input asp-for="Db.FbPath" required /></div>
+            <div><label>Charset</label><input asp-for="Db.FbCharset" /></div>
+            <div><label>User</label><input asp-for="Db.FbUser" /></div>
+            <div><label>Password secret reference</label><input asp-for="Db.FbCredRef" placeholder="env:COMPANY_A_FB_PASSWORD" required /></div>
+            <div>
+                <label>Environment</label>
+                <select asp-for="Db.Environment">
+                    <option>DEVELOPMENT</option><option>TESTING</option><option>PRODUCTION</option>
+                </select>
+            </div>
+            <div><label>SQL API base URL</label><input asp-for="Db.ApiBaseUrl" /></div>
+            <div><label>SQL API credential reference</label><input asp-for="Db.ApiCredRef" /></div>
+        </div>
+        <p><label>Notes</label><textarea asp-for="Db.Notes" rows="3"></textarea></p>
+        <button class="btn" type="submit">Save</button>
+        <a class="btn secondary" asp-page="Index">Cancel</a>
+    </form>
+</div>

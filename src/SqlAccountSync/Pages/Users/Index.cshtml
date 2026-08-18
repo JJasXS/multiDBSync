@@ -1,0 +1,41 @@
+@page
+@model SqlAccountSync.Pages.Users.IndexModel
+@{
+    ViewData["Title"] = "Users";
+}
+<div class="card">
+    <table>
+        <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Active</th><th></th></tr></thead>
+        <tbody>
+        @foreach (var u in Model.Users)
+        {
+            <tr>
+                <td>@u.DisplayName</td>
+                <td>@u.Email</td>
+                <td>@u.Role</td>
+                <td>@(u.IsActive ? "Yes" : "No")</td>
+                <td>
+                    @if (u.IsActive)
+                    {
+                        <form method="post" asp-page-handler="Disable" asp-route-id="@u.UserId"><button class="btn small danger">Disable</button></form>
+                    }
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+</div>
+<div class="card">
+    <h3>Add user</h3>
+    <form method="post" class="form-grid">
+        <div><label>Email</label><input asp-for="Email" type="email" required /></div>
+        <div><label>Name</label><input asp-for="DisplayName" required /></div>
+        <div>
+            <label>Role</label>
+            <select asp-for="Role">
+                <option>ADMIN</option><option>MANAGER</option><option>OPERATOR</option><option>VIEWER</option>
+            </select>
+        </div>
+        <div><button class="btn" type="submit">Save</button></div>
+    </form>
+</div>

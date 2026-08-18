@@ -1,0 +1,28 @@
+@page
+@model SqlAccountSync.Pages.Errors.IndexModel
+@{
+    ViewData["Title"] = "Error logs";
+}
+<div class="card">
+    <p class="muted">Stack traces are stored for administrators and are not shown here.</p>
+    <table>
+        <thead><tr><th>When</th><th>Type</th><th>Message</th><th>Resolved</th><th></th></tr></thead>
+        <tbody>
+        @foreach (var e in Model.Items)
+        {
+            <tr>
+                <td>@e.AtUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                <td>@e.ErrorType</td>
+                <td>@e.UserMessage</td>
+                <td>@(e.Resolved ? "Yes" : "No")</td>
+                <td>
+                    @if (!e.Resolved && Model.CanManage)
+                    {
+                        <form method="post" asp-page-handler="Resolve" asp-route-id="@e.ErrorId"><button class="btn small secondary">Resolve</button></form>
+                    }
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+</div>

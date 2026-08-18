@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SqlAccountSync/SqlAccountSync.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SqlAccountSync.Tests/SqlAccountSync.Tests.csproj" />
+  </Folder>
+</Solution>

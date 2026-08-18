@@ -1,0 +1,25 @@
+@page
+@model SqlAccountSync.Pages.Settings.IndexModel
+@{
+    ViewData["Title"] = "System settings";
+}
+<div class="card">
+    <p>Central database configured: @(Model.DbConfigured ? "Yes" : "No — set CentralDb in .env / appsettings")</p>
+    <p class="muted">Passwords and API secrets are never stored in settings. Use secret references only.</p>
+    <table>
+        <thead><tr><th>Key</th><th>Value</th></tr></thead>
+        <tbody>
+        @foreach (var kv in Model.Settings)
+        {
+            <tr><td>@kv.Key</td><td>@kv.Value</td></tr>
+        }
+        </tbody>
+    </table>
+</div>
+<div class="card">
+    <form method="post" class="form-grid">
+        <div><label>Key</label><input asp-for="Key" /></div>
+        <div><label>Value</label><input asp-for="Value" /></div>
+        <div><button class="btn" type="submit">Save</button></div>
+    </form>
+</div>

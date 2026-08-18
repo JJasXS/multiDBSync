@@ -1,0 +1,35 @@
+@page "{id:int}"
+@model SqlAccountSync.Pages.Databases.DetailsModel
+@{
+    ViewData["Title"] = Model.Db?.DisplayName ?? "Database";
+    var d = Model.Db!;
+}
+@if (!string.IsNullOrEmpty(Model.Message))
+{
+    <div class="flash @(Model.LastTest?.Success == true ? "flash-ok" : "flash-err")">@Model.Message</div>
+}
+<div class="card">
+    <p>
+        <span class="badge badge-@(d.DbRole.ToLowerInvariant())">@d.DbRole</span>
+        <span class="badge badge-@(d.ConnStatus == "ONLINE" ? "online" : "offline")">@d.ConnStatus</span>
+    </p>
+    <p><strong>Company:</strong> @d.CompanyName</p>
+    <p class="muted">Technical connection details (administrators)</p>
+    <p>Host @d.FbHost · Port @d.FbPort · Database file configured · User @d.FbUser</p>
+    <p>Last connection: @(d.LastConnOk?.ToString("yyyy-MM-dd HH:mm") ?? "—")</p>
+    <p>Last synchronization: @(d.LastSyncOk?.ToString("yyyy-MM-dd HH:mm") ?? "—")</p>
+    <form method="post" asp-page-handler="Test" style="display:inline">
+        <button class="btn" type="submit">Test connection</button>
+    </form>
+    @if (Model.IsAdmin)
+    {
+        <a class="btn secondary" asp-page="Edit" asp-route-id="@d.DbId">Edit</a>
+        <form method="post" asp-page-handler="Disable" style="display:inline" onsubmit="return confirm('Disable this database? History is kept.');">
+            <button class="btn danger" type="submit">Disable database</button>
+        </form>
+    }
+    <a class="btn secondary" asp-page="/Mappings/Index" asp-route-entity="ITEM">View mappings</a>
+    <a class="btn secondary" asp-page="/Transactions/Index">View transactions</a>
+    <a class="btn secondary" asp-page="/Errors/Index">View errors</a>
+    <a class="btn secondary" asp-page="/Jobs/Index">Sync now</a>
+</div>

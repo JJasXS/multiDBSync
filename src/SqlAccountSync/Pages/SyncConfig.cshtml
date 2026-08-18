@@ -1,0 +1,67 @@
+@page
+@model SqlAccountSync.Pages.SyncConfigModel
+@{
+    ViewData["Title"] = "Sync configuration";
+}
+<div class="card">
+    <form method="get">
+        <label>Master → Sub link</label>
+        <select name="linkId" onchange="this.form.submit()">
+            @foreach (var l in Model.Links)
+            {
+                <option value="@l.LinkId" selected="@(l.LinkId == Model.LinkId)">@l.MasterName → @l.SubName</option>
+            }
+        </select>
+    </form>
+</div>
+<div class="card">
+    <h3>Entity rules</h3>
+    <table>
+        <thead><tr><th>Entity</th><th>Enabled</th><th>Direction</th><th>Mode</th><th>Last sync</th></tr></thead>
+        <tbody>
+        @foreach (var r in Model.Rules)
+        {
+            <tr>
+                <td>@r.EntityCode</td>
+                <td>@(r.Enabled ? "Yes" : "No")</td>
+                <td>@r.Direction</td>
+                <td>@r.Mode</td>
+                <td>@(r.LastSyncAt?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+</div>
+@if (Model.CanManage)
+{
+    <div class="card">
+        <h3>Add or update rule</h3>
+        <form method="post" asp-page-handler="SaveRule" class="form-grid">
+            <input type="hidden" asp-for="LinkId" />
+            <input type="hidden" asp-for="RuleId" />
+            <div>
+                <label>Entity</label>
+                <select asp-for="EntityCode">
+                    <option>ITEM</option><option>CUSTOMER</option><option>SUPPLIER</option>
+                    <option>WAREHOUSE</option><option>PRICING</option><option>TAXCODE</option>
+                    <option>ACCOUNT</option><option>UOM</option>
+                </select>
+            </div>
+            <div><label>Enabled</label><input asp-for="Enabled" /></div>
+            <div><label>Direction</label><input asp-for="Direction" /></div>
+            <div>
+                <label>Mode</label>
+                <select asp-for="Mode"><option>MANUAL</option><option>AUTOMATIC</option></select>
+            </div>
+            <div><button class="btn" type="submit">Save rule</button></div>
+        </form>
+        <h3>Per-record scope</h3>
+        <form method="post" asp-page-handler="SaveScope" class="form-grid">
+            <input type="hidden" asp-for="LinkId" />
+            <div><label>Rule ID</label><input asp-for="RuleId" /></div>
+            <div><label>Record code</label><input asp-for="RecordCode" placeholder="ITEM001" /></div>
+            <div><label>Enabled for this Sub</label><input asp-for="ScopeEnabled" /></div>
+            <div><button class="btn secondary" type="submit">Save scope</button></div>
+        </form>
+    </div>
+}

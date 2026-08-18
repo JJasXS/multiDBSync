@@ -1,0 +1,28 @@
+@page
+@model SqlAccountSync.Pages.Databases.IndexModel
+@{
+    ViewData["Title"] = "Databases";
+}
+<p>
+    @if (Model.IsAdmin)
+    {
+        <a class="btn" asp-page="Edit">Add database</a>
+    }
+</p>
+<div class="card">
+    <table>
+        <thead><tr><th>Name</th><th>Role</th><th>Status</th><th>Last connection</th><th>Last sync</th></tr></thead>
+        <tbody>
+        @foreach (var d in Model.Databases)
+        {
+            <tr>
+                <td><a asp-page="Details" asp-route-id="@d.DbId">@d.DisplayName</a></td>
+                <td><span class="badge badge-@(d.DbRole.ToLowerInvariant())">@d.DbRole</span></td>
+                <td><span class="badge badge-@(d.ConnStatus == "ONLINE" ? "online" : "offline")">@d.ConnStatus</span></td>
+                <td>@(d.LastConnOk?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+                <td>@(d.LastSyncOk?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+</div>

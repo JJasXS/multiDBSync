@@ -1,0 +1,211 @@
+using FirebirdSql.Data.FirebirdClient;
+using Microsoft.Extensions.Options;
+using SqlAccountSync.Helpers;
+using SqlAccountSync.Models;
+using SqlAccountSync.Options;
+using SqlAccountSync.Services.Secrets;
+
+namespace SqlAccountSync.Data;
+
+public sealed class CentralDb
+{
+    private readonly CentralDbOptions _options;
+    private readonly ISecretResolver _secrets;
+    private readonly ILogger<CentralDb> _logger;
+
+    public CentralDb(IOptions<CentralDbOptions> options, ISecretResolver secrets, ILogger<CentralDb> logger)
+    {
+        _options = options.Value;
+        _secrets = secrets;
+        _logger = logger;
+    }
+
+    public bool IsConfigured =>
+        !string.IsNullOrWhiteSpace(_options.Path) && !string.IsNullOrWhiteSpace(_options.Host);
+
+    public async Task<FbConnection> OpenAsync(CancellationToken cancellationToken = default)
+    {
+        var cs = await BuildConnectionStringAsync(cancellationToken).ConfigureAwait(false);
+        var conn = new FbConnection(cs);
+        await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
+        return conn;
+    }
+
+    public async Task<string> BuildConnectionStringAsync(CancellationToken cancellationToken = default)
+    {
+        var password = await _secrets.ResolveAsync(_options.PasswordSecretRef, cancellationToken).ConfigureAwait(false);
+        var csb = new FbConnectionStringBuilder
+        {
+            DataSource = _options.Host,
+            Port = _options.Port,
+            Database = _options.Path.Replace('\\', '/'),
+            UserID = _options.User,
+            Password = password ?? "",
+            Charset = string.IsNullOrWhiteSpace(_options.Charset) ? "UTF8" : _options.Charset,
+            Dialect = (byte)Math.Clamp(_options.Dialect, 1, 3),
+            Pooling = _options.Pooling
+        };
+        return csb.ToString();
+    }
+
+    public async Task<int> ExecuteAsync(string sql, object? args = null, CancellationToken cancellationToken = default)
+    {
+        await using var conn = await OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = sql;
+        Bind(cmd, args);
+        return await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<object?> ScalarAsync(string sql, object? args = null, CancellationToken cancellationToken = default)
+    {
+        await using var conn = await OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = sql;
+        Bind(cmd, args);
+        return await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<T>> QueryAsync<T>(string sql, Func<FbDataReader, T> map, object? args = null, CancellationToken cancellationToken = default)
+    {
+        await using var conn = await OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = sql;
+        Bind(cmd, args);
+        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        var list = new List<T>();
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            list.Add(map(reader));
+        return list;
+    }
+
+    public async Task<T?> QuerySingleAsync<T>(string sql, Func<FbDataReader, T> map, object? args = null, CancellationToken cancellationToken = default)
+    {
+        var list = await QueryAsync(sql, map, args, cancellationToken).ConfigureAwait(false);
+        return list.Count == 0 ? default : list[0];
+    }
+
+    public async Task<long> NextIdAsync(string generator, CancellationToken cancellationToken = default)
+    {
+        var v = await ScalarAsync($"SELECT GEN_ID({generator}, 1) FROM RDB$DATABASE", cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        return Convert.ToInt64(v);
+    }
+
+    public static void Bind(FbCommand cmd, object? args)
+    {
+        if (args is null)
+            return;
+        if (args is IDictionary<string, object?> dict)
+        {
+            foreach (var kv in dict)
+            {
+                var p = cmd.CreateParameter();
+                p.ParameterName = kv.Key.StartsWith('@') ? kv.Key : "@" + kv.Key;
+                p.Value = kv.Value ?? DBNull.Value;
+                cmd.Parameters.Add(p);
+            }
+            return;
+        }
+
+        foreach (var prop in args.GetType().GetProperties())
+        {
+            var p = cmd.CreateParameter();
+            p.ParameterName = "@" + prop.Name;
+            p.Value = prop.GetValue(args) ?? DBNull.Value;
+            cmd.Parameters.Add(p);
+        }
+    }
+
+    public static string Str(FbDataReader r, string col)
+    {
+        var i = r.GetOrdinal(col);
+        return r.IsDBNull(i) ? "" : Convert.ToString(r.GetValue(i))?.Trim() ?? "";
+    }
+
+    public static int Int(FbDataReader r, string col)
+    {
+        var i = r.GetOrdinal(col);
+        return r.IsDBNull(i) ? 0 : Convert.ToInt32(r.GetValue(i));
+    }
+
+    public static int? IntN(FbDataReader r, string col)
+    {
+        var i = r.GetOrdinal(col);
+        return r.IsDBNull(i) ? null : Convert.ToInt32(r.GetValue(i));
+    }
+
+    public static bool Flag(FbDataReader r, string col) => Int(r, col) != 0;
+
+    public static DateTime? Time(FbDataReader r, string col)
+    {
+        var i = r.GetOrdinal(col);
+        if (r.IsDBNull(i))
+            return null;
+        return Convert.ToDateTime(r.GetValue(i));
+    }
+
+    public static DateTime TimeReq(FbDataReader r, string col) => Time(r, col) ?? DateTime.MinValue;
+}
+
+public sealed class CompanyConnectionFactory
+{
+    private readonly ISecretResolver _secrets;
+    private readonly SyncOptions _sync;
+    private readonly IHostEnvironment _host;
+
+    public CompanyConnectionFactory(ISecretResolver secrets, IOptions<SyncOptions> sync, IHostEnvironment host)
+    {
+        _secrets = secrets;
+        _sync = sync.Value;
+        _host = host;
+    }
+
+    public void GuardEnvironment(RegisteredDatabase db)
+    {
+        var running = _host.EnvironmentName.ToUpperInvariant();
+        var target = (db.Environment ?? "").Trim().ToUpperInvariant();
+        if (target.Length == 0)
+            target = AppEnvironments.Development;
+
+        if (!_sync.AllowCrossEnvironment && !string.Equals(running, target, StringComparison.OrdinalIgnoreCase)
+            && !(running == "DEVELOPMENT" && target == "DEVELOPMENT")
+            && !(running == "PRODUCTION" && target == "PRODUCTION")
+            && !(running == "STAGING" && target == "TESTING"))
+        {
+            if (!string.Equals(running, target, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException(
+                    $"Refusing to connect to {db.DisplayName}: database environment is {target} but the application is {running}.");
+        }
+
+        if (target == AppEnvironments.Production && !_sync.AllowProductionConnections)
+            throw new InvalidOperationException(
+                $"Refusing to connect to PRODUCTION database {db.DisplayName}. Set Sync:AllowProductionConnections to enable.");
+    }
+
+    public async Task<string> BuildAsync(RegisteredDatabase db, CancellationToken cancellationToken = default)
+    {
+        GuardEnvironment(db);
+        var password = await _secrets.ResolveAsync(db.FbCredRef, cancellationToken).ConfigureAwait(false);
+        var csb = new FbConnectionStringBuilder
+        {
+            DataSource = db.FbHost,
+            Port = db.FbPort <= 0 ? 3050 : db.FbPort,
+            Database = db.FbPath.Replace('\\', '/'),
+            UserID = string.IsNullOrWhiteSpace(db.FbUser) ? "SYSDBA" : db.FbUser,
+            Password = password ?? "",
+            Charset = string.IsNullOrWhiteSpace(db.FbCharset) ? "UTF8" : db.FbCharset,
+            Dialect = (byte)Math.Clamp(db.FbDialect <= 0 ? 3 : db.FbDialect, 1, 3),
+            Pooling = true
+        };
+        return csb.ToString();
+    }
+
+    public async Task<FbConnection> OpenAsync(RegisteredDatabase db, CancellationToken cancellationToken = default)
+    {
+        var cs = await BuildAsync(db, cancellationToken).ConfigureAwait(false);
+        var conn = new FbConnection(cs);
+        await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
+        return conn;
+    }
+}
