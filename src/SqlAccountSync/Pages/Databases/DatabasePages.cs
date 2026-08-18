@@ -11,12 +11,50 @@ namespace SqlAccountSync.Pages.Databases;
 public class IndexModel : SyncPageModel
 {
     private readonly IDatabaseRegistry _registry;
+    private readonly IAuditService _audit;
 
-    public IndexModel(IDatabaseRegistry registry) => _registry = registry;
+    public IndexModel(IDatabaseRegistry registry, IAuditService audit)
+    {
+        _registry = registry;
+        _audit = audit;
+    }
 
     public List<RegisteredDatabase> Databases { get; set; } = [];
+    public List<DatabaseLink> Links { get; set; } = [];
+    public string Tab { get; set; } = "databases";
+    [BindProperty] public int MasterDbId { get; set; }
+    [BindProperty] public int SubDbId { get; set; }
+    public string Message { get; set; } = "";
+    public bool Error { get; set; }
+    public bool ShowAddForm { get; set; }
 
-    public async Task OnGetAsync() => Databases = await _registry.ListAsync(includeInactive: IsAdmin);
+    public async Task OnGetAsync(string? tab)
+    {
+        Tab = string.Equals(tab, "relationships", StringComparison.OrdinalIgnoreCase) ? "relationships" : "databases";
+        Databases = await _registry.ListAsync(includeInactive: IsAdmin);
+        Links = await _registry.ListLinksAsync();
+    }
+
+    public async Task<IActionResult> OnPostAddLinkAsync()
+    {
+        if (!IsAdmin) return Forbid();
+        Tab = "relationships";
+        try
+        {
+            await _registry.AddLinkAsync(MasterDbId, SubDbId, CurrentEmail);
+            await _audit.WriteAsync(new AuditEntry { UserEmail = CurrentEmail, Action = "USER CREATED DBLINK", Result = "SUCCESS" });
+            return RedirectToPage(new { tab = "relationships" });
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = true;
+            ShowAddForm = true;
+            Message = ex.Message;
+            Databases = await _registry.ListAsync(includeInactive: IsAdmin);
+            Links = await _registry.ListLinksAsync();
+            return Page();
+        }
+    }
 }
 
 public class EditModel : SyncPageModel

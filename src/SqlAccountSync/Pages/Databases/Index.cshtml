@@ -2,27 +2,129 @@
 @model SqlAccountSync.Pages.Databases.IndexModel
 @{
     ViewData["Title"] = "Databases";
+    var masters = Model.Databases.Where(d => d.DbRole is "MASTER" or "BOTH").ToList();
+    var subs = Model.Databases.Where(d => d.DbRole is "SUB" or "BOTH").ToList();
+    var showForm = Model.Error || Model.ShowAddForm;
 }
-<p>
-    @if (Model.IsAdmin)
-    {
-        <a class="btn" asp-page="Edit">Add database</a>
-    }
-</p>
-<div class="card">
-    <table>
-        <thead><tr><th>Name</th><th>Role</th><th>Status</th><th>Last connection</th><th>Last sync</th></tr></thead>
-        <tbody>
-        @foreach (var d in Model.Databases)
+@if (!string.IsNullOrEmpty(Model.Message))
+{
+    <div class="flash @(Model.Error ? "flash-err" : "flash-ok")">@Model.Message</div>
+}
+<div class="panel-grid two">
+    <div class="card">
+        <div class="card-head">
+            <h3>Companies</h3>
+            @if (Model.IsAdmin)
+            {
+                <a class="btn small" asp-page="Edit">+ Add database</a>
+            }
+        </div>
+        @if (Model.Databases.Count == 0)
         {
-            <tr>
-                <td><a asp-page="Details" asp-route-id="@d.DbId">@d.DisplayName</a></td>
-                <td><span class="badge badge-@(d.DbRole.ToLowerInvariant())">@d.DbRole</span></td>
-                <td><span class="badge badge-@(d.ConnStatus == "ONLINE" ? "online" : "offline")">@d.ConnStatus</span></td>
-                <td>@(d.LastConnOk?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
-                <td>@(d.LastSyncOk?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
-            </tr>
+            <p class="empty">No companies registered yet.</p>
+            <p class="empty-actions">
+                @if (Model.IsAdmin)
+                {
+                    <a class="btn" asp-page="Edit">Add database</a>
+                }
+            </p>
         }
-        </tbody>
-    </table>
+        else
+        {
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Name</th><th>Role</th><th>Status</th><th>Last connection</th><th>Last sync</th></tr></thead>
+                    <tbody>
+                    @foreach (var d in Model.Databases)
+                    {
+                        <tr>
+                            <td><a asp-page="Details" asp-route-id="@d.DbId">@d.DisplayName</a></td>
+                            <td><span class="badge badge-@(d.DbRole.ToLowerInvariant())">@d.DbRole</span></td>
+                            <td><span class="badge badge-@(d.ConnStatus == "ONLINE" ? "online" : "offline")">@d.ConnStatus</span></td>
+                            <td>@(d.LastConnOk?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+                            <td>@(d.LastSyncOk?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+
+    <div class="card">
+        <div class="card-head">
+            <h3>Relationships</h3>
+            @if (Model.IsAdmin)
+            {
+                <button type="button" class="btn small" data-reveal="#add-link" aria-expanded="@(showForm ? "true" : "false")" aria-controls="add-link">+ Add link</button>
+            }
+        </div>
+        @if (Model.Databases.Count == 0)
+        {
+            <p class="empty">No companies registered yet. Add at least one Master and one Sub, then create a link.</p>
+            <p class="empty-actions">
+                <a class="btn" asp-page="Edit">Add database</a>
+            </p>
+        }
+        else if (masters.Count == 0 || subs.Count == 0)
+        {
+            <p class="empty">You need at least one Master and one Sub (or BOTH) before a link can be created.</p>
+            <p class="empty-actions">
+                <a class="btn" asp-page="Edit">Add database</a>
+            </p>
+        }
+        else if (Model.Links.Count == 0)
+        {
+            <p class="empty">No Master → Sub links yet. Use <strong>+ Add link</strong> to connect two companies.</p>
+        }
+        else
+        {
+            @foreach (var m in masters)
+            {
+                <div class="rel-master">
+                    <strong>@m.DisplayName</strong>
+                    <span class="badge badge-master">MASTER</span>
+                    <span class="badge badge-@(m.ConnStatus == "ONLINE" ? "online" : "offline")">@m.ConnStatus</span>
+                </div>
+                <div class="tree">
+                    @foreach (var link in Model.Links.Where(l => l.MasterDbId == m.DbId))
+                    {
+                        var sub = Model.Databases.FirstOrDefault(d => d.DbId == link.SubDbId);
+                        <div class="node">
+                            └── SUB @link.SubName
+                            @if (sub is not null)
+                            {
+                                <span class="badge badge-@(sub.ConnStatus == "ONLINE" ? "online" : "offline")">@sub.ConnStatus</span>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        }
+
+        @if (Model.IsAdmin && masters.Count > 0 && subs.Count > 0)
+        {
+            <div id="add-link" class="inset-form" @(showForm ? null : "hidden")>
+                <p class="muted lede">Choose a Master and a different Sub. A company cannot be linked to itself.</p>
+                <form method="post" asp-page-handler="AddLink" class="form-stack">
+                    <div>
+                        <label>Master</label>
+                        <select asp-for="MasterDbId">
+                            @foreach (var d in masters) { <option value="@d.DbId">@d.DisplayName (@d.DbRole)</option> }
+                        </select>
+                    </div>
+                    <div>
+                        <label>Sub</label>
+                        <select asp-for="SubDbId">
+                            @foreach (var d in subs) { <option value="@d.DbId">@d.DisplayName (@d.DbRole)</option> }
+                        </select>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn" type="submit">Save link</button>
+                        <button type="button" class="btn secondary" data-reveal-hide="#add-link">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        }
+    </div>
 </div>

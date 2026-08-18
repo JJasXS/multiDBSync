@@ -4,64 +4,177 @@
     ViewData["Title"] = "Sync configuration";
 }
 <div class="card">
-    <form method="get">
-        <label>Master → Sub link</label>
-        <select name="linkId" onchange="this.form.submit()">
-            @foreach (var l in Model.Links)
-            {
-                <option value="@l.LinkId" selected="@(l.LinkId == Model.LinkId)">@l.MasterName → @l.SubName</option>
-            }
-        </select>
-    </form>
-</div>
-<div class="card">
-    <h3>Entity rules</h3>
-    <table>
-        <thead><tr><th>Entity</th><th>Enabled</th><th>Direction</th><th>Mode</th><th>Last sync</th></tr></thead>
-        <tbody>
-        @foreach (var r in Model.Rules)
-        {
-            <tr>
-                <td>@r.EntityCode</td>
-                <td>@(r.Enabled ? "Yes" : "No")</td>
-                <td>@r.Direction</td>
-                <td>@r.Mode</td>
-                <td>@(r.LastSyncAt?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
-            </tr>
-        }
-        </tbody>
-    </table>
-</div>
-@if (Model.CanManage)
-{
-    <div class="card">
-        <h3>Add or update rule</h3>
-        <form method="post" asp-page-handler="SaveRule" class="form-grid">
-            <input type="hidden" asp-for="LinkId" />
-            <input type="hidden" asp-for="RuleId" />
-            <div>
-                <label>Entity</label>
-                <select asp-for="EntityCode">
-                    <option>ITEM</option><option>CUSTOMER</option><option>SUPPLIER</option>
-                    <option>WAREHOUSE</option><option>PRICING</option><option>TAXCODE</option>
-                    <option>ACCOUNT</option><option>UOM</option>
-                </select>
-            </div>
-            <div><label>Enabled</label><input asp-for="Enabled" /></div>
-            <div><label>Direction</label><input asp-for="Direction" /></div>
-            <div>
-                <label>Mode</label>
-                <select asp-for="Mode"><option>MANUAL</option><option>AUTOMATIC</option></select>
-            </div>
-            <div><button class="btn" type="submit">Save rule</button></div>
-        </form>
-        <h3>Per-record scope</h3>
-        <form method="post" asp-page-handler="SaveScope" class="form-grid">
-            <input type="hidden" asp-for="LinkId" />
-            <div><label>Rule ID</label><input asp-for="RuleId" /></div>
-            <div><label>Record code</label><input asp-for="RecordCode" placeholder="ITEM001" /></div>
-            <div><label>Enabled for this Sub</label><input asp-for="ScopeEnabled" /></div>
-            <div><button class="btn secondary" type="submit">Save scope</button></div>
-        </form>
+    <div class="card-head">
+        <h3>Master → Sub link</h3>
     </div>
-}
+    @if (Model.Links.Count == 0)
+    {
+        <p class="empty">No Master → Sub relationships yet. Create a link before you can add sync rules.</p>
+        <p class="empty-actions">
+            @if (Model.DatabaseCount < 2)
+            {
+                <a class="btn" asp-page="/Databases/Edit">Add databases</a>
+                <a class="btn secondary" asp-page="/Databases/Index">View databases</a>
+            }
+            else
+            {
+                <a class="btn" asp-page="/Databases/Index" asp-route-tab="relationships">Add a Master / Sub link</a>
+            }
+        </p>
+    }
+    else
+    {
+        <form method="get" class="toolbar-field">
+            <label for="linkId">Active link</label>
+            <select id="linkId" name="linkId" onchange="this.form.submit()">
+                @foreach (var l in Model.Links)
+                {
+                    <option value="@l.LinkId" selected="@(l.LinkId == Model.LinkId)">@l.MasterName → @l.SubName</option>
+                }
+            </select>
+        </form>
+        <p class="muted lede">Rules and record scopes apply only to the selected link.</p>
+    }
+</div>
+
+<div class="panel-grid">
+    <div class="card">
+        <div class="card-head">
+            <h3>Entity rules</h3>
+        </div>
+        @if (Model.Links.Count == 0)
+        {
+            <p class="empty">Rules appear here after a Master → Sub link exists.</p>
+            <p class="empty-actions">
+                @if (Model.DatabaseCount < 2)
+                {
+                    <a class="btn" asp-page="/Databases/Edit">Add databases</a>
+                }
+                else
+                {
+                    <a class="btn" asp-page="/Databases/Index" asp-route-tab="relationships">Go to relationships</a>
+                }
+            </p>
+        }
+        else if (Model.Rules.Count == 0)
+        {
+            <p class="empty">No rules for this link yet. Add an entity in the next column.</p>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Entity</th><th>On</th><th>Direction</th><th>Mode</th><th>Last sync</th></tr></thead>
+                    <tbody>
+                    @foreach (var r in Model.Rules)
+                    {
+                        <tr>
+                            <td>@r.EntityCode</td>
+                            <td><span class="badge @(r.Enabled ? "badge-online" : "badge-disabled")">@(r.Enabled ? "Yes" : "No")</span></td>
+                            <td>@r.Direction</td>
+                            <td>@r.Mode</td>
+                            <td>@(r.LastSyncAt?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+
+    <div class="card" id="add-rule">
+        <div class="card-head">
+            <h3>Add or update rule</h3>
+        </div>
+        @if (Model.Links.Count == 0 || Model.LinkId == 0)
+        {
+            <p class="empty">Select a Master → Sub link first, then enable an entity here.</p>
+        }
+        else if (!Model.CanManage)
+        {
+            <p class="empty">Only a manager or administrator can change rules.</p>
+        }
+        else
+        {
+            <p class="muted lede">Enable an entity for this pair. Automatic runs from the worker; Manual waits for an operator.</p>
+            <form method="post" asp-page-handler="SaveRule" class="form-stack">
+                <input type="hidden" asp-for="LinkId" />
+                <input type="hidden" asp-for="RuleId" />
+                <div>
+                    <label>Entity</label>
+                    <select asp-for="EntityCode">
+                        <option>ITEM</option><option>CUSTOMER</option><option>SUPPLIER</option>
+                        <option>WAREHOUSE</option><option>PRICING</option><option>TAXCODE</option>
+                        <option>ACCOUNT</option><option>UOM</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Mode</label>
+                    <select asp-for="Mode"><option>MANUAL</option><option>AUTOMATIC</option></select>
+                </div>
+                <div>
+                    <label>Direction</label>
+                    <select asp-for="Direction">
+                        <option value="MASTER_TO_SUB">MASTER_TO_SUB</option>
+                        <option value="SUB_TO_MASTER">SUB_TO_MASTER</option>
+                    </select>
+                </div>
+                <label class="check">
+                    <input asp-for="Enabled" />
+                    <span>Enabled</span>
+                </label>
+                <div>
+                    <button class="btn" type="submit">Save rule</button>
+                </div>
+            </form>
+        }
+    </div>
+
+    <div class="card">
+        <div class="card-head">
+            <h3>Per-record scope</h3>
+        </div>
+        @if (Model.Links.Count == 0 || Model.LinkId == 0)
+        {
+            <p class="empty">Select a Master → Sub link first, then limit a rule to specific codes.</p>
+        }
+        else if (!Model.CanManage)
+        {
+            <p class="empty">Only a manager or administrator can change record scope.</p>
+        }
+        else
+        {
+            <p class="muted lede">Limit a rule to specific Sub codes. Save a rule first.</p>
+            <form method="post" asp-page-handler="SaveScope" class="form-stack">
+                <input type="hidden" asp-for="LinkId" />
+                <div>
+                    <label>Rule</label>
+                    @if (Model.Rules.Count == 0)
+                    {
+                        <input asp-for="RuleId" />
+                    }
+                    else
+                    {
+                        <select asp-for="RuleId">
+                            @foreach (var r in Model.Rules)
+                            {
+                                <option value="@r.RuleId">@r.EntityCode (#@r.RuleId)</option>
+                            }
+                        </select>
+                    }
+                </div>
+                <div>
+                    <label>Record code</label>
+                    <input asp-for="RecordCode" placeholder="ITEM001" />
+                </div>
+                <label class="check">
+                    <input asp-for="ScopeEnabled" />
+                    <span>Enabled for this Sub</span>
+                </label>
+                <div>
+                    <button class="btn" type="submit" @(Model.Rules.Count == 0 ? "disabled" : null)>Save scope</button>
+                </div>
+            </form>
+        }
+    </div>
+</div>

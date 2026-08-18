@@ -1,0 +1,77 @@
+@page "/logs"
+@model SqlAccountSync.Pages.LogsModel
+@{
+    ViewData["Title"] = "Logs";
+    var errorsTab = Model.Tab != "audit";
+}
+<nav class="entity-tabs" data-tabs>
+    <a href="/logs?tab=errors" data-tab="errors" class="@(errorsTab ? "active" : null)">Error logs</a>
+    <a href="/logs?tab=audit" data-tab="audit" class="@(errorsTab ? null : "active")">Audit logs</a>
+</nav>
+
+<div class="card" data-tab-panel="errors" @(errorsTab ? null : "hidden")>
+    <div class="card-head">
+        <h3>Error logs</h3>
+    </div>
+    <p class="muted lede">Stack traces are stored for administrators and are not shown here.</p>
+    @if (Model.Errors.Count == 0)
+    {
+        <p class="empty">No error logs yet.</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>When</th><th>Type</th><th>Message</th><th>Resolved</th><th></th></tr></thead>
+                <tbody>
+                @foreach (var e in Model.Errors)
+                {
+                    <tr>
+                        <td>@e.AtUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                        <td>@e.ErrorType</td>
+                        <td>@e.UserMessage</td>
+                        <td>@(e.Resolved ? "Yes" : "No")</td>
+                        <td>
+                            @if (!e.Resolved && Model.CanManage)
+                            {
+                                <form method="post" asp-page-handler="Resolve" asp-route-id="@e.ErrorId"><button class="btn small secondary">Resolve</button></form>
+                            }
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<div class="card" data-tab-panel="audit" @(errorsTab ? "hidden" : null)>
+    <div class="card-head">
+        <h3>Audit logs</h3>
+    </div>
+    @if (Model.Audits.Count == 0)
+    {
+        <p class="empty">No audit logs yet.</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>When</th><th>User</th><th>Action</th><th>Entity</th><th>Record</th><th>Result</th></tr></thead>
+                <tbody>
+                @foreach (var a in Model.Audits)
+                {
+                    <tr>
+                        <td>@a.AtUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                        <td>@a.UserEmail</td>
+                        <td>@a.Action</td>
+                        <td>@a.Entity</td>
+                        <td>@a.RecordId</td>
+                        <td>@a.Result</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

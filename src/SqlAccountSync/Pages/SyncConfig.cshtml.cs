@@ -22,6 +22,8 @@ public class SyncConfigModel : SyncPageModel
 
     public List<DatabaseLink> Links { get; set; } = [];
     public List<SyncRule> Rules { get; set; } = [];
+    public int DatabaseCount { get; set; }
+
     [BindProperty] public int LinkId { get; set; }
     [BindProperty] public int RuleId { get; set; }
     [BindProperty] public string EntityCode { get; set; } = "ITEM";
@@ -34,6 +36,7 @@ public class SyncConfigModel : SyncPageModel
     public async Task OnGetAsync(int? linkId)
     {
         Links = await _registry.ListLinksAsync();
+        DatabaseCount = (await _registry.ListAsync()).Count;
         LinkId = linkId ?? Links.FirstOrDefault()?.LinkId ?? 0;
         if (LinkId > 0)
             Rules = await _sync.ListRulesAsync(LinkId);

@@ -34,22 +34,14 @@
             <div class="group">Overview</div>
             <a class="@NavClass("/Index")" asp-page="/Index">Dashboard</a>
             <a class="@NavClass("/Databases/Index")" asp-page="/Databases/Index">Databases</a>
-            <a class="@NavClass("/Relationships")" asp-page="/Relationships">Relationships</a>
             <div class="group">Configuration</div>
             <a class="@NavClass("/SyncConfig")" asp-page="/SyncConfig">Sync configuration</a>
-            <a class="@NavClass("/Mappings/Index", "ITEM")" asp-page="/Mappings/Index" asp-route-entity="ITEM">Item mapping</a>
-            <a class="@NavClass("/Mappings/Index", "CUSTOMER")" asp-page="/Mappings/Index" asp-route-entity="CUSTOMER">Customer mapping</a>
-            <a class="@NavClass("/Mappings/Index", "SUPPLIER")" asp-page="/Mappings/Index" asp-route-entity="SUPPLIER">Supplier mapping</a>
-            <a class="@NavClass("/Mappings/Index", "ACCOUNT")" asp-page="/Mappings/Index" asp-route-entity="ACCOUNT">Account mapping</a>
-            <a class="@NavClass("/Mappings/Index", "TAXCODE")" asp-page="/Mappings/Index" asp-route-entity="TAXCODE">Tax mapping</a>
-            <a class="@NavClass("/Mappings/Index", "WAREHOUSE")" asp-page="/Mappings/Index" asp-route-entity="WAREHOUSE">Warehouse mapping</a>
-            <a class="@NavClass("/Mappings/Index", "UOM")" asp-page="/Mappings/Index" asp-route-entity="UOM">UOM mapping</a>
+            <a class="@NavClass("/Mappings/Index")" asp-page="/Mappings/Index" asp-route-entity="ITEM">Mappings</a>
             <div class="group">Operations</div>
             <a class="@NavClass("/Jobs/Index")" asp-page="/Jobs/Index">Synchronization jobs</a>
             <a class="@NavClass("/Transactions/Index")" asp-page="/Transactions/Index">Transactions</a>
             <a class="@NavClass("/Browse/Index")" asp-page="/Browse/Index">Browse (read-only)</a>
-            <a class="@NavClass("/Errors/Index")" asp-page="/Errors/Index">Error logs</a>
-            <a class="@NavClass("/Audit/Index")" asp-page="/Audit/Index">Audit logs</a>
+            <a class="@NavClass("/Logs")" asp-page="/Logs">Logs</a>
             <div class="group">System</div>
             <a class="@NavClass("/Users/Index")" asp-page="/Users/Index">Users</a>
             <a class="@NavClass("/Settings/Index")" asp-page="/Settings/Index">Settings</a>
