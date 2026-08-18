@@ -17,75 +17,96 @@
         <a class="@(e == Model.Entity ? "active" : "")" asp-page="/Mappings/Index" asp-route-entity="@e" role="tab" aria-selected="@(e == Model.Entity ? "true" : "false")">@e</a>
     }
 </div>
-<div class="card">
-    <form method="get" class="form-grid">
-        <input type="hidden" name="Entity" value="@Model.Entity" />
-        <div>
-            <label>Master database</label>
-            <select name="MasterDbId">
-                @foreach (var d in Model.Databases) { <option value="@d.DbId" selected="@(d.DbId == Model.MasterDbId)">@d.DisplayName</option> }
-            </select>
+<div class="map-layout">
+    <div class="map-layout-left">
+        <div class="card">
+            <div class="card-head">
+                <h3>Master / Sub databases</h3>
+            </div>
+            <form method="get" class="form-stack">
+                <input type="hidden" name="Entity" value="@Model.Entity" />
+                <div>
+                    <label>Master database</label>
+                    <select name="MasterDbId">
+                        @foreach (var d in Model.Databases) { <option value="@d.DbId" selected="@(d.DbId == Model.MasterDbId)">@d.DisplayName</option> }
+                    </select>
+                </div>
+                <div>
+                    <label>Sub database</label>
+                    <select name="SubDbId">
+                        @foreach (var d in Model.Databases) { <option value="@d.DbId" selected="@(d.DbId == Model.SubDbId)">@d.DisplayName</option> }
+                    </select>
+                </div>
+                <div><button class="btn secondary" type="submit">Load</button></div>
+            </form>
         </div>
-        <div>
-            <label>Sub database</label>
-            <select name="SubDbId">
-                @foreach (var d in Model.Databases) { <option value="@d.DbId" selected="@(d.DbId == Model.SubDbId)">@d.DisplayName</option> }
-            </select>
+        <div class="card">
+            <div class="card-head">
+                <h3>Confirm mapping</h3>
+            </div>
+            <p class="muted">Suggestions based on matching codes or descriptions are shown for convenience. They are never applied until you confirm.</p>
+            <form id="confirmMapForm" method="post" asp-page-handler="Confirm" class="form-stack">
+                <input type="hidden" asp-for="Entity" />
+                <input type="hidden" asp-for="MasterDbId" />
+                <input type="hidden" asp-for="SubDbId" />
+                <div>
+                    <label>Master record</label>
+                    <select asp-for="MasterCode">
+                        @foreach (var r in Model.MasterRecords) { <option value="@r.Code">@r.Code — @r.Description</option> }
+                    </select>
+                </div>
+                <div>
+                    <label>Sub record</label>
+                    <select asp-for="SubCode">
+                        @foreach (var r in Model.SubRecords) { <option value="@r.Code">@r.Code — @r.Description</option> }
+                    </select>
+                </div>
+            </form>
         </div>
-        <div class="form-end"><button class="btn secondary" type="submit">Load</button></div>
-    </form>
-</div>
-<div class="card">
-    <div class="card-head">
-        <h3>Confirm mapping</h3>
     </div>
-    <p class="muted">Suggestions based on matching codes or descriptions are shown for convenience. They are never applied until you confirm.</p>
-    <form id="confirmMapForm" method="post" asp-page-handler="Confirm" class="form-grid">
-        <input type="hidden" asp-for="Entity" />
-        <input type="hidden" asp-for="MasterDbId" />
-        <input type="hidden" asp-for="SubDbId" />
-        <div>
-            <label>Master record</label>
-            <select asp-for="MasterCode">
-                @foreach (var r in Model.MasterRecords) { <option value="@r.Code">@r.Code — @r.Description</option> }
-            </select>
-        </div>
-        <div>
-            <label>Sub record</label>
-            <select asp-for="SubCode">
-                @foreach (var r in Model.SubRecords) { <option value="@r.Code">@r.Code — @r.Description</option> }
-            </select>
-        </div>
-    </form>
-</div>
-<div class="card">
-    <h3>Confirmed mappings</h3>
-    <table>
-        <thead><tr><th>Master</th><th>Sub</th><th>Status</th></tr></thead>
-        <tbody>
-        @foreach (var m in Model.Mappings)
-        {
-            <tr>
-                <td>@m.MasterCode — @m.MasterDesc</td>
-                <td>@m.SubCode — @m.SubDesc</td>
-                <td><span class="badge badge-@(m.Status.ToLowerInvariant())">@m.Status</span></td>
-            </tr>
-        }
-        </tbody>
-    </table>
-</div>
-@if (Model.Conflicts.Count > 0)
-{
-    <div class="card">
-        <h3>Conflicts — administrator resolution required</h3>
-        <table>
-            <thead><tr><th>Master</th><th>Sub</th></tr></thead>
-            <tbody>
-            @foreach (var c in Model.Conflicts)
+    <div class="map-layout-right">
+        <div class="card card-fill">
+            <div class="card-head">
+                <h3>Confirmed mappings</h3>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Master</th><th>Sub</th><th class="col-status">Status</th></tr></thead>
+                    <tbody>
+                    @foreach (var m in Model.Mappings)
+                    {
+                        <tr>
+                            <td>@m.MasterCode — @m.MasterDesc</td>
+                            <td>@m.SubCode — @m.SubDesc</td>
+                            <td><span class="badge badge-@(m.Status.ToLowerInvariant())">@m.Status</span></td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+            @if (Model.Mappings.Count == 0)
             {
-                <tr><td>@c.MasterCode</td><td>@c.SubCode</td></tr>
+                <p class="empty">No mappings confirmed for this Master / Sub pair yet.</p>
             }
-            </tbody>
-        </table>
+        </div>
+        @if (Model.Conflicts.Count > 0)
+        {
+            <div class="card">
+                <div class="card-head">
+                    <h3>Conflicts — administrator resolution required</h3>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Master</th><th>Sub</th></tr></thead>
+                        <tbody>
+                        @foreach (var c in Model.Conflicts)
+                        {
+                            <tr><td>@c.MasterCode</td><td>@c.SubCode</td></tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
     </div>
-}
+</div>

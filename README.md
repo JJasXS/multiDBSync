@@ -7,8 +7,8 @@ Orchestration layer for Master/Sub SQL Account databases.
 ```powershell
 cd C:\Users\sqlsupport\SqlAccountSync
 copy src\SqlAccountSync\.env.example src\SqlAccountSync\.env
-# Edit .env: CentralDb path and CENTRAL_FB_PASSWORD
-dotnet run --project src\SqlAccountSync
+# Edit .env: set CENTRAL_FB_PASSWORD to the Firebird SYSDBA password (often masterkey)
+dotnet run --project src\SqlAccountSync --launch-profile http
 ```
 
 Sign in with the bootstrap admin email (`Bootstrap:AdminEmail`, default `admin@localhost`). In Development the OTP is written to the console when SMTP is not configured.

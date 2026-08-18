@@ -17,6 +17,7 @@ public interface ISyncOrchestrator
     Task<DryRunResult> DryRunMasterAsync(int masterDbId, int subDbId, string entityCode, string masterCode, CancellationToken cancellationToken = default);
     Task ProcessJobAsync(SyncJob job, CancellationToken cancellationToken = default);
     Task<List<SyncRule>> ListRulesAsync(int linkId, CancellationToken cancellationToken = default);
+    Task<int> CountEnabledRulesAsync(CancellationToken cancellationToken = default);
     Task SaveRuleAsync(SyncRule rule, CancellationToken cancellationToken = default);
     Task SaveScopeAsync(int ruleId, string recordCode, bool enabled, CancellationToken cancellationToken = default);
 }
@@ -71,6 +72,16 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
             ScheduleCron = CentralDb.Str(r, "SCHEDULECRON"),
             LastSyncAt = CentralDb.Time(r, "LASTSYNCAT")
         }, new { LINKID = linkId }, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<int> CountEnabledRulesAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_db.IsConfigured)
+            return 0;
+        var n = await _db.ScalarAsync(
+            "SELECT COUNT(*) FROM SYNC_RULE WHERE ENABLED=1",
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+        return Convert.ToInt32(n ?? 0);
     }
 
     public async Task SaveRuleAsync(SyncRule rule, CancellationToken cancellationToken = default)

@@ -23,6 +23,20 @@ public sealed class CentralDb
     public bool IsConfigured =>
         !string.IsNullOrWhiteSpace(_options.Path) && !string.IsNullOrWhiteSpace(_options.Host);
 
+    public async Task EnsureDatabaseExistsAsync(CancellationToken cancellationToken = default)
+    {
+        var path = _options.Path.Replace('/', Path.DirectorySeparatorChar);
+        var dir = Path.GetDirectoryName(path);
+        if (!string.IsNullOrEmpty(dir))
+            Directory.CreateDirectory(dir);
+        if (File.Exists(path))
+            return;
+
+        var cs = await BuildConnectionStringAsync(cancellationToken).ConfigureAwait(false);
+        _logger.LogInformation("Creating central Firebird database at {Path}", path);
+        FbConnection.CreateDatabase(cs, overwrite: false);
+    }
+
     public async Task<FbConnection> OpenAsync(CancellationToken cancellationToken = default)
     {
         var cs = await BuildConnectionStringAsync(cancellationToken).ConfigureAwait(false);

@@ -28,6 +28,7 @@ public sealed class SchemaBootstrap
             return;
         }
 
+        await _db.EnsureDatabaseExistsAsync(cancellationToken).ConfigureAwait(false);
         await using var conn = await _db.OpenAsync(cancellationToken).ConfigureAwait(false);
         await EnsureGenerator(conn, "GEN_SYNC_DATABASE", cancellationToken);
         await EnsureGenerator(conn, "GEN_SYNC_DBLINK", cancellationToken);

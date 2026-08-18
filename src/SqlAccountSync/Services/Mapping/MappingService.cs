@@ -11,6 +11,7 @@ public interface IMappingService
     Task<(bool Ok, string Message, EntityMapping? Mapping)> ConfirmAsync(EntityMapping mapping, string user, CancellationToken cancellationToken = default);
     Task DisableAsync(int mappingId, string user, CancellationToken cancellationToken = default);
     Task<List<EntityMapping>> ConflictsAsync(CancellationToken cancellationToken = default);
+    Task<int> CountMappedAsync(CancellationToken cancellationToken = default);
     Task<List<(MasterRecord Source, MasterRecord? Suggested)>> SuggestAsync(
         IReadOnlyList<MasterRecord> master, IReadOnlyList<MasterRecord> sub);
 }
@@ -83,6 +84,16 @@ WHERE MAPPINGID=@MAPPINGID", Args(mapping, user), cancellationToken).ConfigureAw
         if (!_db.IsConfigured)
             return Task.FromResult(new List<EntityMapping>());
         return _db.QueryAsync("SELECT * FROM SYNC_MAPPING WHERE STATUS='CONFLICT' ORDER BY UPDATEDAT DESC", Map, cancellationToken: cancellationToken);
+    }
+
+    public async Task<int> CountMappedAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_db.IsConfigured)
+            return 0;
+        var n = await _db.ScalarAsync(
+            "SELECT COUNT(*) FROM SYNC_MAPPING WHERE STATUS='MAPPED'",
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+        return Convert.ToInt32(n ?? 0);
     }
 
     public Task<List<(MasterRecord Source, MasterRecord? Suggested)>> SuggestAsync(

@@ -5,29 +5,58 @@
 }
 <div class="login-wrap card">
     <div class="login-head">
-        <h2>SQL Account Sync</h2>
-        <p class="muted">Secure sign-in · one-time code</p>
+        <div class="login-brand">
+            <div class="login-mark" aria-hidden="true">
+                <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="4" y="8" width="24" height="16" rx="2" stroke="currentColor" stroke-width="2"/>
+                    <path d="M4 13h24M11 8V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2" stroke="currentColor" stroke-width="2"/>
+                    <circle cx="16" cy="18" r="2.5" fill="currentColor"/>
+                </svg>
+            </div>
+            <div>
+                <span class="login-kicker">Operations</span>
+                <h2>SQL Account Sync</h2>
+                <p class="muted">Secure sign-in · one-time code</p>
+            </div>
+        </div>
     </div>
     <div class="login-body">
-        <p class="muted">Enter your email to receive a one-time sign-in code. Passwords are not stored.</p>
+        <p class="login-lede">Enter your email to receive a one-time sign-in code. Passwords are not stored.</p>
         @if (Model.ShowLocalDevHint)
         {
-            <p class="hint">Local development (no central database): email <code>admin@localhost</code>, code <code>123456</code>.</p>
+            <p class="hint"><strong>Local development</strong> — email <code>admin@localhost</code>, code <code>123456</code>.</p>
         }
         @if (!string.IsNullOrEmpty(Model.Message))
         {
             <div class="flash @(Model.Sent ? "flash-ok" : "flash-err")">@Model.Message</div>
         }
-        <form method="post" asp-page-handler="Send">
-            <label>Email</label>
-            <input asp-for="Email" type="email" required />
-            <button class="btn" type="submit">Send code</button>
-        </form>
-        <form method="post" asp-page-handler="Verify">
-            <input type="hidden" asp-for="Email" />
-            <label>Code</label>
-            <input asp-for="Code" />
-            <button class="btn secondary" type="submit">Sign in</button>
-        </form>
+        <div class="login-steps">
+            <section class="login-step">
+                <div class="login-step-head">
+                    <span class="login-step-num">1</span>
+                    <span>Email</span>
+                </div>
+                <form method="post" asp-page-handler="Send">
+                    <label asp-for="Email">Work email</label>
+                    <input asp-for="Email" type="email" autocomplete="username" placeholder="you@company.com" required />
+                    <button class="btn" type="submit">Send code</button>
+                </form>
+            </section>
+            <section class="login-step">
+                <div class="login-step-head">
+                    <span class="login-step-num">2</span>
+                    <span>Verification code</span>
+                </div>
+                <form method="post" asp-page-handler="Verify">
+                    <input type="hidden" asp-for="Email" />
+                    <label asp-for="Code">One-time code</label>
+                    <input asp-for="Code" class="login-code" autocomplete="one-time-code" inputmode="numeric" placeholder="000000" maxlength="12" />
+                    <button class="btn secondary" type="submit">Sign in</button>
+                </form>
+            </section>
+        </div>
+    </div>
+    <div class="login-foot">
+        <p>Intercompany sync for SQL Account</p>
     </div>
 </div>

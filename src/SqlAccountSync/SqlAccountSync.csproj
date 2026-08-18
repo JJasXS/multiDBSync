@@ -21,4 +21,7 @@
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update=".env" CopyToOutputDirectory="PreserveNewest" Condition="Exists('.env')" />
+  </ItemGroup>
 </Project>

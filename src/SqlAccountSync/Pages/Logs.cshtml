@@ -2,14 +2,90 @@
 @model SqlAccountSync.Pages.LogsModel
 @{
     ViewData["Title"] = "Logs";
-    var errorsTab = Model.Tab != "audit";
+    var tab = Model.Tab;
 }
 <nav class="entity-tabs" data-tabs>
-    <a href="/logs?tab=errors" data-tab="errors" class="@(errorsTab ? "active" : null)">Error logs</a>
-    <a href="/logs?tab=audit" data-tab="audit" class="@(errorsTab ? null : "active")">Audit logs</a>
+    <a href="/logs?tab=transactions" data-tab="transactions" class="@(tab == "transactions" ? "active" : null)">Transactions</a>
+    <a href="/logs?tab=errors" data-tab="errors" class="@(tab == "errors" ? "active" : null)">Error logs</a>
+    <a href="/logs?tab=audit" data-tab="audit" class="@(tab == "audit" ? "active" : null)">Audit logs</a>
 </nav>
 
-<div class="card" data-tab-panel="errors" @(errorsTab ? null : "hidden")>
+@if (!string.IsNullOrEmpty(Model.Message) && tab == "transactions")
+{
+    <div class="flash flash-ok">@Model.Message</div>
+}
+
+<div class="card" data-tab-panel="transactions" @(tab == "transactions" ? null : "hidden")>
+    <div class="card-head">
+        <h3>Intercompany document</h3>
+    </div>
+    <form method="post" class="form-grid">
+        <div>
+            <label>Source</label>
+            <select asp-for="SourceDbId">@foreach (var d in Model.Databases) { <option value="@d.DbId">@d.DisplayName</option> }</select>
+        </div>
+        <div>
+            <label>Destination</label>
+            <select asp-for="DestDbId">@foreach (var d in Model.Databases) { <option value="@d.DbId">@d.DisplayName</option> }</select>
+        </div>
+        <div>
+            <label>Type</label>
+            <select asp-for="TxnType">
+                @foreach (var t in Model.Types) { <option value="@t.Code">@t.Name</option> }
+            </select>
+        </div>
+        <div><label>Source document number</label><input asp-for="SrcDoc" placeholder="SI-000123" /></div>
+        <div><button class="btn secondary" asp-page-handler="DryRun">Dry run</button></div>
+        <div>
+            <label><input asp-for="Confirmed" /> I confirm this will create a destination accounting document</label>
+            <button class="btn" asp-page-handler="Execute" onclick="return confirm('Create the corresponding document in the destination company?');">Confirm &amp; execute</button>
+        </div>
+    </form>
+    @if (Model.DryRun is not null)
+    {
+        <div class="confirm-box">
+            <strong>@Model.DryRun.Summary</strong>
+            <ul>@foreach (var c in Model.DryRun.Checks) { <li>@(c.Ok ? "✓" : "✗") @c.Name — @c.Detail</li> }</ul>
+        </div>
+    }
+</div>
+<div class="card" data-tab-panel="transactions" @(tab == "transactions" ? null : "hidden")>
+    <div class="card-head">
+        <h3>Transactions</h3>
+    </div>
+    @if (Model.Transactions.Count == 0)
+    {
+        <p class="empty">No intercompany transactions yet.</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>ID</th><th>Type</th><th>Source</th><th>Destination</th><th>Status</th><th></th></tr></thead>
+                <tbody>
+                @foreach (var t in Model.Transactions)
+                {
+                    <tr>
+                        <td><a asp-page="/Transactions/Details" asp-route-id="@t.TxnPk">@t.TxnId</a></td>
+                        <td>@t.TxnTypeCode</td>
+                        <td>@t.SourceName @t.SrcDocType @t.SrcDocNo</td>
+                        <td>@t.DestName @t.DstDocType @t.DstDocNo</td>
+                        <td><span class="badge badge-@(t.Status.ToLowerInvariant())">@t.Status</span></td>
+                        <td>
+                            @if (t.Status is not "COMPLETED")
+                            {
+                                <form method="post" asp-page-handler="Retry" asp-route-txnPk="@t.TxnPk"><button class="btn small" type="submit">Retry</button></form>
+                            }
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<div class="card" data-tab-panel="errors" @(tab == "errors" ? null : "hidden")>
     <div class="card-head">
         <h3>Error logs</h3>
     </div>
@@ -45,7 +121,7 @@
     }
 </div>
 
-<div class="card" data-tab-panel="audit" @(errorsTab ? "hidden" : null)>
+<div class="card" data-tab-panel="audit" @(tab == "audit" ? null : "hidden")>
     <div class="card-head">
         <h3>Audit logs</h3>
     </div>

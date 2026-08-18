@@ -18,6 +18,11 @@
         return string.Equals(Context.Request.Query["entity"].ToString(), entity, StringComparison.OrdinalIgnoreCase);
     }
     string NavClass(string page, string? entity = null) => IsActive(page, entity) ? "active" : "";
+    string LogsNavClass()
+    {
+        var current = ViewContext.RouteData.Values["page"]?.ToString() ?? "";
+        return current is "/Logs" or "/Transactions/Index" or "/Transactions/Details" ? "active" : "";
+    }
 }
 @if (User.Identity?.IsAuthenticated == true)
 {
@@ -39,9 +44,8 @@
             <a class="@NavClass("/Mappings/Index")" asp-page="/Mappings/Index" asp-route-entity="ITEM">Mappings</a>
             <div class="group">Operations</div>
             <a class="@NavClass("/Jobs/Index")" asp-page="/Jobs/Index">Synchronization jobs</a>
-            <a class="@NavClass("/Transactions/Index")" asp-page="/Transactions/Index">Transactions</a>
             <a class="@NavClass("/Browse/Index")" asp-page="/Browse/Index">Browse (read-only)</a>
-            <a class="@NavClass("/Logs")" asp-page="/Logs">Logs</a>
+            <a class="@LogsNavClass()" asp-page="/Logs">Logs</a>
             <div class="group">System</div>
             <a class="@NavClass("/Users/Index")" asp-page="/Users/Index">Users</a>
             <a class="@NavClass("/Settings/Index")" asp-page="/Settings/Index">Settings</a>

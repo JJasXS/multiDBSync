@@ -13,20 +13,294 @@
     <div class="stat"><div class="n">@Model.Stats.Failed</div><div class="l">Failed</div></div>
     <div class="stat"><div class="n">@Model.Stats.CompletedToday</div><div class="l">Completed today</div></div>
 </div>
-<div class="card">
-    <h3>Companies</h3>
-    <table>
-        <thead><tr><th>Company</th><th>Role</th><th>Status</th><th>Last sync</th></tr></thead>
-        <tbody>
-        @foreach (var d in Model.Databases)
-        {
-            <tr>
-                <td><a asp-page="/Databases/Details" asp-route-id="@d.DbId">@d.DisplayName</a></td>
-                <td><span class="badge badge-@(d.DbRole.ToLowerInvariant())">@d.DbRole</span></td>
-                <td><span class="badge badge-@(d.ConnStatus == "ONLINE" ? "online" : "offline")">@d.ConnStatus</span></td>
-                <td>@(d.LastSyncOk?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
-            </tr>
-        }
-        </tbody>
-    </table>
+<div class="map-layout">
+    <div class="map-layout-left">
+        <div class="card">
+            <div class="card-head">
+                <h3>Databases</h3>
+                <a asp-page="/Databases/Index">View</a>
+            </div>
+            @if (!Model.CentralConfigured)
+            {
+                <p class="empty">Central database is not configured.</p>
+            }
+            else if (Model.Databases.Count == 0)
+            {
+                <p class="empty">No companies registered yet.</p>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Company</th><th>Role</th><th>Status</th><th>Last sync</th></tr></thead>
+                        <tbody>
+                        @foreach (var d in Model.Databases)
+                        {
+                            <tr>
+                                <td><a asp-page="/Databases/Details" asp-route-id="@d.DbId">@d.DisplayName</a></td>
+                                <td><span class="badge badge-@(d.DbRole.ToLowerInvariant())">@d.DbRole</span></td>
+                                <td><span class="badge badge-@(d.ConnStatus == "ONLINE" ? "online" : "offline")">@d.ConnStatus</span></td>
+                                <td>@(d.LastSyncOk?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+
+        <div class="card">
+            <div class="card-head">
+                <h3>Mappings</h3>
+                <a asp-page="/Mappings/Index" asp-route-entity="ITEM">View</a>
+            </div>
+            @if (!Model.CentralConfigured)
+            {
+                <p class="empty">Central database is not configured.</p>
+            }
+            else
+            {
+                <p class="muted">@Model.MappedCount mapped · @Model.Conflicts.Count conflict@(Model.Conflicts.Count == 1 ? "" : "s")</p>
+                @if (Model.Conflicts.Count == 0)
+                {
+                    <p class="empty">No mapping conflicts.</p>
+                }
+                else
+                {
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr><th>Entity</th><th>Master</th><th>Sub</th></tr></thead>
+                            <tbody>
+                            @foreach (var m in Model.Conflicts.Take(5))
+                            {
+                                <tr>
+                                    <td>@m.EntityCode</td>
+                                    <td>@m.MasterCode</td>
+                                    <td>@m.SubCode</td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            }
+        </div>
+
+        <div class="card">
+            <div class="card-head">
+                <h3>Browse</h3>
+                <a asp-page="/Browse/Index">View</a>
+            </div>
+            @if (!Model.CentralConfigured)
+            {
+                <p class="empty">Central database is not configured.</p>
+            }
+            else
+            {
+                <p class="muted">@Model.Databases.Count @(Model.Databases.Count == 1 ? "database" : "databases") · read-only Firebird browse</p>
+                <p class="empty">SQL Account items and customers are not loaded here. Open Browse to inspect a company database without writing to it.</p>
+            }
+        </div>
+
+        <div class="card">
+            <div class="card-head">
+                <h3>Users</h3>
+                <a asp-page="/Users/Index">View</a>
+            </div>
+            @if (Model.Users.Count == 0)
+            {
+                <p class="empty">No users yet.</p>
+            }
+            else
+            {
+                <p class="muted">@Model.Users.Count user@(Model.Users.Count == 1 ? "" : "s")</p>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Name</th><th>Role</th></tr></thead>
+                        <tbody>
+                        @foreach (var u in Model.Users.Take(8))
+                        {
+                            <tr>
+                                <td>@(string.IsNullOrWhiteSpace(u.DisplayName) ? u.Email : u.DisplayName)</td>
+                                <td>@u.Role</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="map-layout-right">
+        <div class="card">
+            <div class="card-head">
+                <h3>Sync configuration</h3>
+                <a asp-page="/SyncConfig">View</a>
+            </div>
+            @if (!Model.CentralConfigured)
+            {
+                <p class="empty">Central database is not configured.</p>
+            }
+            else
+            {
+                <p class="muted">@Model.EnabledRuleCount enabled rule@(Model.EnabledRuleCount == 1 ? "" : "s")</p>
+                @if (Model.Links.Count == 0)
+                {
+                    <p class="empty">No Master → Sub links yet.</p>
+                }
+                else
+                {
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr><th>Master</th><th>Sub</th></tr></thead>
+                            <tbody>
+                            @foreach (var l in Model.Links)
+                            {
+                                <tr>
+                                    <td>@l.MasterName</td>
+                                    <td>@l.SubName</td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            }
+        </div>
+
+        <div class="card">
+            <div class="card-head">
+                <h3>Synchronization jobs</h3>
+                <a asp-page="/Jobs/Index">View</a>
+            </div>
+            @if (!Model.CentralConfigured)
+            {
+                <p class="empty">Central database is not configured.</p>
+            }
+            else if (Model.RecentJobs.Count == 0)
+            {
+                <p class="empty">No recent jobs.</p>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Job</th><th>Kind</th><th>Status</th></tr></thead>
+                        <tbody>
+                        @foreach (var j in Model.RecentJobs)
+                        {
+                            <tr>
+                                <td>@j.JobId</td>
+                                <td>@j.JobKind @(j.DryRun ? "(dry run)" : "")</td>
+                                <td><span class="badge badge-@(j.Status.ToLowerInvariant())">@j.Status</span></td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+
+        <div class="card">
+            <div class="card-head">
+                <h3>Logs</h3>
+                <a asp-page="/Logs">View</a>
+            </div>
+            @if (!Model.CentralConfigured)
+            {
+                <p class="empty">Central database is not configured.</p>
+            }
+            else
+            {
+                <div class="dash-section">
+                    <h4>Unresolved errors</h4>
+                    @if (Model.UnresolvedErrors.Count == 0)
+                    {
+                        <p class="empty">None.</p>
+                    }
+                    else
+                    {
+                        <div class="table-wrap">
+                            <table>
+                                <tbody>
+                                @foreach (var e in Model.UnresolvedErrors)
+                                {
+                                    <tr>
+                                        <td>@e.ErrorType</td>
+                                        <td>@(e.UserMessage.Length > 72 ? e.UserMessage[..72] + "…" : e.UserMessage)</td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+                <div class="dash-section">
+                    <h4>Recent transactions</h4>
+                    @if (Model.RecentTxns.Count == 0)
+                    {
+                        <p class="empty">None.</p>
+                    }
+                    else
+                    {
+                        <div class="table-wrap">
+                            <table>
+                                <tbody>
+                                @foreach (var t in Model.RecentTxns)
+                                {
+                                    <tr>
+                                        <td><a asp-page="/Transactions/Details" asp-route-id="@t.TxnPk">@t.TxnId</a></td>
+                                        <td>@t.TxnTypeCode</td>
+                                        <td><span class="badge badge-@(t.Status.ToLowerInvariant())">@t.Status</span></td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+                <div class="dash-section">
+                    <h4>Recent audit</h4>
+                    @if (Model.RecentAudit.Count == 0)
+                    {
+                        <p class="empty">None.</p>
+                    }
+                    else
+                    {
+                        <div class="table-wrap">
+                            <table>
+                                <tbody>
+                                @foreach (var a in Model.RecentAudit)
+                                {
+                                    <tr>
+                                        <td>@a.AtUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                                        <td>@a.Action</td>
+                                        <td>@a.Result</td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="card">
+            <div class="card-head">
+                <h3>Settings</h3>
+                <a asp-page="/Settings/Index">View</a>
+            </div>
+            <p class="muted">Central database: @(Model.CentralConfigured ? "Yes" : "No")</p>
+            @if (Model.CentralConfigured)
+            {
+                <p class="muted">@Model.SettingsKeyCount setting key@(Model.SettingsKeyCount == 1 ? "" : "s")</p>
+            }
+            else
+            {
+                <p class="empty">Set CentralDb in .env / appsettings.</p>
+            }
+        </div>
+    </div>
 </div>

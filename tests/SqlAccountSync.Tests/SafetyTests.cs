@@ -88,6 +88,7 @@ public class ValidationTests
         public Task<(bool Ok, string Message, EntityMapping? Mapping)> ConfirmAsync(EntityMapping mapping, string user, CancellationToken cancellationToken = default) => Task.FromResult<(bool, string, EntityMapping?)>((true, "", mapping));
         public Task DisableAsync(int mappingId, string user, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task<List<EntityMapping>> ConflictsAsync(CancellationToken cancellationToken = default) => Task.FromResult(new List<EntityMapping>());
+        public Task<int> CountMappedAsync(CancellationToken cancellationToken = default) => Task.FromResult(Maps.Count(m => m.Status == MappingStatuses.Mapped));
         public Task<List<(MasterRecord Source, MasterRecord? Suggested)>> SuggestAsync(IReadOnlyList<MasterRecord> master, IReadOnlyList<MasterRecord> sub) => Task.FromResult(new List<(MasterRecord, MasterRecord?)>());
     }
 
