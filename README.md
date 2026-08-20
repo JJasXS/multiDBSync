@@ -15,7 +15,6 @@ It is intended for operators who need to keep master and sub company books align
 - Database registry (master/sub connections)
 - Relationship and mapping screens
 - Job queue and transaction history
-- Browse / test connection against company files (opt-in)
 - Audit and error logs
 - Secret references (`env:` / Secrets Manager) instead of plaintext passwords in config
 - Dry-run path with no write adapter to the API

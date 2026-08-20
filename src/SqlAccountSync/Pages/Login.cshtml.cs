@@ -1,7 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using SqlAccountSync.Data;
+using Microsoft.Extensions.Options;
+using SqlAccountSync.Options;
 using SqlAccountSync.Services.Auth;
 
 namespace SqlAccountSync.Pages;
@@ -10,21 +11,30 @@ namespace SqlAccountSync.Pages;
 public class LoginModel : PageModel
 {
     private readonly OtpAuthService _auth;
-    private readonly CentralDb _db;
     private readonly IHostEnvironment _env;
+    private readonly SyncOptions _sync;
+    private readonly BootstrapOptions _bootstrap;
 
-    public LoginModel(OtpAuthService auth, CentralDb db, IHostEnvironment env)
+    public LoginModel(
+        OtpAuthService auth,
+        IHostEnvironment env,
+        IOptions<SyncOptions> sync,
+        IOptions<BootstrapOptions> bootstrap)
     {
         _auth = auth;
-        _db = db;
         _env = env;
+        _sync = sync.Value;
+        _bootstrap = bootstrap.Value;
     }
 
     [BindProperty] public string Email { get; set; } = "";
     [BindProperty] public string Code { get; set; } = "";
     public string Message { get; set; } = "";
     public bool Sent { get; set; }
-    public bool ShowLocalDevHint => _env.IsDevelopment() && !_db.IsConfigured;
+    public string DevAdminEmail => string.IsNullOrWhiteSpace(_bootstrap.AdminEmail) ? "admin@localhost" : _bootstrap.AdminEmail.Trim();
+    public string DevMockCode => (_sync.MockSignInCode ?? "").Trim();
+    public bool ShowLocalDevHint =>
+        _env.IsDevelopment() && _sync.DebugOtpToConsole && !string.IsNullOrWhiteSpace(DevMockCode);
 
     public void OnGet() { }
 

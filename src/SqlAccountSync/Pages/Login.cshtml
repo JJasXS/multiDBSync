@@ -24,7 +24,7 @@
         <p class="login-lede">Enter your email to receive a one-time sign-in code. Passwords are not stored.</p>
         @if (Model.ShowLocalDevHint)
         {
-            <p class="hint"><strong>Local development</strong> — email <code>admin@localhost</code>, code <code>123456</code>.</p>
+            <p class="hint"><strong>Local development</strong> — email <code>@Model.DevAdminEmail</code>, code <code>@Model.DevMockCode</code>.</p>
         }
         @if (!string.IsNullOrEmpty(Model.Message))
         {

@@ -88,22 +88,6 @@
 
         <div class="card">
             <div class="card-head">
-                <h3>Browse</h3>
-                <a asp-page="/Browse/Index">View</a>
-            </div>
-            @if (!Model.CentralConfigured)
-            {
-                <p class="empty">Central database is not configured.</p>
-            }
-            else
-            {
-                <p class="muted">@Model.Databases.Count @(Model.Databases.Count == 1 ? "database" : "databases") · read-only Firebird browse</p>
-                <p class="empty">SQL Account items and customers are not loaded here. Open Browse to inspect a company database without writing to it.</p>
-            }
-        </div>
-
-        <div class="card">
-            <div class="card-head">
                 <h3>Users</h3>
                 <a asp-page="/Users/Index">View</a>
             </div>
