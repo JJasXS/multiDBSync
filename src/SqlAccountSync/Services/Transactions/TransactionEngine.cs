@@ -86,9 +86,18 @@ public sealed class TransactionEngine : ITransactionEngine
         if (type.Code is null)
             return (0, "", "Unknown transaction type.");
 
-        var source = await _read.GetDocumentAsync(srcDb!, type.Src, srcDocNoOrKey, cancellationToken).ConfigureAwait(false);
-        if (source is null)
-            return (0, "", "Source document was not found.");
+        DocumentHeader source;
+        try
+        {
+            var found = await _read.GetDocumentAsync(srcDb!, type.Src, srcDocNoOrKey, cancellationToken).ConfigureAwait(false);
+            if (found is null)
+                return (0, "", $"Source document was not found in {srcDb!.DisplayName}.");
+            source = found;
+        }
+        catch (Exception ex)
+        {
+            return (0, "", FirebirdErrorMapper.Describe(ex));
+        }
 
         var idem = IdempotencyKey.ForTransaction(srcDb!.DbCode, dstDb!.DbCode, txnTypeCode, type.Src, source.DocKey, source.DocNo);
         var existing = await _db.QuerySingleAsync("SELECT FIRST 1 * FROM SYNC_TXN WHERE IDEMKEY=@IDEMKEY", MapTxn, new { IDEMKEY = idem }, cancellationToken).ConfigureAwait(false);
@@ -135,7 +144,8 @@ VALUES (@TXNPK, @TXNID, @TXNTYPECODE, @SOURCEDBID, @DESTDBID, @SRCDOCTYPE, @SRCD
         }
 
         await AddEvent(txnPk, "Created", "SUCCESS", $"Queued from {source.DocType} {source.DocNo}", cancellationToken).ConfigureAwait(false);
-        var jobIdem = idem + (dryRun ? "|DRY" : "|EXEC");
+        // IDEMKEY is VARCHAR(64); hash so "|EXEC"/ "|DRY" suffixes never truncate.
+        var jobIdem = IdempotencyKey.Hash(idem + (dryRun ? "|DRY" : "|EXEC"));
         await _queue.EnqueueAsync(new SyncJob
         {
             JobKind = dryRun ? "TXN_DRYRUN" : "TXN",
@@ -175,10 +185,30 @@ VALUES (@TXNPK, @TXNID, @TXNTYPECODE, @SOURCEDBID, @DESTDBID, @SRCDOCTYPE, @SRCD
             result.Summary = "Dry run failed. No data was modified.";
             return result;
         }
-        var source = await _read.GetDocumentAsync(srcDb!, type.Src, srcDocNoOrKey, cancellationToken).ConfigureAwait(false);
+        DocumentHeader? source;
+        try
+        {
+            source = await _read.GetDocumentAsync(srcDb!, type.Src, srcDocNoOrKey, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            result.Checks.Add(new DryRunCheck
+            {
+                Name = "Source document",
+                Ok = false,
+                Detail = FirebirdErrorMapper.Describe(ex)
+            });
+            result.Summary = "Dry run failed. No data was modified.";
+            return result;
+        }
         if (source is null)
         {
-            result.Checks.Add(new DryRunCheck { Name = "Source document", Ok = false, Detail = "Not found." });
+            result.Checks.Add(new DryRunCheck
+            {
+                Name = "Source document",
+                Ok = false,
+                Detail = $"No {type.Src} document '{(srcDocNoOrKey ?? "").Trim()}' in {srcDb!.DisplayName}."
+            });
             result.Summary = "Dry run failed. No data was modified.";
             return result;
         }
@@ -325,7 +355,7 @@ WHERE TXNPK=@TXNPK",
             SourceDbId = txn.SourceDbId,
             DestDbId = txn.DestDbId,
             PayloadJson = JsonSerializer.Serialize(new TxnPayload { TxnPk = txnPk, TxnType = txn.TxnTypeCode, DstApiPath = type.DstPath, SrcDoc = txn.SrcDocNo }),
-            IdemKey = txn.IdemKey + "|RETRY|" + Guid.NewGuid().ToString("N")[..8],
+            IdemKey = IdempotencyKey.Hash(txn.IdemKey + "|RETRY|" + Guid.NewGuid().ToString("N")[..8]),
             CreatedBy = user
         }, cancellationToken).ConfigureAwait(false);
         await _audit.WriteAsync(new AuditEntry { UserEmail = user, Action = "TXN_RETRY", RecordId = txn.TxnId, Result = "QUEUED" }, cancellationToken);
@@ -409,32 +439,64 @@ WHERE TXNPK=@TXNPK",
         {
             DocType = source.DocType,
             DocDate = source.DocDate,
+            PostDate = source.PostDate ?? source.DocDate,
+            TaxDate = source.TaxDate ?? source.DocDate,
+            DueDate = source.DueDate,
             Amount = source.Amount,
             Currency = source.Currency,
-            PartyName = source.PartyName
+            CurrencyRate = source.CurrencyRate,
+            PartyName = source.PartyName,
+            Description = string.IsNullOrWhiteSpace(source.Description) ? "Purchase" : source.Description,
+            Terms = source.Terms,
+            Area = source.Area,
+            Agent = source.Agent,
+            Project = source.Project,
+            Note = source.Note,
+            Fields = new Dictionary<string, string>(source.Fields, StringComparer.OrdinalIgnoreCase)
         };
-        var party = await _mapping.FindAsync(masterDbId, subDbId, EntityCodes.Customer, source.PartyCode, cancellationToken).ConfigureAwait(false)
-                    ?? await _mapping.FindAsync(masterDbId, subDbId, EntityCodes.Supplier, source.PartyCode, cancellationToken).ConfigureAwait(false);
+        var party = await _mapping.FindPartyMapAsync(masterDbId, subDbId, EntityCodes.Customer, source.PartyCode, cancellationToken).ConfigureAwait(false);
         dest.PartyCode = party?.SubCode ?? source.PartyCode;
+        if (!string.IsNullOrWhiteSpace(party?.SubDesc))
+            dest.PartyName = party.SubDesc;
         foreach (var line in source.Lines)
         {
             var item = await _mapping.FindAsync(masterDbId, subDbId, EntityCodes.Item, line.ItemCode, cancellationToken).ConfigureAwait(false);
-            var tax = string.IsNullOrWhiteSpace(line.TaxCode) ? null : await _mapping.FindAsync(masterDbId, subDbId, EntityCodes.TaxCode, line.TaxCode, cancellationToken).ConfigureAwait(false);
-            var wh = string.IsNullOrWhiteSpace(line.Warehouse) ? null : await _mapping.FindAsync(masterDbId, subDbId, EntityCodes.Warehouse, line.Warehouse, cancellationToken).ConfigureAwait(false);
+            var tax = NeedsMap(line.TaxCode)
+                ? await _mapping.FindAsync(masterDbId, subDbId, EntityCodes.TaxCode, line.TaxCode, cancellationToken).ConfigureAwait(false)
+                : null;
+            var wh = NeedsMap(line.Warehouse)
+                ? await _mapping.FindAsync(masterDbId, subDbId, EntityCodes.Warehouse, line.Warehouse, cancellationToken).ConfigureAwait(false)
+                : null;
             dest.Lines.Add(new DocumentLine
             {
                 Seq = line.Seq,
                 ItemCode = item?.SubCode ?? line.ItemCode,
                 Description = line.Description,
+                Description2 = line.Description2,
                 Qty = line.Qty,
                 Uom = line.Uom,
+                Rate = line.Rate,
                 UnitPrice = line.UnitPrice,
                 Amount = line.Amount,
-                TaxCode = tax?.SubCode ?? line.TaxCode,
-                Warehouse = wh?.SubCode ?? line.Warehouse
+                TaxCode = tax?.SubCode ?? (NeedsMap(line.TaxCode) ? line.TaxCode : ""),
+                Warehouse = wh?.SubCode ?? (NeedsMap(line.Warehouse) ? line.Warehouse : "----"),
+                Batch = line.Batch,
+                Project = line.Project,
+                Account = line.Account,
+                Disc = line.Disc,
+                TaxInclusive = line.TaxInclusive,
+                IrbmClassification = line.IrbmClassification,
+                DeliveryDate = line.DeliveryDate ?? source.DocDate,
+                Fields = new Dictionary<string, string>(line.Fields, StringComparer.OrdinalIgnoreCase)
             });
         }
         return dest;
+    }
+
+    private static bool NeedsMap(string? code)
+    {
+        var c = (code ?? "").Trim();
+        return c.Length > 0 && c != "----";
     }
 
     private async Task AddEvent(int txnPk, string step, string result, string detail, CancellationToken cancellationToken)

@@ -66,9 +66,16 @@ public class LogsModel : SyncPageModel
     {
         if (!CanOperate) return Forbid();
         Tab = "transactions";
-        var (_, txnId, msg) = await _engine.EnqueueAsync(
-            SourceDbId, DestDbId, TxnType, SrcDoc, dryRun: false, CurrentEmail, Confirmed);
-        Message = string.IsNullOrEmpty(txnId) ? msg : $"{txnId}: {msg}";
+        try
+        {
+            var (_, txnId, msg) = await _engine.EnqueueAsync(
+                SourceDbId, DestDbId, TxnType, SrcDoc, dryRun: false, CurrentEmail, Confirmed);
+            Message = string.IsNullOrEmpty(txnId) ? msg : $"{txnId}: {msg}";
+        }
+        catch (Exception ex)
+        {
+            Message = Helpers.FirebirdErrorMapper.Describe(ex);
+        }
         await LoadAsync();
         return Page();
     }

@@ -201,13 +201,22 @@ public sealed class CompanyConnectionFactory
     {
         GuardEnvironment(db);
         var password = await _secrets.ResolveAsync(db.FbCredRef, cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(password))
+        {
+            var r = (db.FbCredRef ?? "").Trim();
+            throw new InvalidOperationException(
+                string.IsNullOrEmpty(r)
+                    ? "Firebird password secret reference is empty. Use env:VAR, sm:secret-id, or dpapi:file."
+                    : $"Could not resolve Firebird credential reference '{r}'. Use env:CENTRAL_FB_PASSWORD (not the raw password).");
+        }
+
         var csb = new FbConnectionStringBuilder
         {
             DataSource = db.FbHost,
             Port = db.FbPort <= 0 ? 3050 : db.FbPort,
             Database = db.FbPath.Replace('\\', '/'),
             UserID = string.IsNullOrWhiteSpace(db.FbUser) ? "SYSDBA" : db.FbUser,
-            Password = password ?? "",
+            Password = password,
             Charset = string.IsNullOrWhiteSpace(db.FbCharset) ? "UTF8" : db.FbCharset,
             Dialect = (byte)Math.Clamp(db.FbDialect <= 0 ? 3 : db.FbDialect, 1, 3),
             Pooling = true

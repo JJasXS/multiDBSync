@@ -2,7 +2,7 @@
 @model SqlAccountSync.Pages.Mappings.IndexModel
 @{
     ViewData["Title"] = Model.EntityTitle + " mapping";
-    var entities = new[] { "ITEM", "CUSTOMER", "SUPPLIER", "ACCOUNT", "TAXCODE", "WAREHOUSE", "UOM" };
+    var entities = PushableEntityCodes.All;
 }
 @section TopbarActions {
     <button class="btn" type="submit" form="confirmMapForm">Confirm mapping</button>

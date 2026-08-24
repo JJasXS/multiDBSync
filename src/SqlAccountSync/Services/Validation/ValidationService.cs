@@ -57,8 +57,7 @@ public sealed class ValidationService : IValidationService
         if (source.Lines.Count == 0)
             errors.Add("Document has no lines.");
 
-        var partyMap = await _mapping.FindAsync(masterDbId, subDbId, EntityCodes.Customer, source.PartyCode, cancellationToken)
-                       ?? await _mapping.FindAsync(masterDbId, subDbId, EntityCodes.Supplier, source.PartyCode, cancellationToken);
+        var partyMap = await _mapping.FindPartyMapAsync(masterDbId, subDbId, EntityCodes.Customer, source.PartyCode, cancellationToken);
         if (partyMap is null)
             errors.Add($"No customer/supplier mapping for {source.PartyCode}.");
 
@@ -73,24 +72,19 @@ public sealed class ValidationService : IValidationService
             var itemMap = await _mapping.FindAsync(masterDbId, subDbId, EntityCodes.Item, line.ItemCode, cancellationToken);
             if (itemMap is null)
                 errors.Add($"Line {line.Seq}: no item mapping for {line.ItemCode}.");
-            if (!string.IsNullOrWhiteSpace(line.TaxCode))
+            if (!string.IsNullOrWhiteSpace(line.TaxCode) && line.TaxCode.Trim() != "----")
             {
                 var tax = await _mapping.FindAsync(masterDbId, subDbId, EntityCodes.TaxCode, line.TaxCode, cancellationToken);
                 if (tax is null)
                     errors.Add($"Line {line.Seq}: no tax mapping for {line.TaxCode}.");
             }
-            if (!string.IsNullOrWhiteSpace(line.Warehouse))
+            if (!string.IsNullOrWhiteSpace(line.Warehouse) && line.Warehouse.Trim() != "----")
             {
                 var wh = await _mapping.FindAsync(masterDbId, subDbId, EntityCodes.Warehouse, line.Warehouse, cancellationToken);
                 if (wh is null)
                     errors.Add($"Line {line.Seq}: no warehouse mapping for {line.Warehouse}.");
             }
-            if (!string.IsNullOrWhiteSpace(line.Uom))
-            {
-                var uom = await _mapping.FindAsync(masterDbId, subDbId, EntityCodes.Uom, line.Uom, cancellationToken);
-                if (uom is null)
-                    errors.Add($"Line {line.Seq}: no UOM mapping for {line.Uom}.");
-            }
+            // UOM / blank tax & location (----) are passed through without mapping.
         }
 
         return errors.Count == 0 ? ValidationResult.Pass() : ValidationResult.Fail(errors.ToArray());

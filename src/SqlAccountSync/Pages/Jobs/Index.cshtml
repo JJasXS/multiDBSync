@@ -6,6 +6,7 @@
 @if (!string.IsNullOrEmpty(Model.Message)) { <div class="flash flash-ok">@Model.Message</div> }
 <div class="card">
     <h3>Manual master-data sync</h3>
+    <p class="muted">For pushing several records to one or more subs, use <a asp-page="/Push/Index">Push to subs</a>.</p>
     <form method="post" class="form-grid">
         <div>
             <label>Master</label>

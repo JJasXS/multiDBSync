@@ -15,10 +15,10 @@ public static class IdempotencyKey
     }
 
     public static string ForMasterData(
-        string masterDbCode, string subDbCode, string entityCode,
+        string sourceDbCode, string destDbCode, string sourceEntity, string destEntity,
         string masterCode, string contentHash)
     {
-        return Hash(Join(masterDbCode, subDbCode, entityCode, masterCode, contentHash));
+        return Hash(Join(sourceDbCode, destDbCode, sourceEntity, destEntity, masterCode, contentHash));
     }
 
     public static string ContentHash(string payload) => Hash(payload ?? "");
@@ -95,7 +95,22 @@ public static class FirebirdErrorMapper
             || combined.Contains("335544344")
             || combined.Contains("I/O error", StringComparison.OrdinalIgnoreCase))
             return Models.ConnectionResults.DatabaseNotFound;
+        if (combined.Contains("335544345") || combined.Contains("lock conflict", StringComparison.OrdinalIgnoreCase)
+            || combined.Contains("335544336") || combined.Contains("deadlock", StringComparison.OrdinalIgnoreCase))
+            return "LOCK_CONFLICT";
         return Models.ConnectionResults.UnknownError;
+    }
+
+    /// <summary>User-facing detail: keep known codes, otherwise the redacted exception text.</summary>
+    public static string Describe(Exception ex)
+    {
+        var code = Map(ex);
+        var detail = CredentialRedactor.Redact(ex.Message);
+        if (string.IsNullOrWhiteSpace(detail))
+            return code;
+        if (code is Models.ConnectionResults.UnknownError or "LOCK_CONFLICT")
+            return detail;
+        return $"{code}: {detail}";
     }
 }
 

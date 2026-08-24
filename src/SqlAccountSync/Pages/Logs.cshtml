@@ -34,7 +34,7 @@
                 @foreach (var t in Model.Types) { <option value="@t.Code">@t.Name</option> }
             </select>
         </div>
-        <div><label>Source document number</label><input asp-for="SrcDoc" placeholder="SI-000123" /></div>
+        <div><label>Source document number</label><input asp-for="SrcDoc" placeholder="IV-00001" /></div>
         <div><button class="btn secondary" asp-page-handler="DryRun">Dry run</button></div>
         <div>
             <label><input asp-for="Confirmed" /> I confirm this will create a destination accounting document</label>

@@ -16,6 +16,7 @@ using SqlAccountSync.Services.Queue;
 using SqlAccountSync.Services.Secrets;
 using SqlAccountSync.Services.SqlAccount;
 using SqlAccountSync.Services.Sync;
+using SqlAccountSync.Services.Tenants;
 using SqlAccountSync.Services.Transactions;
 using SqlAccountSync.Services.Validation;
 
@@ -35,15 +36,41 @@ foreach (var envPath in new[]
 var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseWindowsService();
 
+// Standard ProAcc .env keys (same names as ApprovalPO / eQuotation).
+var envOverrides = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+var tenantFromEnv = (Environment.GetEnvironmentVariable("TENANT_CODE") ?? builder.Configuration["TENANT_CODE"])?.Trim();
+if (!string.IsNullOrEmpty(tenantFromEnv))
+{
+    envOverrides["Sync:TenantCode"] = tenantFromEnv;
+    envOverrides["TenantBootstrap:TenantCode"] = tenantFromEnv;
+}
+
+var regionFromEnv = (Environment.GetEnvironmentVariable("AWS_REGION")
+    ?? Environment.GetEnvironmentVariable("AWS__Region")
+    ?? builder.Configuration["AWS_REGION"])?.Trim();
+if (!string.IsNullOrEmpty(regionFromEnv))
+    envOverrides["AWS:Region"] = regionFromEnv;
+
+var bootstrapUrlFromEnv = (Environment.GetEnvironmentVariable("TENANT_BOOTSTRAP_API_URL")
+    ?? Environment.GetEnvironmentVariable("TenantBootstrap__AwsApiBaseUrl"))?.Trim();
+if (!string.IsNullOrEmpty(bootstrapUrlFromEnv))
+    envOverrides["TenantBootstrap:AwsApiBaseUrl"] = bootstrapUrlFromEnv;
+
+if (envOverrides.Count > 0)
+    builder.Configuration.AddInMemoryCollection(envOverrides);
+
 builder.Services.Configure<CentralDbOptions>(builder.Configuration.GetSection(CentralDbOptions.SectionName));
 builder.Services.Configure<SmtpOptions>(builder.Configuration.GetSection(SmtpOptions.SectionName));
 builder.Services.Configure<SyncOptions>(builder.Configuration.GetSection(SyncOptions.SectionName));
 builder.Services.Configure<BootstrapOptions>(builder.Configuration.GetSection(BootstrapOptions.SectionName));
 builder.Services.Configure<AwsOptions>(builder.Configuration.GetSection(AwsOptions.SectionName));
 
-var awsRegion = builder.Configuration["AWS:Region"] ?? "ap-southeast-1";
+var awsRegion = builder.Configuration["AWS:Region"]
+    ?? Environment.GetEnvironmentVariable("AWS_REGION")
+    ?? "ap-southeast-1";
 try
 {
+    // Default credential chain picks up AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY from .env after DotNetEnv.Load.
     builder.Services.AddSingleton<IAmazonSecretsManager>(_ =>
         new AmazonSecretsManagerClient(RegionEndpoint.GetBySystemName(awsRegion)));
 }
@@ -53,8 +80,18 @@ catch
 }
 
 builder.Services.AddMemoryCache();
-builder.Services.AddHttpClient<SqlAccountApiWriteAdapter>();
+builder.Services.AddHttpClient<SqlAccountApiWriteAdapter>(client =>
+{
+    // SQL Accounting IntraWeb BFF rejects clients without a modern browser User-Agent (HTTP 500 HTML).
+    client.DefaultRequestHeaders.UserAgent.ParseAdd(
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36");
+});
+builder.Services.AddHttpClient<ITenantEmailBootstrap, TenantEmailBootstrap>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
 builder.Services.AddSingleton<ISecretResolver, SecretResolver>();
+builder.Services.AddSingleton<ISqlApiSecretProvisioner, SqlApiSecretProvisioner>();
 builder.Services.AddSingleton<CentralDb>();
 builder.Services.AddSingleton<CompanyConnectionFactory>();
 builder.Services.AddSingleton<SchemaBootstrap>();
@@ -95,7 +132,7 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy(PolicyNames.Viewer, p => p.RequireRole(AppRoles.Admin, AppRoles.Manager, AppRoles.Operator, AppRoles.Viewer));
 });
 
-builder.Services.AddRazorPages(options =>
+var razorPages = builder.Services.AddRazorPages(options =>
 {
     options.Conventions.AuthorizeFolder("/");
     options.Conventions.AllowAnonymousToPage("/Login");
@@ -104,6 +141,8 @@ builder.Services.AddRazorPages(options =>
     options.Conventions.AuthorizeFolder("/Users", PolicyNames.Admin);
     options.Conventions.AuthorizeFolder("/Settings", PolicyNames.Admin);
 });
+if (builder.Environment.IsDevelopment())
+    razorPages.AddRazorRuntimeCompilation();
 
 var app = builder.Build();
 

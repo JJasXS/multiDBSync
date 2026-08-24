@@ -7,7 +7,7 @@ namespace SqlAccountSync.Data;
 
 public sealed class SchemaBootstrap
 {
-    public const int CurrentVersion = 1;
+    public const int CurrentVersion = 2;
 
     private readonly CentralDb _db;
     private readonly BootstrapOptions _bootstrap;
@@ -143,6 +143,8 @@ CREATE TABLE SYNC_MAPPING (
     MASTERDBID INTEGER NOT NULL,
     SUBDBID INTEGER NOT NULL,
     ENTITYCODE VARCHAR(20) NOT NULL,
+    SRCENTITYCODE VARCHAR(20) NOT NULL,
+    DSTENTITYCODE VARCHAR(20) NOT NULL,
     MASTERCODE VARCHAR(80) NOT NULL,
     MASTERKEY VARCHAR(80),
     SUBCODE VARCHAR(80) NOT NULL,
@@ -150,12 +152,14 @@ CREATE TABLE SYNC_MAPPING (
     MASTERDESC VARCHAR(200),
     SUBDESC VARCHAR(200),
     STATUS VARCHAR(20) DEFAULT 'MAPPED' NOT NULL,
+    ORIGINJOBID INTEGER,
+    LASTSYNCAT TIMESTAMP,
     CREATEDAT TIMESTAMP NOT NULL,
     CREATEDBY VARCHAR(120),
     UPDATEDAT TIMESTAMP NOT NULL,
     UPDATEDBY VARCHAR(120),
-    CONSTRAINT UQ_SYNC_MAP_MASTER UNIQUE (MASTERDBID, SUBDBID, ENTITYCODE, MASTERCODE),
-    CONSTRAINT UQ_SYNC_MAP_SUB UNIQUE (MASTERDBID, SUBDBID, ENTITYCODE, SUBCODE),
+    CONSTRAINT UQ_SYNC_MAP_SRC UNIQUE (MASTERDBID, SUBDBID, SRCENTITYCODE, MASTERCODE),
+    CONSTRAINT UQ_SYNC_MAP_DST UNIQUE (MASTERDBID, SUBDBID, DSTENTITYCODE, SUBCODE),
     CONSTRAINT FK_SYNC_MAP_M FOREIGN KEY (MASTERDBID) REFERENCES SYNC_DATABASE (DBID),
     CONSTRAINT FK_SYNC_MAP_S FOREIGN KEY (SUBDBID) REFERENCES SYNC_DATABASE (DBID)
 )", cancellationToken);
@@ -284,11 +288,70 @@ CREATE TABLE SYNC_SETTING (
         await SeedAsync(conn, cancellationToken);
 
         var ver = await ScalarInt(conn, "SELECT COALESCE(MAX(VERID), 0) FROM SYNC_SCHEMA_VER", cancellationToken);
+        if (ver < 2)
+            await MigrateToV2Async(conn, cancellationToken);
         if (ver < CurrentVersion)
         {
             await Exec(conn, "INSERT INTO SYNC_SCHEMA_VER (VERID, APPLIEDAT) VALUES (@V, CURRENT_TIMESTAMP)",
                 new Dictionary<string, object?> { ["V"] = CurrentVersion }, cancellationToken);
         }
+    }
+
+    private static async Task MigrateToV2Async(FbConnection conn, CancellationToken ct)
+    {
+        await EnsureColumn(conn, "SYNC_MAPPING", "SRCENTITYCODE", "VARCHAR(20)", ct);
+        await EnsureColumn(conn, "SYNC_MAPPING", "DSTENTITYCODE", "VARCHAR(20)", ct);
+        await EnsureColumn(conn, "SYNC_MAPPING", "ORIGINJOBID", "INTEGER", ct);
+        await EnsureColumn(conn, "SYNC_MAPPING", "LASTSYNCAT", "TIMESTAMP", ct);
+        await Exec(conn, "UPDATE SYNC_MAPPING SET SRCENTITYCODE = ENTITYCODE WHERE SRCENTITYCODE IS NULL", new Dictionary<string, object?>(), ct);
+        await Exec(conn, "UPDATE SYNC_MAPPING SET DSTENTITYCODE = ENTITYCODE WHERE DSTENTITYCODE IS NULL", new Dictionary<string, object?>(), ct);
+        await DropConstraintIfExists(conn, "SYNC_MAPPING", "UQ_SYNC_MAP_MASTER", ct);
+        await DropConstraintIfExists(conn, "SYNC_MAPPING", "UQ_SYNC_MAP_SUB", ct);
+        await EnsureConstraint(conn, "SYNC_MAPPING", "UQ_SYNC_MAP_SRC",
+            "UNIQUE (MASTERDBID, SUBDBID, SRCENTITYCODE, MASTERCODE)", ct);
+        await EnsureConstraint(conn, "SYNC_MAPPING", "UQ_SYNC_MAP_DST",
+            "UNIQUE (MASTERDBID, SUBDBID, DSTENTITYCODE, SUBCODE)", ct);
+    }
+
+    private static async Task EnsureColumn(FbConnection conn, string table, string column, string ddlType, CancellationToken ct)
+    {
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+SELECT COUNT(*) FROM RDB$RELATION_FIELDS
+WHERE TRIM(RDB$RELATION_NAME)=@T AND TRIM(RDB$FIELD_NAME)=@C";
+        CentralDb.Bind(cmd, new Dictionary<string, object?> { ["T"] = table, ["C"] = column });
+        var n = Convert.ToInt32(await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false));
+        if (n > 0)
+            return;
+        await using var alter = conn.CreateCommand();
+        alter.CommandText = $"ALTER TABLE {table} ADD {column} {ddlType}";
+        await alter.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+    }
+
+    private static async Task DropConstraintIfExists(FbConnection conn, string table, string name, CancellationToken ct)
+    {
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM RDB$RELATION_CONSTRAINTS WHERE TRIM(RDB$CONSTRAINT_NAME)=@N";
+        CentralDb.Bind(cmd, new Dictionary<string, object?> { ["N"] = name });
+        var n = Convert.ToInt32(await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false));
+        if (n == 0)
+            return;
+        await using var drop = conn.CreateCommand();
+        drop.CommandText = $"ALTER TABLE {table} DROP CONSTRAINT {name}";
+        await drop.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+    }
+
+    private static async Task EnsureConstraint(FbConnection conn, string table, string name, string ddl, CancellationToken ct)
+    {
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM RDB$RELATION_CONSTRAINTS WHERE TRIM(RDB$CONSTRAINT_NAME)=@N";
+        CentralDb.Bind(cmd, new Dictionary<string, object?> { ["N"] = name });
+        var n = Convert.ToInt32(await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false));
+        if (n > 0)
+            return;
+        await using var add = conn.CreateCommand();
+        add.CommandText = $"ALTER TABLE {table} ADD CONSTRAINT {name} {ddl}";
+        await add.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
     private async Task SeedAsync(FbConnection conn, CancellationToken ct)
@@ -315,7 +378,7 @@ MATCHING (ENTITYCODE)", new Dictionary<string, object?> { ["C"] = code, ["N"] = 
 
         var types = new (string Code, string Name, string Src, string Dst, string SrcPath, string DstPath)[]
         {
-            ("SI_TO_PI", "Sales Invoice → Purchase Invoice", "IV", "PI", "/salesinvoice", "/purchaseinvoice"),
+            ("SI_TO_PI", "Sales Invoice → Purchase Invoice", "IV", "PI", "/customerinvoice", "/purchaseinvoice"),
             ("DO_TO_GR", "Delivery Order → Goods Received", "DO", "GR", "/deliveryorder", "/goodsreceived"),
             ("ST_TO_ST", "Stock Transfer → Stock Transfer", "ST", "ST", "/stocktransfer", "/stocktransfer"),
             ("SR_TO_PR", "Sales Return → Purchase Return", "SR", "PR", "/salesreturn", "/purchasereturn"),

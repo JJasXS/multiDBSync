@@ -79,11 +79,15 @@ public class IndexModel : SyncPageModel
         if (subDb is not null) SubRecords = await Load(subDb, Entity);
         var masterRec = MasterRecords.FirstOrDefault(r => r.Code == MasterCode);
         var subRec = SubRecords.FirstOrDefault(r => r.Code == SubCode);
+        var srcEntity = ResolvePartyType(masterRec, Entity);
+        var dstEntity = ResolvePartyType(subRec, Entity);
         var (ok, msg, _) = await _mapping.ConfirmAsync(new EntityMapping
         {
             MasterDbId = MasterDbId,
             SubDbId = SubDbId,
-            EntityCode = Entity,
+            EntityCode = srcEntity,
+            SrcEntityCode = srcEntity,
+            DstEntityCode = dstEntity,
             MasterCode = MasterCode,
             SubCode = SubCode,
             MasterDesc = masterRec?.Description ?? "",
@@ -102,23 +106,68 @@ public class IndexModel : SyncPageModel
         return Page();
     }
 
-    private static string NormalizeEntity(string entity)
+    private static string NormalizeEntity(string entity) =>
+        PushableEntityCodes.Normalize(entity, EntityCodes.Item);
+
+    private async Task<List<MasterRecord>> Load(RegisteredDatabase db, string entity)
     {
-        var e = (entity ?? "").Trim().ToUpperInvariant();
-        return e is "ITEM" or "CUSTOMER" or "SUPPLIER" or "ACCOUNT" or "TAXCODE" or "WAREHOUSE" or "UOM"
-            ? e
-            : "ITEM";
+        switch (entity.ToUpperInvariant())
+        {
+            case "ITEM":
+                return await _read.GetItemsAsync(db);
+            case "CUSTOMER":
+                return MergeParty(await _read.GetCustomersAsync(db), await _read.GetSuppliersAsync(db), "customer", "supplier");
+            case "SUPPLIER":
+                return MergeParty(await _read.GetSuppliersAsync(db), await _read.GetCustomersAsync(db), "supplier", "customer");
+            default:
+                return [];
+        }
     }
 
-    private Task<List<MasterRecord>> Load(RegisteredDatabase db, string entity) => entity.ToUpperInvariant() switch
+    private static List<MasterRecord> MergeParty(
+        List<MasterRecord> primary, List<MasterRecord> secondary, string primaryLabel, string secondaryLabel)
     {
-        "ITEM" => _read.GetItemsAsync(db),
-        "CUSTOMER" => _read.GetCustomersAsync(db),
-        "SUPPLIER" => _read.GetSuppliersAsync(db),
-        "WAREHOUSE" => _read.GetWarehousesAsync(db),
-        "TAXCODE" => _read.GetTaxCodesAsync(db),
-        "ACCOUNT" => _read.GetAccountsAsync(db),
-        "UOM" => _read.GetUomsAsync(db),
-        _ => Task.FromResult(new List<MasterRecord>())
-    };
+        var list = new List<MasterRecord>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var r in primary)
+        {
+            if (!seen.Add(r.Code)) continue;
+            list.Add(new MasterRecord
+            {
+                Code = r.Code,
+                Description = string.IsNullOrWhiteSpace(r.Description) ? $"({primaryLabel})" : $"{r.Description} ({primaryLabel})",
+                Key = r.Key,
+                Fields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["partyType"] = primaryLabel.Equals("customer", StringComparison.OrdinalIgnoreCase)
+                        ? EntityCodes.Customer
+                        : EntityCodes.Supplier
+                }
+            });
+        }
+        foreach (var r in secondary)
+        {
+            if (!seen.Add(r.Code)) continue;
+            list.Add(new MasterRecord
+            {
+                Code = r.Code,
+                Description = string.IsNullOrWhiteSpace(r.Description) ? $"({secondaryLabel})" : $"{r.Description} ({secondaryLabel})",
+                Key = r.Key,
+                Fields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["partyType"] = secondaryLabel.Equals("customer", StringComparison.OrdinalIgnoreCase)
+                        ? EntityCodes.Customer
+                        : EntityCodes.Supplier
+                }
+            });
+        }
+        return list.OrderBy(r => r.Code, StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    private static string ResolvePartyType(MasterRecord? record, string fallbackEntity)
+    {
+        if (record?.Fields.TryGetValue("partyType", out var t) == true && !string.IsNullOrWhiteSpace(t))
+            return t.Trim().ToUpperInvariant();
+        return fallbackEntity.Trim().ToUpperInvariant();
+    }
 }

@@ -1,0 +1,1864 @@
+Using launch settings from C:\Users\sqlsupport\SqlAccountSync\src\SqlAccountSync\Properties\launchSettings.json...
+info: Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager[63]
+      User profile is available. Using 'C:\Users\sqlsupport\AppData\Local\ASP.NET\DataProtection-Keys' as key repository and Windows DPAPI to encrypt keys at rest.
+dbug: Microsoft.Extensions.Hosting.Internal.Host[1]
+      Hosting starting
+info: Microsoft.Hosting.Lifetime[14]
+      Now listening on: http://localhost:5030
+info: Microsoft.Hosting.Lifetime[0]
+      Application started. Press Ctrl+C to shut down.
+info: Microsoft.Hosting.Lifetime[0]
+      Hosting environment: Development
+info: Microsoft.Hosting.Lifetime[0]
+      Content root path: C:\Users\sqlsupport\SqlAccountSync\src\SqlAccountSync
+dbug: Microsoft.Extensions.Hosting.Internal.Host[2]
+      Hosting started
+info: Microsoft.AspNetCore.Hosting.Diagnostics[1]
+      Request starting HTTP/1.1 GET http://localhost:5030/login - - -
+warn: Microsoft.AspNetCore.HttpsPolicy.HttpsRedirectionMiddleware[3]
+      Failed to determine the https port for redirect.
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]
+      Executing endpoint '/Login'
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[103]
+      Route matched with {page = "/Login"}. Executing page /Login
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[105]
+      Executing handler method SqlAccountSync.Pages.LoginModel.OnGet - ModelState is Valid
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[108]
+      Executed handler method OnGet, returned result .
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[107]
+      Executing an implicit handler method - ModelState is Valid
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[109]
+      Executed an implicit handler method, returned result Microsoft.AspNetCore.Mvc.RazorPages.PageResult.
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[104]
+      Executed page /Login in 113.9201ms
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]
+      Executed endpoint '/Login'
+info: Microsoft.AspNetCore.Hosting.Diagnostics[2]
+      Request finished HTTP/1.1 GET http://localhost:5030/login - 200 - text/html;+charset=utf-8 1137.1505ms
+info: SqlAccountSync.Services.Queue.SyncWorker[0]
+      Processing job 17 kind MASTER
+info: System.Net.Http.HttpClient.SqlAccountApiWriteAdapter.LogicalHandler[100]
+      Start processing HTTP request POST https://api.sql.my/customer
+info: System.Net.Http.HttpClient.SqlAccountApiWriteAdapter.ClientHandler[100]
+      Sending HTTP request POST https://api.sql.my/customer
+info: System.Net.Http.HttpClient.SqlAccountApiWriteAdapter.ClientHandler[101]
+      Received HTTP response headers after 2139.5554ms - 200
+info: System.Net.Http.HttpClient.SqlAccountApiWriteAdapter.LogicalHandler[101]
+      End processing HTTP request after 2142.9171ms - 200
+info: SqlAccountSync.Services.Queue.SyncWorker[0]
+      Processing job 18 kind MASTER
+info: System.Net.Http.HttpClient.SqlAccountApiWriteAdapter.LogicalHandler[100]
+      Start processing HTTP request POST https://api.sql.my/customer
+info: System.Net.Http.HttpClient.SqlAccountApiWriteAdapter.ClientHandler[100]
+      Sending HTTP request POST https://api.sql.my/customer
+info: System.Net.Http.HttpClient.SqlAccountApiWriteAdapter.ClientHandler[101]
+      Received HTTP response headers after 1463.7802ms - 200
+info: System.Net.Http.HttpClient.SqlAccountApiWriteAdapter.LogicalHandler[101]
+      End processing HTTP request after 1463.9914ms - 200
+info: SqlAccountSync.Services.Queue.SyncWorker[0]
+      Processing job 19 kind MASTER
+info: System.Net.Http.HttpClient.SqlAccountApiWriteAdapter.LogicalHandler[100]
+      Start processing HTTP request POST https://api.sql.my/customer
+info: System.Net.Http.HttpClient.SqlAccountApiWriteAdapter.ClientHandler[100]
+      Sending HTTP request POST https://api.sql.my/customer
+info: System.Net.Http.HttpClient.SqlAccountApiWriteAdapter.ClientHandler[101]
+      Received HTTP response headers after 1444.9955ms - 200
+info: System.Net.Http.HttpClient.SqlAccountApiWriteAdapter.LogicalHandler[101]
+      End processing HTTP request after 1445.0831ms - 200
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[103]
+      HttpMessageHandler expired after 120000ms for client 'SqlAccountApiWriteAdapter'
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 1 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0178ms - processed: 0 items - remaining: 1 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[103]
+      HttpMessageHandler expired after 120000ms for client 'ITenantEmailBootstrap'
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 2 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0176ms - processed: 0 items - remaining: 2 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 2 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0317ms - processed: 0 items - remaining: 2 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 2 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0022ms - processed: 0 items - remaining: 2 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 2 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0036ms - processed: 0 items - remaining: 2 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 2 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0045ms - processed: 0 items - remaining: 2 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 2 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0034ms - processed: 0 items - remaining: 2 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 2 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0031ms - processed: 0 items - remaining: 2 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 2 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0168ms - processed: 0 items - remaining: 2 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 2 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0087ms - processed: 0 items - remaining: 2 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 2 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0063ms - processed: 0 items - remaining: 2 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 2 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0039ms - processed: 0 items - remaining: 2 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[103]
+      HttpMessageHandler expired after 120000ms for client 'SqlAccountApiWriteAdapter'
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0091ms - processed: 0 items - remaining: 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0042ms - processed: 0 items - remaining: 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.2896ms - processed: 0 items - remaining: 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0102ms - processed: 0 items - remaining: 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0093ms - processed: 0 items - remaining: 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.006ms - processed: 0 items - remaining: 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0105ms - processed: 0 items - remaining: 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0022ms - processed: 0 items - remaining: 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0054ms - processed: 0 items - remaining: 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0017ms - processed: 0 items - remaining: 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0027ms - processed: 0 items - remaining: 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.2339ms - processed: 0 items - remaining: 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[103]
+      HttpMessageHandler expired after 120000ms for client 'SqlAccountApiWriteAdapter'
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 4 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.3097ms - processed: 0 items - remaining: 4 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 4 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0884ms - processed: 0 items - remaining: 4 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 4 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0043ms - processed: 0 items - remaining: 4 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 4 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0046ms - processed: 0 items - remaining: 4 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 4 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0054ms - processed: 0 items - remaining: 4 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 4 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0059ms - processed: 0 items - remaining: 4 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 4 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0061ms - processed: 0 items - remaining: 4 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 4 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0017ms - processed: 0 items - remaining: 4 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 4 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0055ms - processed: 0 items - remaining: 4 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 4 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0074ms - processed: 0 items - remaining: 4 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 4 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0053ms - processed: 0 items - remaining: 4 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 4 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0041ms - processed: 0 items - remaining: 4 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[103]
+      HttpMessageHandler expired after 120000ms for client 'SqlAccountApiWriteAdapter'
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 5 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0023ms - processed: 0 items - remaining: 5 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 5 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0026ms - processed: 0 items - remaining: 5 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 5 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0079ms - processed: 0 items - remaining: 5 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 5 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0066ms - processed: 0 items - remaining: 5 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 5 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0272ms - processed: 0 items - remaining: 5 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 5 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0025ms - processed: 0 items - remaining: 5 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 5 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0038ms - processed: 0 items - remaining: 5 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 5 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0034ms - processed: 0 items - remaining: 5 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 5 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.005ms - processed: 0 items - remaining: 5 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 5 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0032ms - processed: 0 items - remaining: 5 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 5 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0187ms - processed: 0 items - remaining: 5 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 5 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0046ms - processed: 0 items - remaining: 5 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[103]
+      HttpMessageHandler expired after 120000ms for client 'SqlAccountApiWriteAdapter'
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 6 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0064ms - processed: 0 items - remaining: 6 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 6 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0029ms - processed: 0 items - remaining: 6 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 6 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0087ms - processed: 0 items - remaining: 6 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 6 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0048ms - processed: 0 items - remaining: 6 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 6 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0064ms - processed: 0 items - remaining: 6 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 6 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0075ms - processed: 0 items - remaining: 6 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 6 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0063ms - processed: 0 items - remaining: 6 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 6 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.1148ms - processed: 0 items - remaining: 6 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 6 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0049ms - processed: 0 items - remaining: 6 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 6 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.1361ms - processed: 0 items - remaining: 6 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 6 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0034ms - processed: 0 items - remaining: 6 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 6 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0063ms - processed: 0 items - remaining: 6 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[103]
+      HttpMessageHandler expired after 120000ms for client 'SqlAccountApiWriteAdapter'
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 7 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0099ms - processed: 0 items - remaining: 7 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 7 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0023ms - processed: 0 items - remaining: 7 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 7 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.1498ms - processed: 0 items - remaining: 7 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 7 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0078ms - processed: 0 items - remaining: 7 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 7 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0048ms - processed: 0 items - remaining: 7 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 7 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0034ms - processed: 0 items - remaining: 7 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 7 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0043ms - processed: 0 items - remaining: 7 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 7 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.005ms - processed: 0 items - remaining: 7 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 7 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0046ms - processed: 0 items - remaining: 7 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 7 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0059ms - processed: 0 items - remaining: 7 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 7 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0059ms - processed: 0 items - remaining: 7 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 7 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0046ms - processed: 0 items - remaining: 7 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[103]
+      HttpMessageHandler expired after 120000ms for client 'SqlAccountApiWriteAdapter'
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 8 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0064ms - processed: 0 items - remaining: 8 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 8 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.002ms - processed: 0 items - remaining: 8 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 8 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0087ms - processed: 0 items - remaining: 8 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 8 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0038ms - processed: 0 items - remaining: 8 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 8 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0021ms - processed: 0 items - remaining: 8 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 8 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0051ms - processed: 0 items - remaining: 8 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 8 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0035ms - processed: 0 items - remaining: 8 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 8 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0385ms - processed: 0 items - remaining: 8 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 8 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0077ms - processed: 0 items - remaining: 8 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 8 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0067ms - processed: 0 items - remaining: 8 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 8 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0041ms - processed: 0 items - remaining: 8 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 8 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0056ms - processed: 0 items - remaining: 8 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[103]
+      HttpMessageHandler expired after 120000ms for client 'SqlAccountApiWriteAdapter'
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 9 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0094ms - processed: 0 items - remaining: 9 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 9 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0038ms - processed: 0 items - remaining: 9 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 9 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0043ms - processed: 0 items - remaining: 9 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 9 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.002ms - processed: 0 items - remaining: 9 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 9 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0041ms - processed: 0 items - remaining: 9 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 9 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0039ms - processed: 0 items - remaining: 9 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 9 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0074ms - processed: 0 items - remaining: 9 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 9 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0068ms - processed: 0 items - remaining: 9 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 9 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0042ms - processed: 0 items - remaining: 9 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 9 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0058ms - processed: 0 items - remaining: 9 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 9 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0056ms - processed: 0 items - remaining: 9 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 9 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0038ms - processed: 0 items - remaining: 9 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[103]
+      HttpMessageHandler expired after 120000ms for client 'SqlAccountApiWriteAdapter'
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 10 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0067ms - processed: 0 items - remaining: 10 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 10 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0034ms - processed: 0 items - remaining: 10 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 10 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0074ms - processed: 0 items - remaining: 10 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 10 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0049ms - processed: 0 items - remaining: 10 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 10 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0065ms - processed: 0 items - remaining: 10 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 10 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0249ms - processed: 0 items - remaining: 10 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 10 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.004ms - processed: 0 items - remaining: 10 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 10 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0092ms - processed: 0 items - remaining: 10 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 10 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0079ms - processed: 0 items - remaining: 10 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 10 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0048ms - processed: 0 items - remaining: 10 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 10 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0043ms - processed: 0 items - remaining: 10 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 10 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0043ms - processed: 0 items - remaining: 10 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[103]
+      HttpMessageHandler expired after 120000ms for client 'SqlAccountApiWriteAdapter'
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 11 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0023ms - processed: 0 items - remaining: 11 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 11 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0021ms - processed: 0 items - remaining: 11 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 11 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0097ms - processed: 0 items - remaining: 11 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 11 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.008ms - processed: 0 items - remaining: 11 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 11 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0039ms - processed: 0 items - remaining: 11 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 11 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0034ms - processed: 0 items - remaining: 11 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 11 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0096ms - processed: 0 items - remaining: 11 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 11 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0048ms - processed: 0 items - remaining: 11 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 11 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0042ms - processed: 0 items - remaining: 11 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 11 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0083ms - processed: 0 items - remaining: 11 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 11 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0067ms - processed: 0 items - remaining: 11 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 11 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.005ms - processed: 0 items - remaining: 11 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[103]
+      HttpMessageHandler expired after 120000ms for client 'SqlAccountApiWriteAdapter'
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 12 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0071ms - processed: 0 items - remaining: 12 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 12 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0046ms - processed: 0 items - remaining: 12 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 12 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0054ms - processed: 0 items - remaining: 12 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 12 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0081ms - processed: 0 items - remaining: 12 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 12 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.011ms - processed: 0 items - remaining: 12 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 12 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0082ms - processed: 0 items - remaining: 12 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 12 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0072ms - processed: 0 items - remaining: 12 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 12 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0054ms - processed: 0 items - remaining: 12 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 12 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0068ms - processed: 0 items - remaining: 12 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 12 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0074ms - processed: 0 items - remaining: 12 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 12 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0477ms - processed: 0 items - remaining: 12 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 12 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0077ms - processed: 0 items - remaining: 12 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[103]
+      HttpMessageHandler expired after 120000ms for client 'SqlAccountApiWriteAdapter'
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 13 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0093ms - processed: 0 items - remaining: 13 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 13 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0127ms - processed: 0 items - remaining: 13 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 13 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0079ms - processed: 0 items - remaining: 13 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 13 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.004ms - processed: 0 items - remaining: 13 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 13 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0079ms - processed: 0 items - remaining: 13 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 13 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0065ms - processed: 0 items - remaining: 13 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 13 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0069ms - processed: 0 items - remaining: 13 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 13 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0093ms - processed: 0 items - remaining: 13 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 13 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0139ms - processed: 0 items - remaining: 13 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 13 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0389ms - processed: 0 items - remaining: 13 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 13 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0383ms - processed: 0 items - remaining: 13 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 13 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0095ms - processed: 0 items - remaining: 13 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[103]
+      HttpMessageHandler expired after 120000ms for client 'SqlAccountApiWriteAdapter'
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 14 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0114ms - processed: 0 items - remaining: 14 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 14 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0069ms - processed: 0 items - remaining: 14 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 14 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0026ms - processed: 0 items - remaining: 14 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 14 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0058ms - processed: 0 items - remaining: 14 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 14 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0062ms - processed: 0 items - remaining: 14 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 14 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0057ms - processed: 0 items - remaining: 14 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 14 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0144ms - processed: 0 items - remaining: 14 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 14 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0092ms - processed: 0 items - remaining: 14 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 14 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0083ms - processed: 0 items - remaining: 14 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 14 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0125ms - processed: 0 items - remaining: 14 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 14 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0092ms - processed: 0 items - remaining: 14 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 14 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0128ms - processed: 0 items - remaining: 14 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[103]
+      HttpMessageHandler expired after 120000ms for client 'SqlAccountApiWriteAdapter'
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 15 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.003ms - processed: 0 items - remaining: 15 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 15 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0024ms - processed: 0 items - remaining: 15 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 15 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0084ms - processed: 0 items - remaining: 15 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 15 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0091ms - processed: 0 items - remaining: 15 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 15 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0172ms - processed: 0 items - remaining: 15 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 15 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0109ms - processed: 0 items - remaining: 15 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 15 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0091ms - processed: 0 items - remaining: 15 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 15 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0079ms - processed: 0 items - remaining: 15 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 15 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.008ms - processed: 0 items - remaining: 15 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 15 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0059ms - processed: 0 items - remaining: 15 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 15 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0057ms - processed: 0 items - remaining: 15 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 15 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.006ms - processed: 0 items - remaining: 15 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[103]
+      HttpMessageHandler expired after 120000ms for client 'SqlAccountApiWriteAdapter'
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 16 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0134ms - processed: 0 items - remaining: 16 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 16 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0079ms - processed: 0 items - remaining: 16 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 16 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.008ms - processed: 0 items - remaining: 16 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 16 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0104ms - processed: 0 items - remaining: 16 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 16 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0112ms - processed: 0 items - remaining: 16 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 16 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0357ms - processed: 0 items - remaining: 16 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 16 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0134ms - processed: 0 items - remaining: 16 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 16 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0086ms - processed: 0 items - remaining: 16 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 16 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0034ms - processed: 0 items - remaining: 16 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 16 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0035ms - processed: 0 items - remaining: 16 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 16 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0086ms - processed: 0 items - remaining: 16 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 16 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0103ms - processed: 0 items - remaining: 16 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[103]
+      HttpMessageHandler expired after 120000ms for client 'SqlAccountApiWriteAdapter'
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 17 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0111ms - processed: 0 items - remaining: 17 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 17 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0167ms - processed: 0 items - remaining: 17 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 17 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.005ms - processed: 0 items - remaining: 17 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 17 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0132ms - processed: 0 items - remaining: 17 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 17 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0501ms - processed: 0 items - remaining: 17 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 17 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0025ms - processed: 0 items - remaining: 17 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 17 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0071ms - processed: 0 items - remaining: 17 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 17 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0091ms - processed: 0 items - remaining: 17 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 17 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0082ms - processed: 0 items - remaining: 17 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 17 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0094ms - processed: 0 items - remaining: 17 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 17 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0133ms - processed: 0 items - remaining: 17 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 17 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0116ms - processed: 0 items - remaining: 17 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[103]
+      HttpMessageHandler expired after 120000ms for client 'SqlAccountApiWriteAdapter'
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 18 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0062ms - processed: 0 items - remaining: 18 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 18 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0545ms - processed: 0 items - remaining: 18 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 18 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.1402ms - processed: 0 items - remaining: 18 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 18 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0092ms - processed: 0 items - remaining: 18 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 18 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0028ms - processed: 0 items - remaining: 18 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 18 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0028ms - processed: 0 items - remaining: 18 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 18 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0039ms - processed: 0 items - remaining: 18 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 18 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0038ms - processed: 0 items - remaining: 18 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 18 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0095ms - processed: 0 items - remaining: 18 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 18 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0111ms - processed: 0 items - remaining: 18 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 18 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.016ms - processed: 0 items - remaining: 18 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 18 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0128ms - processed: 0 items - remaining: 18 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[103]
+      HttpMessageHandler expired after 120000ms for client 'SqlAccountApiWriteAdapter'
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 19 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.01ms - processed: 0 items - remaining: 19 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 19 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0098ms - processed: 0 items - remaining: 19 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 19 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0072ms - processed: 0 items - remaining: 19 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 19 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0132ms - processed: 0 items - remaining: 19 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 19 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.009ms - processed: 0 items - remaining: 19 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 19 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0071ms - processed: 0 items - remaining: 19 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 19 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0107ms - processed: 0 items - remaining: 19 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 19 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0117ms - processed: 0 items - remaining: 19 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 19 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0129ms - processed: 0 items - remaining: 19 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 19 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0115ms - processed: 0 items - remaining: 19 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 19 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0095ms - processed: 0 items - remaining: 19 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 19 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0047ms - processed: 0 items - remaining: 19 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[103]
+      HttpMessageHandler expired after 120000ms for client 'SqlAccountApiWriteAdapter'
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 20 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0064ms - processed: 0 items - remaining: 20 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 20 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.004ms - processed: 0 items - remaining: 20 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 20 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0158ms - processed: 0 items - remaining: 20 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 20 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0112ms - processed: 0 items - remaining: 20 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 20 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0051ms - processed: 0 items - remaining: 20 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 20 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0087ms - processed: 0 items - remaining: 20 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 20 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0133ms - processed: 0 items - remaining: 20 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 20 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0134ms - processed: 0 items - remaining: 20 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 20 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0158ms - processed: 0 items - remaining: 20 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 20 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0129ms - processed: 0 items - remaining: 20 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 20 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0156ms - processed: 0 items - remaining: 20 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 20 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0122ms - processed: 0 items - remaining: 20 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[103]
+      HttpMessageHandler expired after 120000ms for client 'SqlAccountApiWriteAdapter'
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 21 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0034ms - processed: 0 items - remaining: 21 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 21 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0045ms - processed: 0 items - remaining: 21 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 21 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0073ms - processed: 0 items - remaining: 21 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 21 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0097ms - processed: 0 items - remaining: 21 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 21 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.019ms - processed: 0 items - remaining: 21 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 21 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0112ms - processed: 0 items - remaining: 21 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 21 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0108ms - processed: 0 items - remaining: 21 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 21 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0097ms - processed: 0 items - remaining: 21 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 21 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.007ms - processed: 0 items - remaining: 21 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 21 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0135ms - processed: 0 items - remaining: 21 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 21 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0088ms - processed: 0 items - remaining: 21 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 21 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0055ms - processed: 0 items - remaining: 21 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[103]
+      HttpMessageHandler expired after 120000ms for client 'SqlAccountApiWriteAdapter'
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 22 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0055ms - processed: 0 items - remaining: 22 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 22 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0058ms - processed: 0 items - remaining: 22 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 22 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0161ms - processed: 0 items - remaining: 22 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 22 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0114ms - processed: 0 items - remaining: 22 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 22 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0319ms - processed: 0 items - remaining: 22 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 22 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0039ms - processed: 0 items - remaining: 22 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 22 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0183ms - processed: 0 items - remaining: 22 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 22 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0087ms - processed: 0 items - remaining: 22 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 22 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0106ms - processed: 0 items - remaining: 22 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 22 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0113ms - processed: 0 items - remaining: 22 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 22 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0079ms - processed: 0 items - remaining: 22 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 22 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0132ms - processed: 0 items - remaining: 22 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[103]
+      HttpMessageHandler expired after 120000ms for client 'SqlAccountApiWriteAdapter'
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 23 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0172ms - processed: 0 items - remaining: 23 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 23 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.007ms - processed: 0 items - remaining: 23 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 23 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0118ms - processed: 0 items - remaining: 23 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 23 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0082ms - processed: 0 items - remaining: 23 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 23 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.2397ms - processed: 0 items - remaining: 23 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 23 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0182ms - processed: 0 items - remaining: 23 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 23 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0125ms - processed: 0 items - remaining: 23 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 23 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0058ms - processed: 0 items - remaining: 23 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 23 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0081ms - processed: 0 items - remaining: 23 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 23 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0095ms - processed: 0 items - remaining: 23 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 23 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0161ms - processed: 0 items - remaining: 23 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 23 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0041ms - processed: 0 items - remaining: 23 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[103]
+      HttpMessageHandler expired after 120000ms for client 'SqlAccountApiWriteAdapter'
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 24 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0178ms - processed: 0 items - remaining: 24 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 24 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0047ms - processed: 0 items - remaining: 24 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 24 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0065ms - processed: 0 items - remaining: 24 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 24 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0232ms - processed: 0 items - remaining: 24 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 24 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0088ms - processed: 0 items - remaining: 24 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 24 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0041ms - processed: 0 items - remaining: 24 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 24 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0118ms - processed: 0 items - remaining: 24 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 24 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.007ms - processed: 0 items - remaining: 24 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 24 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.018ms - processed: 0 items - remaining: 24 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 24 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0075ms - processed: 0 items - remaining: 24 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 24 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0323ms - processed: 0 items - remaining: 24 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 24 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0049ms - processed: 0 items - remaining: 24 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[103]
+      HttpMessageHandler expired after 120000ms for client 'SqlAccountApiWriteAdapter'
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 25 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0107ms - processed: 0 items - remaining: 25 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 25 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0055ms - processed: 0 items - remaining: 25 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 25 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0128ms - processed: 0 items - remaining: 25 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 25 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.014ms - processed: 0 items - remaining: 25 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 25 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0128ms - processed: 0 items - remaining: 25 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 25 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0094ms - processed: 0 items - remaining: 25 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 25 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0399ms - processed: 0 items - remaining: 25 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 25 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.009ms - processed: 0 items - remaining: 25 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 25 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0099ms - processed: 0 items - remaining: 25 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 25 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0049ms - processed: 0 items - remaining: 25 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 25 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0182ms - processed: 0 items - remaining: 25 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 25 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0378ms - processed: 0 items - remaining: 25 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[103]
+      HttpMessageHandler expired after 120000ms for client 'SqlAccountApiWriteAdapter'
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 26 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0103ms - processed: 0 items - remaining: 26 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 26 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0378ms - processed: 0 items - remaining: 26 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 26 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0097ms - processed: 0 items - remaining: 26 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 26 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0128ms - processed: 0 items - remaining: 26 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 26 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0121ms - processed: 0 items - remaining: 26 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 26 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.013ms - processed: 0 items - remaining: 26 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 26 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0243ms - processed: 0 items - remaining: 26 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 26 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0098ms - processed: 0 items - remaining: 26 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 26 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0061ms - processed: 0 items - remaining: 26 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 26 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0126ms - processed: 0 items - remaining: 26 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 26 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0117ms - processed: 0 items - remaining: 26 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 26 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.008ms - processed: 0 items - remaining: 26 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[103]
+      HttpMessageHandler expired after 120000ms for client 'SqlAccountApiWriteAdapter'
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 27 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0096ms - processed: 0 items - remaining: 27 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 27 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0259ms - processed: 0 items - remaining: 27 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 27 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0203ms - processed: 0 items - remaining: 27 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 27 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0149ms - processed: 0 items - remaining: 27 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 27 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0048ms - processed: 0 items - remaining: 27 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 27 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0105ms - processed: 0 items - remaining: 27 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 27 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.016ms - processed: 0 items - remaining: 27 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 27 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0057ms - processed: 0 items - remaining: 27 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 27 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0132ms - processed: 0 items - remaining: 27 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 27 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0603ms - processed: 0 items - remaining: 27 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 27 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0089ms - processed: 0 items - remaining: 27 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 27 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.009ms - processed: 0 items - remaining: 27 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[103]
+      HttpMessageHandler expired after 120000ms for client 'SqlAccountApiWriteAdapter'
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 28 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0212ms - processed: 0 items - remaining: 28 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 28 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0097ms - processed: 0 items - remaining: 28 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 28 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0133ms - processed: 0 items - remaining: 28 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 28 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0381ms - processed: 0 items - remaining: 28 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 28 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0197ms - processed: 0 items - remaining: 28 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 28 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0167ms - processed: 0 items - remaining: 28 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 28 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0046ms - processed: 0 items - remaining: 28 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 28 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0039ms - processed: 0 items - remaining: 28 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 28 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0154ms - processed: 0 items - remaining: 28 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 28 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0152ms - processed: 0 items - remaining: 28 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 28 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0192ms - processed: 0 items - remaining: 28 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 28 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0127ms - processed: 0 items - remaining: 28 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[103]
+      HttpMessageHandler expired after 120000ms for client 'SqlAccountApiWriteAdapter'
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 29 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0096ms - processed: 0 items - remaining: 29 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 29 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0061ms - processed: 0 items - remaining: 29 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 29 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0217ms - processed: 0 items - remaining: 29 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 29 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.012ms - processed: 0 items - remaining: 29 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 29 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0572ms - processed: 0 items - remaining: 29 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 29 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0059ms - processed: 0 items - remaining: 29 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 29 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0086ms - processed: 0 items - remaining: 29 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 29 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0058ms - processed: 0 items - remaining: 29 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 29 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0247ms - processed: 0 items - remaining: 29 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 29 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0357ms - processed: 0 items - remaining: 29 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 29 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0306ms - processed: 0 items - remaining: 29 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 29 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0128ms - processed: 0 items - remaining: 29 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[103]
+      HttpMessageHandler expired after 120000ms for client 'SqlAccountApiWriteAdapter'
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 30 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0226ms - processed: 0 items - remaining: 30 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 30 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0102ms - processed: 0 items - remaining: 30 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 30 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0045ms - processed: 0 items - remaining: 30 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 30 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0087ms - processed: 0 items - remaining: 30 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 30 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0106ms - processed: 0 items - remaining: 30 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 30 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0129ms - processed: 0 items - remaining: 30 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 30 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.022ms - processed: 0 items - remaining: 30 items
+info: Microsoft.AspNetCore.Hosting.Diagnostics[1]
+      Request starting HTTP/1.1 GET http://localhost:5030/logs?tab=audit - - -
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]
+      Executing endpoint '/Logs'
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[103]
+      Route matched with {page = "/Logs"}. Executing page /Logs
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[105]
+      Executing handler method SqlAccountSync.Pages.LogsModel.OnGetAsync - ModelState is Valid
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[108]
+      Executed handler method OnGetAsync, returned result .
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[107]
+      Executing an implicit handler method - ModelState is Valid
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[109]
+      Executed an implicit handler method, returned result Microsoft.AspNetCore.Mvc.RazorPages.PageResult.
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[104]
+      Executed page /Logs in 208.8931ms
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]
+      Executed endpoint '/Logs'
+info: Microsoft.AspNetCore.Hosting.Diagnostics[2]
+      Request finished HTTP/1.1 GET http://localhost:5030/logs?tab=audit - 200 - text/html;+charset=utf-8 428.2301ms
+info: Microsoft.AspNetCore.Hosting.Diagnostics[1]
+      Request starting HTTP/1.1 GET http://localhost:5030/css/site.css?v=x9fyCx-NqlX5BZXQaAREnq2zDXsXGnZK-j9Oh-7n3dQ - - -
+info: Microsoft.AspNetCore.Hosting.Diagnostics[1]
+      Request starting HTTP/1.1 GET http://localhost:5030/js/site.js?v=tUQtcZWkGg61B4_IScQ89PhNNTjXb9eTxuozvNxeYU8 - - -
+info: Microsoft.AspNetCore.StaticFiles.StaticFileMiddleware[6]
+      The file /css/site.css was not modified
+info: Microsoft.AspNetCore.Hosting.Diagnostics[2]
+      Request finished HTTP/1.1 GET http://localhost:5030/css/site.css?v=x9fyCx-NqlX5BZXQaAREnq2zDXsXGnZK-j9Oh-7n3dQ - 304 - text/css 1.8793ms
+info: Microsoft.AspNetCore.StaticFiles.StaticFileMiddleware[2]
+      Sending file. Request path: '/js/site.js'. Physical path: 'C:\Users\sqlsupport\SqlAccountSync\src\SqlAccountSync\wwwroot\js\site.js'
+info: Microsoft.AspNetCore.Hosting.Diagnostics[2]
+      Request finished HTTP/1.1 GET http://localhost:5030/js/site.js?v=tUQtcZWkGg61B4_IScQ89PhNNTjXb9eTxuozvNxeYU8 - 200 4323 text/javascript 2.4684ms
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 30 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0056ms - processed: 0 items - remaining: 30 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 30 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0162ms - processed: 0 items - remaining: 30 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 30 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0217ms - processed: 0 items - remaining: 30 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 30 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0453ms - processed: 0 items - remaining: 30 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 30 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0125ms - processed: 0 items - remaining: 30 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[103]
+      HttpMessageHandler expired after 120000ms for client 'SqlAccountApiWriteAdapter'
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 31 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.1917ms - processed: 31 items - remaining: 0 items
+info: Microsoft.AspNetCore.Hosting.Diagnostics[1]
+      Request starting HTTP/1.1 GET http://localhost:5030/logs?tab=audit - - -
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]
+      Executing endpoint '/Logs'
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[103]
+      Route matched with {page = "/Logs"}. Executing page /Logs
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[105]
+      Executing handler method SqlAccountSync.Pages.LogsModel.OnGetAsync - ModelState is Valid
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[108]
+      Executed handler method OnGetAsync, returned result .
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[107]
+      Executing an implicit handler method - ModelState is Valid
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[109]
+      Executed an implicit handler method, returned result Microsoft.AspNetCore.Mvc.RazorPages.PageResult.
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[104]
+      Executed page /Logs in 23.1867ms
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]
+      Executed endpoint '/Logs'
+info: Microsoft.AspNetCore.Hosting.Diagnostics[2]
+      Request finished HTTP/1.1 GET http://localhost:5030/logs?tab=audit - 200 - text/html;+charset=utf-8 28.4377ms
+info: Microsoft.AspNetCore.Hosting.Diagnostics[1]
+      Request starting HTTP/1.1 GET http://localhost:5030/js/site.js?v=tUQtcZWkGg61B4_IScQ89PhNNTjXb9eTxuozvNxeYU8 - - -
+info: Microsoft.AspNetCore.StaticFiles.StaticFileMiddleware[2]
+      Sending file. Request path: '/js/site.js'. Physical path: 'C:\Users\sqlsupport\SqlAccountSync\src\SqlAccountSync\wwwroot\js\site.js'
+info: Microsoft.AspNetCore.Hosting.Diagnostics[2]
+      Request finished HTTP/1.1 GET http://localhost:5030/js/site.js?v=tUQtcZWkGg61B4_IScQ89PhNNTjXb9eTxuozvNxeYU8 - 200 4323 text/javascript 2.8648ms
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[103]
+      HttpMessageHandler expired after 120000ms for client 'SqlAccountApiWriteAdapter'
+info: Microsoft.AspNetCore.Hosting.Diagnostics[1]
+      Request starting HTTP/1.1 GET http://localhost:5030/ - - -
+info: Microsoft.AspNetCore.Authorization.DefaultAuthorizationService[2]
+      Authorization failed. These requirements were not met:
+      DenyAnonymousAuthorizationRequirement: Requires an authenticated user.
+info: Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationHandler[12]
+      AuthenticationScheme: Cookies was challenged.
+info: Microsoft.AspNetCore.Hosting.Diagnostics[2]
+      Request finished HTTP/1.1 GET http://localhost:5030/ - 302 0 - 300.9696ms
+info: Microsoft.AspNetCore.Hosting.Diagnostics[1]
+      Request starting HTTP/1.1 GET http://localhost:5030/Login?ReturnUrl=%2F - - -
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]
+      Executing endpoint '/Login'
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[103]
+      Route matched with {page = "/Login"}. Executing page /Login
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[105]
+      Executing handler method SqlAccountSync.Pages.LoginModel.OnGet - ModelState is Valid
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[108]
+      Executed handler method OnGet, returned result .
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[107]
+      Executing an implicit handler method - ModelState is Valid
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[109]
+      Executed an implicit handler method, returned result Microsoft.AspNetCore.Mvc.RazorPages.PageResult.
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[104]
+      Executed page /Login in 1.4197ms
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]
+      Executed endpoint '/Login'
+info: Microsoft.AspNetCore.Hosting.Diagnostics[2]
+      Request finished HTTP/1.1 GET http://localhost:5030/Login?ReturnUrl=%2F - 200 - text/html;+charset=utf-8 4.1418ms
+info: Microsoft.AspNetCore.Hosting.Diagnostics[1]
+      Request starting HTTP/1.1 GET http://localhost:5030/css/site.css?v=x9fyCx-NqlX5BZXQaAREnq2zDXsXGnZK-j9Oh-7n3dQ - - -
+info: Microsoft.AspNetCore.Hosting.Diagnostics[1]
+      Request starting HTTP/1.1 GET http://localhost:5030/js/login.js?v=2JgsnbDUCd3e5iOvUHReqs_35VBz1ITSYJZwauEPPZE - - -
+info: Microsoft.AspNetCore.Hosting.Diagnostics[1]
+      Request starting HTTP/1.1 GET http://localhost:5030/css/login.css?v=9M23wyI2SpZ7hbtYTqxgkmEc-jG7dSsj2QqID2NC55g - - -
+info: Microsoft.AspNetCore.StaticFiles.StaticFileMiddleware[2]
+      Sending file. Request path: '/css/site.css'. Physical path: 'C:\Users\sqlsupport\SqlAccountSync\src\SqlAccountSync\wwwroot\css\site.css'
+info: Microsoft.AspNetCore.Hosting.Diagnostics[2]
+      Request finished HTTP/1.1 GET http://localhost:5030/css/site.css?v=x9fyCx-NqlX5BZXQaAREnq2zDXsXGnZK-j9Oh-7n3dQ - 200 18921 text/css 0.9975ms
+info: Microsoft.AspNetCore.StaticFiles.StaticFileMiddleware[2]
+      Sending file. Request path: '/js/login.js'. Physical path: 'C:\Users\sqlsupport\SqlAccountSync\src\SqlAccountSync\wwwroot\js\login.js'
+info: Microsoft.AspNetCore.Hosting.Diagnostics[2]
+      Request finished HTTP/1.1 GET http://localhost:5030/js/login.js?v=2JgsnbDUCd3e5iOvUHReqs_35VBz1ITSYJZwauEPPZE - 200 7654 text/javascript 0.4593ms
+info: Microsoft.AspNetCore.StaticFiles.StaticFileMiddleware[2]
+      Sending file. Request path: '/css/login.css'. Physical path: 'C:\Users\sqlsupport\SqlAccountSync\src\SqlAccountSync\wwwroot\css\login.css'
+info: Microsoft.AspNetCore.Hosting.Diagnostics[2]
+      Request finished HTTP/1.1 GET http://localhost:5030/css/login.css?v=9M23wyI2SpZ7hbtYTqxgkmEc-jG7dSsj2QqID2NC55g - 200 8720 text/css 0.5443ms
+info: Microsoft.AspNetCore.Hosting.Diagnostics[1]
+      Request starting HTTP/1.1 GET http://localhost:5030/favicon.ico - - -
+info: Microsoft.AspNetCore.StaticFiles.StaticFileMiddleware[2]
+      Sending file. Request path: '/favicon.ico'. Physical path: 'C:\Users\sqlsupport\SqlAccountSync\src\SqlAccountSync\wwwroot\favicon.ico'
+info: Microsoft.AspNetCore.Hosting.Diagnostics[2]
+      Request finished HTTP/1.1 GET http://localhost:5030/favicon.ico - 200 5430 image/x-icon 0.5512ms
+info: Microsoft.AspNetCore.Hosting.Diagnostics[1]
+      Request starting HTTP/1.1 POST http://localhost:5030/Login?handler=Send - application/x-www-form-urlencoded 215
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]
+      Executing endpoint '/Login'
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[103]
+      Route matched with {page = "/Login"}. Executing page /Login
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[105]
+      Executing handler method SqlAccountSync.Pages.LoginModel.OnPostSendAsync - ModelState is Valid
+info: System.Net.Http.HttpClient.ITenantEmailBootstrap.LogicalHandler[100]
+      Start processing HTTP request GET https://v2wwsho311.execute-api.ap-southeast-1.amazonaws.com/default/proacc-tenant-config-api?tenantCode=TNT10006
+info: System.Net.Http.HttpClient.ITenantEmailBootstrap.ClientHandler[100]
+      Sending HTTP request GET https://v2wwsho311.execute-api.ap-southeast-1.amazonaws.com/default/proacc-tenant-config-api?tenantCode=TNT10006
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 1 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0008ms - processed: 0 items - remaining: 1 items
+info: System.Net.Http.HttpClient.ITenantEmailBootstrap.ClientHandler[101]
+      Received HTTP response headers after 1037.4506ms - 200
+info: System.Net.Http.HttpClient.ITenantEmailBootstrap.LogicalHandler[101]
+      End processing HTTP request after 1037.534ms - 200
+info: SqlAccountSync.Services.Auth.OtpAuthService[0]
+      OTP email sent to jason.choo2004@gmail.com via mail.proaccsystem.com:465
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[108]
+      Executed handler method OnPostSendAsync, returned result Microsoft.AspNetCore.Mvc.JsonResult.
+info: Microsoft.AspNetCore.Mvc.Infrastructure.SystemTextJsonResultExecutor[1]
+      Executing JsonResult, writing value of type '<>f__AnonymousType3`5[[System.Boolean, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[104]
+      Executed page /Login in 3254.1532ms
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]
+      Executed endpoint '/Login'
+info: Microsoft.AspNetCore.Hosting.Diagnostics[2]
+      Request finished HTTP/1.1 POST http://localhost:5030/Login?handler=Send - 200 - application/json;+charset=utf-8 3254.5717ms
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 1 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0027ms - processed: 0 items - remaining: 1 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 1 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0024ms - processed: 0 items - remaining: 1 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 1 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.003ms - processed: 0 items - remaining: 1 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 1 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0023ms - processed: 0 items - remaining: 1 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 1 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0032ms - processed: 0 items - remaining: 1 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 1 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0023ms - processed: 0 items - remaining: 1 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 1 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.002ms - processed: 0 items - remaining: 1 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 1 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0036ms - processed: 0 items - remaining: 1 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 1 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0025ms - processed: 0 items - remaining: 1 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 1 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0033ms - processed: 0 items - remaining: 1 items
+info: Microsoft.AspNetCore.Hosting.Diagnostics[1]
+      Request starting HTTP/1.1 GET http://localhost:5030/Login?ReturnUrl=%2F - - -
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]
+      Executing endpoint '/Login'
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[103]
+      Route matched with {page = "/Login"}. Executing page /Login
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[105]
+      Executing handler method SqlAccountSync.Pages.LoginModel.OnGet - ModelState is Valid
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[108]
+      Executed handler method OnGet, returned result .
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[107]
+      Executing an implicit handler method - ModelState is Valid
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[109]
+      Executed an implicit handler method, returned result Microsoft.AspNetCore.Mvc.RazorPages.PageResult.
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[104]
+      Executed page /Login in 0.9871ms
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]
+      Executed endpoint '/Login'
+info: Microsoft.AspNetCore.Hosting.Diagnostics[2]
+      Request finished HTTP/1.1 GET http://localhost:5030/Login?ReturnUrl=%2F - 200 - text/html;+charset=utf-8 1.4685ms
+info: Microsoft.AspNetCore.Hosting.Diagnostics[1]
+      Request starting HTTP/1.1 GET http://localhost:5030/Login - - -
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]
+      Executing endpoint '/Login'
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[103]
+      Route matched with {page = "/Login"}. Executing page /Login
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[105]
+      Executing handler method SqlAccountSync.Pages.LoginModel.OnGet - ModelState is Valid
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[108]
+      Executed handler method OnGet, returned result .
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[107]
+      Executing an implicit handler method - ModelState is Valid
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[109]
+      Executed an implicit handler method, returned result Microsoft.AspNetCore.Mvc.RazorPages.PageResult.
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[104]
+      Executed page /Login in 0.4357ms
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]
+      Executed endpoint '/Login'
+info: Microsoft.AspNetCore.Hosting.Diagnostics[2]
+      Request finished HTTP/1.1 GET http://localhost:5030/Login - 200 - text/html;+charset=utf-8 0.6974ms
+info: Microsoft.AspNetCore.Hosting.Diagnostics[1]
+      Request starting HTTP/1.1 GET http://localhost:5030/css/site.css?v=x9fyCx-NqlX5BZXQaAREnq2zDXsXGnZK-j9Oh-7n3dQ - - -
+info: Microsoft.AspNetCore.StaticFiles.StaticFileMiddleware[2]
+      Sending file. Request path: '/css/site.css'. Physical path: 'C:\Users\sqlsupport\SqlAccountSync\src\SqlAccountSync\wwwroot\css\site.css'
+info: Microsoft.AspNetCore.Hosting.Diagnostics[2]
+      Request finished HTTP/1.1 GET http://localhost:5030/css/site.css?v=x9fyCx-NqlX5BZXQaAREnq2zDXsXGnZK-j9Oh-7n3dQ - 200 18921 text/css 0.6864ms
+info: Microsoft.AspNetCore.Hosting.Diagnostics[1]
+      Request starting HTTP/1.1 GET http://localhost:5030/js/login.js?v=2JgsnbDUCd3e5iOvUHReqs_35VBz1ITSYJZwauEPPZE - - -
+info: Microsoft.AspNetCore.Hosting.Diagnostics[1]
+      Request starting HTTP/1.1 GET http://localhost:5030/css/login.css?v=9M23wyI2SpZ7hbtYTqxgkmEc-jG7dSsj2QqID2NC55g - - -
+info: Microsoft.AspNetCore.StaticFiles.StaticFileMiddleware[2]
+      Sending file. Request path: '/js/login.js'. Physical path: 'C:\Users\sqlsupport\SqlAccountSync\src\SqlAccountSync\wwwroot\js\login.js'
+info: Microsoft.AspNetCore.StaticFiles.StaticFileMiddleware[2]
+      Sending file. Request path: '/css/login.css'. Physical path: 'C:\Users\sqlsupport\SqlAccountSync\src\SqlAccountSync\wwwroot\css\login.css'
+info: Microsoft.AspNetCore.Hosting.Diagnostics[2]
+      Request finished HTTP/1.1 GET http://localhost:5030/js/login.js?v=2JgsnbDUCd3e5iOvUHReqs_35VBz1ITSYJZwauEPPZE - 200 7654 text/javascript 0.3993ms
+info: Microsoft.AspNetCore.Hosting.Diagnostics[2]
+      Request finished HTTP/1.1 GET http://localhost:5030/css/login.css?v=9M23wyI2SpZ7hbtYTqxgkmEc-jG7dSsj2QqID2NC55g - 200 8720 text/css 0.3894ms
+info: Microsoft.AspNetCore.Hosting.Diagnostics[1]
+      Request starting HTTP/1.1 GET http://localhost:5030/favicon.ico - - -
+info: Microsoft.AspNetCore.StaticFiles.StaticFileMiddleware[2]
+      Sending file. Request path: '/favicon.ico'. Physical path: 'C:\Users\sqlsupport\SqlAccountSync\src\SqlAccountSync\wwwroot\favicon.ico'
+info: Microsoft.AspNetCore.Hosting.Diagnostics[2]
+      Request finished HTTP/1.1 GET http://localhost:5030/favicon.ico - 200 5430 image/x-icon 0.4436ms
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 1 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0014ms - processed: 0 items - remaining: 1 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[103]
+      HttpMessageHandler expired after 120000ms for client 'SqlAccountApiWriteAdapter'
+info: Microsoft.AspNetCore.Hosting.Diagnostics[1]
+      Request starting HTTP/1.1 POST http://localhost:5030/Login?handler=Send - application/x-www-form-urlencoded 215
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]
+      Executing endpoint '/Login'
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[103]
+      Route matched with {page = "/Login"}. Executing page /Login
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[105]
+      Executing handler method SqlAccountSync.Pages.LoginModel.OnPostSendAsync - ModelState is Valid
+info: SqlAccountSync.Services.Auth.OtpAuthService[0]
+      OTP email sent to jason.choo2004@gmail.com via mail.proaccsystem.com:465
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[108]
+      Executed handler method OnPostSendAsync, returned result Microsoft.AspNetCore.Mvc.JsonResult.
+info: Microsoft.AspNetCore.Mvc.Infrastructure.SystemTextJsonResultExecutor[1]
+      Executing JsonResult, writing value of type '<>f__AnonymousType3`5[[System.Boolean, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+info: Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker[104]
+      Executed page /Login in 1070.5966ms
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]
+      Executed endpoint '/Login'
+info: Microsoft.AspNetCore.Hosting.Diagnostics[2]
+      Request finished HTTP/1.1 POST http://localhost:5030/Login?handler=Send - 200 - application/json;+charset=utf-8 1071.1961ms
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[103]
+      HttpMessageHandler expired after 120000ms for client 'ITenantEmailBootstrap'
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0018ms - processed: 0 items - remaining: 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0019ms - processed: 0 items - remaining: 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.001ms - processed: 0 items - remaining: 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0016ms - processed: 0 items - remaining: 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0039ms - processed: 0 items - remaining: 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0033ms - processed: 0 items - remaining: 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.003ms - processed: 0 items - remaining: 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0015ms - processed: 0 items - remaining: 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.004ms - processed: 0 items - remaining: 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0039ms - processed: 0 items - remaining: 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0052ms - processed: 0 items - remaining: 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0037ms - processed: 0 items - remaining: 3 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[103]
+      HttpMessageHandler expired after 120000ms for client 'SqlAccountApiWriteAdapter'
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 4 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0037ms - processed: 0 items - remaining: 4 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 4 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0026ms - processed: 0 items - remaining: 4 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[100]
+      Starting HttpMessageHandler cleanup cycle with 4 items
+dbug: Microsoft.Extensions.Http.DefaultHttpClientFactory[101]
+      Ending HttpMessageHandler cleanup cycle after 0.0019ms - processed: 0 items - remaining: 4 items

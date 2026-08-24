@@ -36,6 +36,16 @@ public sealed class SyncOptions
     public bool DebugOtpToConsole { get; set; }
     /// <summary>Fixed OTP used only when DebugOtpToConsole is true (Development).</summary>
     public string MockSignInCode { get; set; } = "";
+    /// <summary>Tenant code used for standardized SQL API secret paths (e.g. TNT10006).</summary>
+    public string TenantCode { get; set; } = "";
+    /// <summary>
+    /// When true and <see cref="TenantCode"/> is set, blank/convention ApiCredRef is filled as
+    /// <c>sm:proacc/tenant/{TenantCode}/sqlApiCredentials/{DbCode}</c> after save
+    /// (falls back to numeric DBID if Code is empty).
+    /// </summary>
+    public bool AutoAssignSqlApiCredRefByDbId { get; set; } = true;
+    /// <summary>When true, create an empty Secrets Manager placeholder for the assigned path if missing.</summary>
+    public bool EnsureSqlApiSecretPlaceholder { get; set; } = true;
     public string[] RequiredTables { get; set; } = ["ST_ITEM", "AR_CUSTOMER", "SY_USER"];
 }
 

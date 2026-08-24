@@ -1,10 +1,13 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using SqlAccountSync.Helpers;
 using SqlAccountSync.Models;
+using SqlAccountSync.Options;
 using SqlAccountSync.Services.Audit;
 using SqlAccountSync.Services.Auth;
 using SqlAccountSync.Services.Connections;
 using SqlAccountSync.Services.Databases;
+using SqlAccountSync.Services.Secrets;
 
 namespace SqlAccountSync.Pages.Databases;
 
@@ -61,15 +64,40 @@ public class EditModel : SyncPageModel
 {
     private readonly IDatabaseRegistry _registry;
     private readonly IAuditService _audit;
+    private readonly ISqlApiSecretProvisioner _secrets;
+    private readonly SyncOptions _sync;
 
-    public EditModel(IDatabaseRegistry registry, IAuditService audit)
+    public EditModel(
+        IDatabaseRegistry registry,
+        IAuditService audit,
+        ISqlApiSecretProvisioner secrets,
+        IOptions<SyncOptions> sync)
     {
         _registry = registry;
         _audit = audit;
+        _secrets = secrets;
+        _sync = sync.Value;
     }
 
     [BindProperty] public RegisteredDatabase Db { get; set; } = new();
     public string Message { get; set; } = "";
+    public string TenantCode => (_sync.TenantCode ?? "").Trim();
+    public bool AutoSqlApiCredRef => _sync.AutoAssignSqlApiCredRefByDbId && TenantCode.Length > 0;
+    public string DefaultApiBaseUrl => "https://api.sql.my";
+    public string SqlApiCredRefPlaceholder
+    {
+        get
+        {
+            var tenant = TenantCode.Length > 0 ? TenantCode : "{TENANT_CODE}";
+            var code = SqlApiCredRefConvention.SanitizeDbCode(Db.DbCode);
+            var dbPart = code.Length > 0 ? code : "{CODE}";
+            return $"sm:proacc/tenant/{tenant}/sqlApiCredentials/{dbPart}";
+        }
+    }
+    public string SqlApiCredRefHint =>
+        AutoSqlApiCredRef
+            ? $"Follows the Code field: sm:proacc/tenant/{TenantCode}/sqlApiCredentials/{{CODE}} (TENANT_CODE from .env)"
+            : "Use sm:proacc/tenant/{TENANT_CODE}/sqlApiCredentials/{CODE}";
 
     public async Task<IActionResult> OnGetAsync(int? id)
     {
@@ -80,17 +108,40 @@ public class EditModel : SyncPageModel
             if (existing is null) return RedirectToPage("Index");
             Db = existing;
         }
+        else
+        {
+            Db.DbRole = DatabaseRoles.Master;
+            if (string.IsNullOrWhiteSpace(Db.ApiBaseUrl))
+                Db.ApiBaseUrl = DefaultApiBaseUrl;
+            if (string.IsNullOrWhiteSpace(Db.ApiCredRef))
+                Db.ApiCredRef = SqlApiCredRefPlaceholder;
+            if (string.IsNullOrWhiteSpace(Db.FbHost))
+                Db.FbHost = "localhost";
+            if (string.IsNullOrWhiteSpace(Db.FbCredRef))
+                Db.FbCredRef = "env:CENTRAL_FB_PASSWORD";
+        }
         return Page();
     }
 
     public async Task<IActionResult> OnPostAsync()
     {
         if (!IsAdmin) return Forbid();
+        var wasNew = Db.DbId == 0;
         var id = await _registry.SaveAsync(Db, CurrentEmail);
+        var saved = await _registry.GetAsync(id);
+        if (saved is not null
+            && !string.IsNullOrWhiteSpace(_sync.TenantCode)
+            && !string.IsNullOrWhiteSpace(saved.DbCode)
+            && !string.IsNullOrWhiteSpace(saved.ApiCredRef)
+            && saved.ApiCredRef.StartsWith("sm:", StringComparison.OrdinalIgnoreCase))
+        {
+            await _secrets.EnsurePlaceholderAsync(_sync.TenantCode, saved.DbCode);
+        }
+
         await _audit.WriteAsync(new AuditEntry
         {
             UserEmail = CurrentEmail,
-            Action = Db.DbId == 0 ? "USER CREATED DATABASE" : "USER UPDATED DATABASE",
+            Action = wasNew ? "USER CREATED DATABASE" : "USER UPDATED DATABASE",
             DbId = id,
             Entity = "DATABASE",
             RecordId = Db.DbCode,

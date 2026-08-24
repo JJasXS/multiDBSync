@@ -10,7 +10,10 @@ namespace SqlAccountSync.Services.Auth;
 public interface IUserDirectory
 {
     Task<AppUser?> FindByEmailAsync(string email, CancellationToken cancellationToken = default);
+    Task<AppUser?> GetByIdAsync(int userId, CancellationToken cancellationToken = default);
     Task<List<AppUser>> ListAsync(CancellationToken cancellationToken = default);
+    Task<int> CountActiveAdminsAsync(CancellationToken cancellationToken = default);
+    Task<List<int>> ListActiveAdminIdsAsync(CancellationToken cancellationToken = default);
     Task<int> SaveAsync(AppUser user, CancellationToken cancellationToken = default);
     Task DeactivateAsync(int userId, CancellationToken cancellationToken = default);
     Task<bool> CanAccessDbAsync(int userId, string role, int dbId, bool forSync, CancellationToken cancellationToken = default);
@@ -40,6 +43,18 @@ public sealed class UserDirectory : IUserDirectory
             Map, new { E = email.Trim() }, cancellationToken);
     }
 
+    public Task<AppUser?> GetByIdAsync(int userId, CancellationToken cancellationToken = default)
+    {
+        if (!_db.IsConfigured)
+        {
+            var local = LocalDevUser(_bootstrap.AdminEmail);
+            return Task.FromResult(local is not null && local.UserId == userId ? local : null);
+        }
+        return _db.QuerySingleAsync(
+            "SELECT FIRST 1 * FROM SYNC_USER WHERE USERID=@USERID",
+            Map, new { USERID = userId }, cancellationToken);
+    }
+
     public Task<List<AppUser>> ListAsync(CancellationToken cancellationToken = default)
     {
         if (!_db.IsConfigured)
@@ -48,6 +63,27 @@ public sealed class UserDirectory : IUserDirectory
             return Task.FromResult(local is null ? new List<AppUser>() : new List<AppUser> { local });
         }
         return _db.QueryAsync("SELECT * FROM SYNC_USER ORDER BY DISPLAYNAME", Map, cancellationToken: cancellationToken);
+    }
+
+    public async Task<int> CountActiveAdminsAsync(CancellationToken cancellationToken = default)
+    {
+        var ids = await ListActiveAdminIdsAsync(cancellationToken).ConfigureAwait(false);
+        return ids.Count;
+    }
+
+    public Task<List<int>> ListActiveAdminIdsAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_db.IsConfigured)
+        {
+            var local = LocalDevUser(_bootstrap.AdminEmail);
+            return Task.FromResult(local is null ? new List<int>() : new List<int> { local.UserId });
+        }
+
+        return _db.QueryAsync(
+            "SELECT USERID FROM SYNC_USER WHERE ISACTIVE=1 AND TRIM(UPPER(USERROLE))=@R ORDER BY USERID",
+            r => CentralDb.Int(r, "USERID"),
+            new { R = AppRoles.Admin },
+            cancellationToken);
     }
 
     public async Task<int> SaveAsync(AppUser user, CancellationToken cancellationToken = default)
@@ -63,6 +99,8 @@ VALUES (@USERID, @EMAIL, @DISPLAYNAME, @USERROLE, 1, CURRENT_TIMESTAMP)",
             return id;
         }
 
+        await EnsureNotRemovingLastAdminAsync(user.UserId, user.Role, user.IsActive, cancellationToken).ConfigureAwait(false);
+
         await _db.ExecuteAsync(@"
 UPDATE SYNC_USER SET EMAIL=@EMAIL, DISPLAYNAME=@DISPLAYNAME, USERROLE=@USERROLE, ISACTIVE=@ISACTIVE
 WHERE USERID=@USERID",
@@ -77,8 +115,42 @@ WHERE USERID=@USERID",
         return user.UserId;
     }
 
-    public Task DeactivateAsync(int userId, CancellationToken cancellationToken = default) =>
-        _db.ExecuteAsync("UPDATE SYNC_USER SET ISACTIVE=0 WHERE USERID=@USERID", new { USERID = userId }, cancellationToken);
+    public async Task DeactivateAsync(int userId, CancellationToken cancellationToken = default)
+    {
+        var existing = await GetByIdAsync(userId, cancellationToken).ConfigureAwait(false);
+        if (existing is null)
+            return;
+
+        await EnsureNotRemovingLastAdminAsync(userId, existing.Role, isActive: false, cancellationToken).ConfigureAwait(false);
+        await _db.ExecuteAsync(
+            "UPDATE SYNC_USER SET ISACTIVE=0 WHERE USERID=@USERID",
+            new { USERID = userId }, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task EnsureNotRemovingLastAdminAsync(
+        int userId,
+        string? newRole,
+        bool isActive,
+        CancellationToken cancellationToken)
+    {
+        var existing = await GetByIdAsync(userId, cancellationToken).ConfigureAwait(false);
+        if (existing is null || !existing.IsActive)
+            return;
+        if (AppRoles.Rank(existing.Role) < AppRoles.Rank(AppRoles.Admin))
+            return;
+
+        var stillAdmin = isActive && AppRoles.Rank(newRole) >= AppRoles.Rank(AppRoles.Admin);
+        if (stillAdmin)
+            return;
+
+        var users = await ListAsync(cancellationToken).ConfigureAwait(false);
+        var otherActiveAdmins = users.Count(u =>
+            u.UserId != userId
+            && u.IsActive
+            && AppRoles.Rank(u.Role) >= AppRoles.Rank(AppRoles.Admin));
+        if (otherActiveAdmins == 0)
+            throw new InvalidOperationException("At least one active ADMIN is required. This admin cannot be disabled or demoted.");
+    }
 
     public async Task<bool> CanAccessDbAsync(int userId, string role, int dbId, bool forSync, CancellationToken cancellationToken = default)
     {

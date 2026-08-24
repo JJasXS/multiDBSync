@@ -1,14 +1,18 @@
 using System.Security.Cryptography;
+using Amazon.SecretsManager;
 using MailKit.Net.Smtp;
+using MailKit.Security;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using MimeKit;
 using SqlAccountSync.Authorization;
+using SqlAccountSync.Helpers;
 using SqlAccountSync.Models;
 using SqlAccountSync.Options;
 using SqlAccountSync.Services.Secrets;
+using SqlAccountSync.Services.Tenants;
 using System.Security.Claims;
 
 namespace SqlAccountSync.Services.Auth;
@@ -18,24 +22,36 @@ public sealed class OtpAuthService
     private readonly IUserDirectory _users;
     private readonly IMemoryCache _cache;
     private readonly ISecretResolver _secrets;
+    private readonly ITenantEmailBootstrap _tenantEmail;
+    private readonly IAmazonSecretsManager? _aws;
+    private readonly IConfiguration _config;
     private readonly SmtpOptions _smtp;
     private readonly SyncOptions _sync;
+    private readonly IHostEnvironment _env;
     private readonly ILogger<OtpAuthService> _logger;
 
     public OtpAuthService(
         IUserDirectory users,
         IMemoryCache cache,
         ISecretResolver secrets,
+        ITenantEmailBootstrap tenantEmail,
+        IConfiguration config,
         IOptions<SmtpOptions> smtp,
         IOptions<SyncOptions> sync,
-        ILogger<OtpAuthService> logger)
+        IHostEnvironment env,
+        ILogger<OtpAuthService> logger,
+        IAmazonSecretsManager? aws = null)
     {
         _users = users;
         _cache = cache;
         _secrets = secrets;
+        _tenantEmail = tenantEmail;
+        _config = config;
         _smtp = smtp.Value;
         _sync = sync.Value;
+        _env = env;
         _logger = logger;
+        _aws = aws;
     }
 
     public async Task<(bool Ok, string Message)> SendOtpAsync(string email, CancellationToken cancellationToken = default)
@@ -45,49 +61,29 @@ public sealed class OtpAuthService
             return (false, "No active user matches that email.");
 
         var code = RandomNumberGenerator.GetInt32(100000, 999999).ToString();
-        if (_sync.DebugOtpToConsole && !string.IsNullOrWhiteSpace(_sync.MockSignInCode))
-            code = _sync.MockSignInCode.Trim();
-        _cache.Set("otp:" + email.Trim().ToLowerInvariant(), code, TimeSpan.FromMinutes(Math.Clamp(_sync.OtpMinutes, 2, 30)));
+        var minutes = Math.Clamp(_sync.OtpMinutes, 2, 30);
+        _cache.Set("otp:" + email.Trim().ToLowerInvariant(), code, TimeSpan.FromMinutes(minutes));
 
-        if (_sync.DebugOtpToConsole)
-            _logger.LogInformation("OTP for {Email} generated (console debug enabled).", email);
+        var subject = "Your Login OTP Code";
+        var html = $@"
+<html><body>
+  <p>Your OTP code is:</p>
+  <h2 style=""letter-spacing:4px"">{code}</h2>
+  <p>This code expires in {minutes} minutes.</p>
+</body></html>";
 
-        if (string.IsNullOrWhiteSpace(_smtp.Host))
-        {
-            if (_sync.DebugOtpToConsole)
-                Console.WriteLine($"[OTP] {email}: {code}");
-            var hint = _sync.DebugOtpToConsole && !string.IsNullOrWhiteSpace(_sync.MockSignInCode)
-                ? $" Development code: {code}"
-                : " In development it is written to the console when SMTP is not configured.";
-            return (true, "OTP issued." + hint);
-        }
-
-        try
-        {
-            var password = await _secrets.ResolveAsync(_smtp.PasswordSecretRef, cancellationToken).ConfigureAwait(false);
-            var msg = new MimeMessage();
-            msg.From.Add(MailboxAddress.Parse(string.IsNullOrWhiteSpace(_smtp.From) ? _smtp.User : _smtp.From));
-            msg.To.Add(MailboxAddress.Parse(email));
-            msg.Subject = "SQL Account Sync sign-in code";
-            msg.Body = new TextPart("plain") { Text = $"Your sign-in code is {code}. It expires in {_sync.OtpMinutes} minutes." };
-            using var client = new SmtpClient();
-            await client.ConnectAsync(_smtp.Host, _smtp.Port, _smtp.EnableSsl, cancellationToken).ConfigureAwait(false);
-            if (!string.IsNullOrWhiteSpace(_smtp.User))
-                await client.AuthenticateAsync(_smtp.User, password ?? "", cancellationToken).ConfigureAwait(false);
-            await client.SendAsync(msg, cancellationToken).ConfigureAwait(false);
-            await client.DisconnectAsync(true, cancellationToken).ConfigureAwait(false);
+        var (sent, err) = await TrySendEmailAsync(email, subject, html, cancellationToken).ConfigureAwait(false);
+        if (sent)
             return (true, "A sign-in code was sent to your email.");
-        }
-        catch (Exception ex)
+
+        if (_env.IsDevelopment() && _sync.DebugOtpToConsole)
         {
-            _logger.LogWarning(ex, "Failed to send OTP email.");
-            if (_sync.DebugOtpToConsole)
-            {
-                Console.WriteLine($"[OTP] {email}: {code}");
-                return (true, "Email send failed; OTP written to console in development.");
-            }
-            return (false, "Could not send the sign-in email.");
+            Console.WriteLine($"[OTP] {email}: {code}");
+            _logger.LogWarning("OTP email not delivered ({Error}); code written to console in development.", err);
+            return (true, "Email send failed; OTP written to the server console in development.");
         }
+
+        return (false, string.IsNullOrWhiteSpace(err) ? "Could not send the sign-in email." : err);
     }
 
     public async Task<(bool Ok, AppUser? User, string Message)> VerifyAsync(string email, string code, CancellationToken cancellationToken = default)
@@ -113,6 +109,119 @@ public sealed class OtpAuthService
         };
         var id = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
         await http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(id));
+    }
+
+    /// <summary>
+    /// Same merge order as eQuotation / ApprovalPO:
+    /// appsettings Smtp → tenant email/proaccEmail → smtpCredentialsSecretRef → smtpAppPasswordSecretRef.
+    /// </summary>
+    private async Task<(bool Sent, string? Error)> TrySendEmailAsync(
+        string toAddress, string subject, string htmlBody, CancellationToken cancellationToken)
+    {
+        var tenantCode = (_config["TenantBootstrap:TenantCode"]
+                          ?? _sync.TenantCode
+                          ?? Environment.GetEnvironmentVariable("TENANT_CODE")
+                          ?? "").Trim();
+
+        TenantEmailOverride? tenantEmail = null;
+        if (tenantCode.Length > 0)
+        {
+            try
+            {
+                tenantEmail = await _tenantEmail.GetEmailOverrideAsync(tenantCode, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[SMTP] Could not load tenant email overrides for {Tenant}.", tenantCode);
+            }
+        }
+
+        if (tenantEmail?.OtpEnabled == false)
+            return (false, "OTP email is disabled for this tenant.");
+
+        var host = (_smtp.Host ?? "").Trim();
+        if (host.Length == 0)
+            host = "smtp.gmail.com";
+        var port = _smtp.Port <= 0 ? 587 : _smtp.Port;
+        var user = (_smtp.User ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(user) && !string.IsNullOrWhiteSpace(_smtp.From))
+            user = _smtp.From.Trim();
+
+        if (tenantEmail is not null)
+        {
+            if (!string.IsNullOrWhiteSpace(tenantEmail.SmtpHost))
+                host = tenantEmail.SmtpHost.Trim();
+            if (tenantEmail.SmtpPort is > 0)
+                port = tenantEmail.SmtpPort.Value;
+            if (!string.IsNullOrWhiteSpace(tenantEmail.SmtpSenderEmail))
+                user = tenantEmail.SmtpSenderEmail.Trim();
+        }
+
+        TenantSmtpCredentialsSecretPayload? bundle = null;
+        if (!string.IsNullOrWhiteSpace(tenantEmail?.SmtpCredentialsSecretRef))
+        {
+            bundle = await TenantSmtpSecretResolver
+                .ResolveSmtpCredentialsSecretAsync(_aws, tenantEmail.SmtpCredentialsSecretRef, cancellationToken)
+                .ConfigureAwait(false);
+            if (bundle is not null)
+            {
+                if (!string.IsNullOrWhiteSpace(bundle.Host))
+                    host = bundle.Host.Trim();
+                if (bundle.Port is > 0)
+                    port = bundle.Port.Value;
+                if (!string.IsNullOrWhiteSpace(bundle.User))
+                    user = bundle.User.Trim();
+            }
+        }
+
+        string pass;
+        if (!string.IsNullOrWhiteSpace(bundle?.Password))
+        {
+            pass = bundle.Password.Replace(" ", "").Trim();
+        }
+        else
+        {
+            var fallback = await _secrets.ResolveAsync(_smtp.PasswordSecretRef, cancellationToken).ConfigureAwait(false) ?? "";
+            pass = (await TenantSmtpSecretResolver.ResolveSmtpPasswordAsync(
+                    _aws,
+                    tenantEmail?.SmtpAppPasswordSecretRef,
+                    fallback,
+                    cancellationToken)
+                .ConfigureAwait(false) ?? "").Replace(" ", "").Trim();
+        }
+
+        if (string.IsNullOrWhiteSpace(host))
+            return (false, "SMTP is not configured.");
+        if (string.IsNullOrWhiteSpace(user) || string.IsNullOrWhiteSpace(pass))
+        {
+            return (false,
+                "SMTP user or password empty. Tenant must provide proaccEmail/email smtpCredentialsSecretRef or smtpAppPasswordSecretRef (same as eQuotation), and the app needs AWS credentials to read Secrets Manager.");
+        }
+
+        try
+        {
+            var message = new MimeMessage();
+            message.From.Add(new MailboxAddress("SQL Account Sync", user));
+            message.To.Add(MailboxAddress.Parse(toAddress));
+            message.Subject = subject;
+            message.Body = new TextPart("html") { Text = htmlBody };
+
+            using var client = new SmtpClient();
+            var secure = port == 465
+                ? SecureSocketOptions.SslOnConnect
+                : (_smtp.EnableSsl ? SecureSocketOptions.StartTlsWhenAvailable : SecureSocketOptions.None);
+            await client.ConnectAsync(host, port, secure, cancellationToken).ConfigureAwait(false);
+            await client.AuthenticateAsync(user, pass, cancellationToken).ConfigureAwait(false);
+            await client.SendAsync(message, cancellationToken).ConfigureAwait(false);
+            await client.DisconnectAsync(true, cancellationToken).ConfigureAwait(false);
+            _logger.LogInformation("OTP email sent to {Email} via {Host}:{Port}", toAddress, host, port);
+            return (true, null);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "SMTP send failed.");
+            return (false, "Could not send the sign-in email.");
+        }
     }
 }
 

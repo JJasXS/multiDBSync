@@ -2,6 +2,11 @@
 @model SqlAccountSync.Pages.Users.IndexModel
 @{
     ViewData["Title"] = "Users";
+    var activeAdminCount = Model.Users.Count(u => u.IsActive && AppRoles.Rank(u.Role) >= AppRoles.Rank(AppRoles.Admin));
+}
+@if (!string.IsNullOrWhiteSpace(Model.Message))
+{
+    <div class="flash @(Model.Error ? "flash-err" : "flash-ok")">@Model.Message</div>
 }
 <div class="map-layout">
     <div class="map-layout-left">
@@ -27,6 +32,7 @@
             <div class="card-head">
                 <h3>Users</h3>
             </div>
+            <p class="muted lede">At least one active ADMIN is always required.</p>
             @if (Model.Users.Count == 0)
             {
                 <p class="empty">No users yet.</p>
@@ -39,15 +45,27 @@
                         <tbody>
                         @foreach (var u in Model.Users)
                         {
+                            var isAdmin = AppRoles.Rank(u.Role) >= AppRoles.Rank(AppRoles.Admin);
+                            var isLastAdmin = u.IsActive && isAdmin && activeAdminCount <= 1;
                             <tr>
                                 <td>@u.DisplayName</td>
                                 <td>@u.Email</td>
                                 <td>@u.Role</td>
                                 <td>@(u.IsActive ? "Yes" : "No")</td>
                                 <td>
-                                    @if (u.IsActive)
+                                    @if (!u.IsActive)
                                     {
-                                        <form method="post" asp-page-handler="Disable" asp-route-id="@u.UserId"><button class="btn small danger">Disable</button></form>
+                                        <span class="muted">—</span>
+                                    }
+                                    else if (isLastAdmin)
+                                    {
+                                        <span class="muted">Cannot disable (last admin)</span>
+                                    }
+                                    else
+                                    {
+                                        <form method="post" asp-page-handler="Disable" asp-route-id="@u.UserId">
+                                            <button class="btn small danger" type="submit">Disable</button>
+                                        </form>
                                     }
                                 </td>
                             </tr>

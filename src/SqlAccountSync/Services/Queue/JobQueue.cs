@@ -54,9 +54,22 @@ VALUES (@JOBID, @JOBKIND, @TXNPK, @SOURCEDBID, @DESTDBID, @ENTITYCODE, @PAYLOADJ
         catch (FirebirdSql.Data.FirebirdClient.FbException ex) when (ex.Message.Contains("unique", StringComparison.OrdinalIgnoreCase))
         {
             var existing = await _db.QuerySingleAsync(
-                "SELECT FIRST 1 JOBID FROM SYNC_JOB WHERE IDEMKEY=@IDEMKEY",
-                r => CentralDb.Int(r, "JOBID"), new { IDEMKEY = job.IdemKey }, cancellationToken).ConfigureAwait(false);
-            return existing;
+                "SELECT FIRST 1 * FROM SYNC_JOB WHERE IDEMKEY=@IDEMKEY",
+                Map, new { IDEMKEY = job.IdemKey }, cancellationToken).ConfigureAwait(false);
+            if (existing is null)
+                return id;
+
+            // Allow a fresh attempt after a permanent failure / cancel (same payload idem key).
+            if (existing.Status is JobStatuses.Failed or JobStatuses.Cancelled)
+            {
+                await _db.ExecuteAsync(@"
+UPDATE SYNC_JOB SET STATUS='PENDING', ATTEMPTS=0, ERRORMESSAGE='', LOCKEDBY=NULL, LOCKEDAT=NULL,
+NEXTRUNAT=CURRENT_TIMESTAMP, PAYLOADJSON=@PAYLOADJSON, CREATEDBY=@CREATEDBY
+WHERE JOBID=@JOBID",
+                    new { PAYLOADJSON = job.PayloadJson, CREATEDBY = job.CreatedBy, JOBID = existing.JobId },
+                    cancellationToken).ConfigureAwait(false);
+            }
+            return existing.JobId;
         }
     }
 

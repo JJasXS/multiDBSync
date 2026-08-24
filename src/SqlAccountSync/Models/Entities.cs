@@ -8,7 +8,7 @@ public sealed class RegisteredDatabase
     public string DbCode { get; set; } = "";
     public string DisplayName { get; set; } = "";
     public string CompanyName { get; set; } = "";
-    public string DbRole { get; set; } = DatabaseRoles.Sub;
+    public string DbRole { get; set; } = DatabaseRoles.Master;
     public string FbHost { get; set; } = "";
     public int FbPort { get; set; } = 3050;
     public string FbPath { get; set; } = "";
@@ -47,6 +47,8 @@ public sealed class EntityMapping
     public int MasterDbId { get; set; }
     public int SubDbId { get; set; }
     public string EntityCode { get; set; } = "";
+    public string SrcEntityCode { get; set; } = "";
+    public string DstEntityCode { get; set; } = "";
     public string MasterCode { get; set; } = "";
     public string MasterKey { get; set; } = "";
     public string SubCode { get; set; } = "";
@@ -54,6 +56,8 @@ public sealed class EntityMapping
     public string MasterDesc { get; set; } = "";
     public string SubDesc { get; set; } = "";
     public string Status { get; set; } = MappingStatuses.Mapped;
+    public int? OriginJobId { get; set; }
+    public DateTime? LastSyncAt { get; set; }
     public DateTime CreatedAt { get; set; }
     public string CreatedBy { get; set; } = "";
     public DateTime UpdatedAt { get; set; }
@@ -203,10 +207,21 @@ public sealed class DocumentHeader
     public string DocKey { get; set; } = "";
     public string DocNo { get; set; } = "";
     public DateTime? DocDate { get; set; }
+    public DateTime? PostDate { get; set; }
+    public DateTime? TaxDate { get; set; }
+    public DateTime? DueDate { get; set; }
     public string PartyCode { get; set; } = "";
     public string PartyName { get; set; } = "";
+    public string Description { get; set; } = "";
+    public string Terms { get; set; } = "";
+    public string Area { get; set; } = "";
+    public string Agent { get; set; } = "";
+    public string Project { get; set; } = "";
     public decimal Amount { get; set; }
-    public string Currency { get; set; } = "MYR";
+    public string Currency { get; set; } = "----";
+    public string CurrencyRate { get; set; } = "1";
+    public string Note { get; set; } = "";
+    public Dictionary<string, string> Fields { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public List<DocumentLine> Lines { get; set; } = [];
 }
 
@@ -216,12 +231,22 @@ public sealed class DocumentLine
     public int Seq { get; set; }
     public string ItemCode { get; set; } = "";
     public string Description { get; set; } = "";
+    public string Description2 { get; set; } = "";
     public decimal Qty { get; set; }
     public string Uom { get; set; } = "";
+    public string Rate { get; set; } = "1";
     public decimal UnitPrice { get; set; }
     public decimal Amount { get; set; }
     public string TaxCode { get; set; } = "";
     public string Warehouse { get; set; } = "";
+    public string Batch { get; set; } = "";
+    public string Project { get; set; } = "";
+    public string Account { get; set; } = "";
+    public string Disc { get; set; } = "";
+    public bool TaxInclusive { get; set; }
+    public string IrbmClassification { get; set; } = "";
+    public DateTime? DeliveryDate { get; set; }
+    public Dictionary<string, string> Fields { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
 public sealed class ConnectionTestResult

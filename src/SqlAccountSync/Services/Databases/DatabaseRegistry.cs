@@ -1,5 +1,8 @@
+using Microsoft.Extensions.Options;
 using SqlAccountSync.Data;
+using SqlAccountSync.Helpers;
 using SqlAccountSync.Models;
+using SqlAccountSync.Options;
 
 namespace SqlAccountSync.Services.Databases;
 
@@ -32,8 +35,13 @@ public sealed class DashboardStats
 public sealed class DatabaseRegistry : IDatabaseRegistry
 {
     private readonly CentralDb _db;
+    private readonly SyncOptions _sync;
 
-    public DatabaseRegistry(CentralDb db) => _db = db;
+    public DatabaseRegistry(CentralDb db, IOptions<SyncOptions> sync)
+    {
+        _db = db;
+        _sync = sync.Value;
+    }
 
     public Task<List<RegisteredDatabase>> ListAsync(bool includeInactive = false, CancellationToken cancellationToken = default)
     {
@@ -54,9 +62,11 @@ public sealed class DatabaseRegistry : IDatabaseRegistry
 
     public async Task<int> SaveAsync(RegisteredDatabase db, string user, CancellationToken cancellationToken = default)
     {
+        int id;
         if (db.DbId == 0)
         {
-            var id = (int)await _db.NextIdAsync("GEN_SYNC_DATABASE", cancellationToken).ConfigureAwait(false);
+            id = (int)await _db.NextIdAsync("GEN_SYNC_DATABASE", cancellationToken).ConfigureAwait(false);
+            ApplyAutoSqlApiCredRef(db, id);
             await _db.ExecuteAsync(@"
 INSERT INTO SYNC_DATABASE (DBID, DBCODE, DISPLAYNAME, COMPANYNAME, DBROLE, FBHOST, FBPORT, FBPATH, FBCHARSET, FBDIALECT, FBUSER, FBCREDREF, APIBASEURL, APICREDREF, ENVIRONMENT, ISACTIVE, CONNSTATUS, CREATEDAT, CREATEDBY, UPDATEDAT, UPDATEDBY, NOTES)
 VALUES (@DBID, @DBCODE, @DISPLAYNAME, @COMPANYNAME, @DBROLE, @FBHOST, @FBPORT, @FBPATH, @FBCHARSET, @FBDIALECT, @FBUSER, @FBCREDREF, @APIBASEURL, @APICREDREF, @ENVIRONMENT, 1, 'OFFLINE', CURRENT_TIMESTAMP, @USER, CURRENT_TIMESTAMP, @USER, @NOTES)",
@@ -64,14 +74,36 @@ VALUES (@DBID, @DBCODE, @DISPLAYNAME, @COMPANYNAME, @DBROLE, @FBHOST, @FBPORT, @
             return id;
         }
 
+        id = db.DbId;
+        ApplyAutoSqlApiCredRef(db, id);
         await _db.ExecuteAsync(@"
 UPDATE SYNC_DATABASE SET
     DBCODE=@DBCODE, DISPLAYNAME=@DISPLAYNAME, COMPANYNAME=@COMPANYNAME, DBROLE=@DBROLE,
     FBHOST=@FBHOST, FBPORT=@FBPORT, FBPATH=@FBPATH, FBCHARSET=@FBCHARSET, FBDIALECT=@FBDIALECT,
     FBUSER=@FBUSER, FBCREDREF=@FBCREDREF, APIBASEURL=@APIBASEURL, APICREDREF=@APICREDREF,
     ENVIRONMENT=@ENVIRONMENT, UPDATEDAT=CURRENT_TIMESTAMP, UPDATEDBY=@USER, NOTES=@NOTES
-WHERE DBID=@DBID AND ISACTIVE=1", Args(db, db.DbId, user), cancellationToken).ConfigureAwait(false);
-        return db.DbId;
+WHERE DBID=@DBID AND ISACTIVE=1", Args(db, id, user), cancellationToken).ConfigureAwait(false);
+        return id;
+    }
+
+    private void ApplyAutoSqlApiCredRef(RegisteredDatabase db, int dbId)
+    {
+        if (!_sync.AutoAssignSqlApiCredRefByDbId)
+            return;
+        if (string.IsNullOrWhiteSpace(_sync.TenantCode))
+            return;
+        if (!SqlApiCredRefConvention.ShouldAutoAssign(db.ApiCredRef, _sync.TenantCode))
+            return;
+
+        var fromCode = SqlApiCredRefConvention.BuildCredRef(_sync.TenantCode, db.DbCode);
+        if (fromCode.Length > 0)
+        {
+            db.ApiCredRef = fromCode;
+            return;
+        }
+
+        // Code empty: fall back to numeric id so a secret path still exists.
+        db.ApiCredRef = SqlApiCredRefConvention.BuildCredRef(_sync.TenantCode, dbId.ToString());
     }
 
     public Task DeactivateAsync(int dbId, string user, CancellationToken cancellationToken = default) =>

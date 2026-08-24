@@ -90,6 +90,22 @@ public sealed class SecretResolver : ISecretResolver
             }
         }
 
+        // Bare Secrets Manager id (e.g. proacc/tenant/.../S2) when it looks like a path.
+        if (_secrets is not null && r.Contains('/') && !r.Contains('\\')
+            && !r.Contains('=') && r.IndexOf(' ') < 0)
+        {
+            try
+            {
+                var resp = await _secrets.GetSecretValueAsync(new GetSecretValueRequest { SecretId = r }, cancellationToken)
+                    .ConfigureAwait(false);
+                return InterpretSecretString(resp.SecretString);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to resolve bare Secrets Manager id.");
+            }
+        }
+
         // Bare environment variable name fallback
         var envVal = Environment.GetEnvironmentVariable(r);
         return string.IsNullOrWhiteSpace(envVal) ? null : envVal;

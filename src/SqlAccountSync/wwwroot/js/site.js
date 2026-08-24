@@ -1,4 +1,4 @@
-﻿(() => {
+(() => {
   const shell = document.querySelector(".app-shell");
   if (!shell) return;
 
@@ -63,6 +63,62 @@
     link.addEventListener("click", (e) => {
       e.preventDefault();
       activate(link.getAttribute("data-tab"));
+    });
+  });
+})();
+
+(() => {
+  document.querySelectorAll("[data-secret-toggle]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const wrap = btn.closest(".secret-input");
+      const input = wrap?.querySelector("input");
+      if (!input) return;
+      const show = input.type === "password";
+      input.type = show ? "text" : "password";
+      btn.setAttribute("aria-label", show ? "Hide secret reference" : "Show secret reference");
+      const eye = btn.querySelector(".icon-eye");
+      const eyeOff = btn.querySelector(".icon-eye-off");
+      if (eye) eye.hidden = show;
+      if (eyeOff) eyeOff.hidden = !show;
+    });
+  });
+})();
+
+(() => {
+  const codeInput = document.querySelector("[data-db-code]");
+  const credInput = document.querySelector("[data-api-cred-ref]");
+  if (!codeInput || !credInput) return;
+  if (codeInput.getAttribute("data-sync-api-cred") !== "true") return;
+
+  const tenant = (codeInput.getAttribute("data-tenant-code") || "").trim();
+  if (!tenant) return;
+
+  const prefix = `sm:proacc/tenant/${tenant}/sqlApiCredentials/`;
+  const sanitize = (v) => (v || "").trim().toUpperCase().replace(/[^A-Z0-9._@+=-]/g, "");
+
+  const sync = () => {
+    const current = (credInput.value || "").trim();
+    const managed =
+      !current ||
+      current.includes("{CODE}") ||
+      current.includes("{DBID}") ||
+      current.startsWith(prefix);
+    if (!managed) return;
+    const code = sanitize(codeInput.value);
+    credInput.value = code ? prefix + code : prefix + "{CODE}";
+  };
+
+  codeInput.addEventListener("input", sync);
+  sync();
+})();
+
+(() => {
+  document.querySelectorAll("[data-check-all]").forEach((master) => {
+    master.addEventListener("change", () => {
+      const group = master.getAttribute("data-check-all");
+      document.querySelectorAll(`[data-check-group="${group}"]`).forEach((cb) => {
+        cb.checked = master.checked;
+      });
     });
   });
 })();

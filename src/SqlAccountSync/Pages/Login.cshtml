@@ -1,62 +1,101 @@
 @page
 @model SqlAccountSync.Pages.LoginModel
 @{
-    ViewData["Title"] = "Sign in";
+    ViewData["Title"] = "Sign In";
+    Layout = "_LoginLayout";
 }
-<div class="login-wrap card">
-    <div class="login-head">
-        <div class="login-brand">
-            <div class="login-mark" aria-hidden="true">
-                <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <rect x="4" y="8" width="24" height="16" rx="2" stroke="currentColor" stroke-width="2"/>
-                    <path d="M4 13h24M11 8V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2" stroke="currentColor" stroke-width="2"/>
-                    <circle cx="16" cy="18" r="2.5" fill="currentColor"/>
-                </svg>
+<div class="login-page" id="login-page">
+    <aside class="login-aside" aria-label="About SQL Account Sync">
+        <div class="login-aside-header">
+            <p class="login-aside-kicker">Operations</p>
+            <p class="login-aside-hint">Intercompany sync for SQL Account — master data, partner maps, and document flows.</p>
+        </div>
+        <div class="login-feature-list">
+            <div class="login-feature">
+                <span class="login-feature-icon" aria-hidden="true">⇄</span>
+                <div>
+                    <div class="login-feature-title">Master → Sub</div>
+                    <div class="login-feature-desc">Push customers, items, and suppliers to linked company databases.</div>
+                </div>
             </div>
-            <div>
-                <span class="login-kicker">Operations</span>
-                <h2>SQL Account Sync</h2>
-                <p class="muted">Secure sign-in · one-time code</p>
+            <div class="login-feature">
+                <span class="login-feature-icon" aria-hidden="true">🤝</span>
+                <div>
+                    <div class="login-feature-title">Partner maps</div>
+                    <div class="login-feature-desc">Reciprocal Customer ↔ Supplier mapping for Sub-to-Sub sync.</div>
+                </div>
+            </div>
+            <div class="login-feature">
+                <span class="login-feature-icon" aria-hidden="true">📄</span>
+                <div>
+                    <div class="login-feature-title">SI → PI</div>
+                    <div class="login-feature-desc">Translate sales invoices into purchase invoices across companies.</div>
+                </div>
             </div>
         </div>
-    </div>
-    <div class="login-body">
-        <p class="login-lede">Enter your email to receive a one-time sign-in code. Passwords are not stored.</p>
-        @if (Model.ShowLocalDevHint)
-        {
-            <p class="hint"><strong>Local development</strong> — email <code>@Model.DevAdminEmail</code>, code <code>@Model.DevMockCode</code>.</p>
-        }
-        @if (!string.IsNullOrEmpty(Model.Message))
-        {
-            <div class="flash @(Model.Sent ? "flash-ok" : "flash-err")">@Model.Message</div>
-        }
-        <div class="login-steps">
-            <section class="login-step">
-                <div class="login-step-head">
-                    <span class="login-step-num">1</span>
-                    <span>Email</span>
+    </aside>
+
+    <div class="login-main">
+        <div class="login-container">
+            <div class="login-brand">
+                <div class="login-brand-mark" aria-hidden="true">
+                    <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="4" y="8" width="24" height="16" rx="2" stroke="currentColor" stroke-width="2"/>
+                        <path d="M4 13h24M11 8V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2" stroke="currentColor" stroke-width="2"/>
+                        <circle cx="16" cy="18" r="2.5" fill="currentColor"/>
+                    </svg>
                 </div>
-                <form method="post" asp-page-handler="Send">
-                    <label asp-for="Email">Work email</label>
-                    <input asp-for="Email" type="email" autocomplete="username" placeholder="you@company.com" required />
-                    <button class="btn" type="submit">Send code</button>
-                </form>
-            </section>
-            <section class="login-step">
-                <div class="login-step-head">
-                    <span class="login-step-num">2</span>
-                    <span>Verification code</span>
+                <h1 class="login-brand-title">SQL Account Sync</h1>
+                <p class="login-brand-sub">Secure sign-in · one-time code</p>
+            </div>
+
+            <div class="login-card"
+                 data-otp-seconds="@Model.OtpSeconds"
+                 data-resend-seconds="30"
+                 data-suggested-email="@Model.SuggestedEmail">
+
+                <div id="email-step" class="login-step active">
+                    <form id="email-form">
+                        @Html.AntiForgeryToken()
+                        <div class="form-group">
+                            <label for="email">Email Address</label>
+                            <input type="email" id="email" name="email" value="@Model.SuggestedEmail"
+                                   placeholder="your@email.com" required autocomplete="email" />
+                        </div>
+                        <button type="submit" class="btn-submit" id="email-submit">Continue</button>
+                    </form>
+                    <div id="email-error" class="error-message" role="alert"></div>
                 </div>
-                <form method="post" asp-page-handler="Verify">
-                    <input type="hidden" asp-for="Email" />
-                    <label asp-for="Code">One-time code</label>
-                    <input asp-for="Code" class="login-code" autocomplete="one-time-code" inputmode="numeric" placeholder="000000" maxlength="12" />
-                    <button class="btn secondary" type="submit">Sign in</button>
-                </form>
-            </section>
+
+                <div id="otp-step" class="login-step">
+                    <h2 class="login-otp-heading">Verify Your Email</h2>
+                    <p class="subtitle">Enter the 6-digit code sent to<br><span id="email-display"></span></p>
+                    <form id="otp-form">
+                        <div class="form-group">
+                            <label for="otp-1">Enter OTP</label>
+                            <div class="otp-boxes" id="otp-boxes">
+                                <input type="tel" id="otp-1" class="otp-digit" maxlength="1" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" required />
+                                <input type="tel" id="otp-2" class="otp-digit" maxlength="1" inputmode="numeric" pattern="[0-9]*" autocomplete="off" required />
+                                <input type="tel" id="otp-3" class="otp-digit" maxlength="1" inputmode="numeric" pattern="[0-9]*" autocomplete="off" required />
+                                <input type="tel" id="otp-4" class="otp-digit" maxlength="1" inputmode="numeric" pattern="[0-9]*" autocomplete="off" required />
+                                <input type="tel" id="otp-5" class="otp-digit" maxlength="1" inputmode="numeric" pattern="[0-9]*" autocomplete="off" required />
+                                <input type="tel" id="otp-6" class="otp-digit" maxlength="1" inputmode="numeric" pattern="[0-9]*" autocomplete="off" required />
+                            </div>
+                            <div class="otp-hint" id="otp-timer">OTP expires in <span id="otp-countdown">@Model.OtpSeconds</span>s</div>
+                        </div>
+                        <button type="submit" class="btn-submit" id="otp-verify-btn">Verify</button>
+                    </form>
+                    <div id="otp-error" class="error-message" role="alert"></div>
+                    <div class="otp-footer">
+                        <p>Didn't receive the code? <button type="button" class="btn-resend" id="btn-resend">Resend</button></p>
+                        <button type="button" class="btn-back" id="btn-back">&larr; Back</button>
+                    </div>
+                </div>
+
+                <div class="login-meta">
+                    <div>Managed by ProAcc System.</div>
+                </div>
+            </div>
         </div>
-    </div>
-    <div class="login-foot">
-        <p>Intercompany sync for SQL Account</p>
     </div>
 </div>

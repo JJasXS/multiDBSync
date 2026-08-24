@@ -1,0 +1,238 @@
+@page "/push"
+
+@model SqlAccountSync.Pages.Push.IndexModel
+
+@{
+
+    ViewData["Title"] = "Push to subs";
+
+    var entities = PushableEntityCodes.All;
+
+}
+
+@section TopbarActions {
+
+    @if (Model.CanOperate)
+
+    {
+
+        <button class="btn" type="submit" form="pushForm"
+
+                onclick="return confirm('Push selected records to the selected target databases?');">Push</button>
+
+    }
+
+}
+
+
+
+@if (!string.IsNullOrEmpty(Model.Message))
+
+{
+
+    <div class="flash @(Model.MessageOk ? "flash-ok" : "flash-err")">@Model.Message</div>
+
+}
+
+
+
+<div class="card">
+
+    <div class="card-head">
+
+        <h3>Source database</h3>
+
+    </div>
+
+    <form method="get" class="form-grid">
+
+        <div>
+
+            <label>Source</label>
+
+            <select name="SourceDbId" onchange="this.form.submit()">
+
+                @foreach (var d in Model.SourceDatabases)
+
+                {
+
+                    <option value="@d.DbId" selected="@(d.DbId == Model.SourceDbId)">@d.DisplayName (@d.DbRole)</option>
+
+                }
+
+            </select>
+
+        </div>
+
+        <div>
+
+            <label>Entity</label>
+
+            <select name="EntityCode" onchange="this.form.submit()">
+
+                @foreach (var e in entities)
+
+                {
+
+                    <option value="@e" selected="@(e == Model.EntityCode)">@e</option>
+
+                }
+
+            </select>
+
+        </div>
+
+    </form>
+
+    <p class="muted">Select records and one or more target databases, then Push. Master→Sub copies the same type; Sub→Sub flips Customer↔Supplier for party entities.</p>
+
+</div>
+
+
+
+<form id="pushForm" method="post" asp-page-handler="Push">
+
+    <input type="hidden" asp-for="SourceDbId" />
+
+    <input type="hidden" asp-for="EntityCode" />
+
+
+
+    <div class="push-layout">
+
+        <div class="card card-fill">
+
+            <div class="card-head">
+
+                <h3>@Model.EntityCode records</h3>
+
+                <label class="check-all"><input type="checkbox" data-check-all="master-codes" /> Select all</label>
+
+            </div>
+
+            @if (Model.Records.Count == 0)
+
+            {
+
+                <p class="empty">No records loaded. Pick a source database and entity.</p>
+
+            }
+
+            else
+
+            {
+
+                <div class="table-wrap">
+
+                    <table>
+
+                        <thead><tr><th class="col-check"></th><th>Code</th><th>Description</th></tr></thead>
+
+                        <tbody>
+
+                        @foreach (var r in Model.Records)
+
+                        {
+
+                            var selected = Model.SelectedCodes.Contains(r.Code, StringComparer.OrdinalIgnoreCase);
+
+                            <tr>
+
+                                <td class="col-check">
+
+                                    <input type="checkbox" name="SelectedCodes" value="@r.Code" data-check-group="master-codes"
+
+                                           @(selected ? "checked" : null) />
+
+                                </td>
+
+                                <td>@r.Code</td>
+
+                                <td>@r.Description</td>
+
+                            </tr>
+
+                        }
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            }
+
+        </div>
+
+
+
+        <div class="card card-fill">
+
+            <div class="card-head">
+
+                <h3>Target databases</h3>
+
+                <label class="check-all"><input type="checkbox" data-check-all="sub-dbs" /> Select all</label>
+
+            </div>
+
+            @if (Model.TargetSubs.Count == 0)
+
+            {
+
+                <p class="empty">No target databases available for this source.</p>
+
+            }
+
+            else
+
+            {
+
+                <ul class="check-list">
+
+                    @foreach (var s in Model.TargetSubs)
+
+                    {
+
+                        var selected = Model.SelectedSubDbIds.Contains(s.DbId);
+
+                        Model.TargetEntityHints.TryGetValue(s.DbId, out var hint);
+
+                        <li>
+
+                            <label>
+
+                                <input type="checkbox" name="SelectedSubDbIds" value="@s.DbId" data-check-group="sub-dbs"
+
+                                       @(selected ? "checked" : null) />
+
+                                @s.DisplayName <span class="muted">(@s.DbCode)</span>
+
+                                @if (!string.IsNullOrEmpty(hint))
+
+                                {
+
+                                    <span class="muted"> — @hint</span>
+
+                                }
+
+                            </label>
+
+                        </li>
+
+                    }
+
+                </ul>
+
+            }
+
+        </div>
+
+    </div>
+
+</form>
+
+
+
+<p class="muted">Queued jobs appear under <a asp-page="/Jobs/Index">Synchronization jobs</a>.</p>
+
