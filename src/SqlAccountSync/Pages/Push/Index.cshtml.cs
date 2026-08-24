@@ -1,266 +1,209 @@
 using Microsoft.AspNetCore.Mvc;
-
 using SqlAccountSync.Helpers;
-
 using SqlAccountSync.Models;
-
+using SqlAccountSync.Services.Audit;
 using SqlAccountSync.Services.Databases;
-
+using SqlAccountSync.Services.Queue;
 using SqlAccountSync.Services.SqlAccount;
-
 using SqlAccountSync.Services.Sync;
-
-
 
 namespace SqlAccountSync.Pages.Push;
 
-
-
 public class IndexModel : SyncPageModel
-
 {
-
     private readonly IDatabaseRegistry _registry;
-
     private readonly ISqlAccountReadAdapter _read;
-
     private readonly ISyncOrchestrator _sync;
+    private readonly IJobQueue _jobs;
+    private readonly IAuditService _audit;
 
-
-
-    public IndexModel(IDatabaseRegistry registry, ISqlAccountReadAdapter read, ISyncOrchestrator sync)
-
+    public IndexModel(
+        IDatabaseRegistry registry,
+        ISqlAccountReadAdapter read,
+        ISyncOrchestrator sync,
+        IJobQueue jobs,
+        IAuditService audit)
     {
-
         _registry = registry;
-
         _read = read;
-
         _sync = sync;
-
+        _jobs = jobs;
+        _audit = audit;
     }
 
-
-
+    [BindProperty(SupportsGet = true)] public string Tab { get; set; } = "push";
     [BindProperty(SupportsGet = true)] public int SourceDbId { get; set; }
-
     [BindProperty(SupportsGet = true)] public string EntityCode { get; set; } = "CUSTOMER";
 
     [BindProperty] public List<string> SelectedCodes { get; set; } = [];
-
     [BindProperty] public List<int> SelectedSubDbIds { get; set; } = [];
 
-
+    [BindProperty] public int MasterDbId { get; set; }
+    [BindProperty] public int SubDbId { get; set; }
+    [BindProperty] public string JobEntityCode { get; set; } = "ITEM";
+    [BindProperty] public string MasterCode { get; set; } = "";
 
     public List<RegisteredDatabase> SourceDatabases { get; set; } = [];
-
     public List<RegisteredDatabase> TargetSubs { get; set; } = [];
-
     public List<MasterRecord> Records { get; set; } = [];
-
     public Dictionary<int, string> TargetEntityHints { get; set; } = new();
-
     public RegisteredDatabase? SelectedSource { get; set; }
 
-    public string Message { get; set; } = "";
+    public List<SyncJob> Jobs { get; set; } = [];
+    public List<RegisteredDatabase> Databases { get; set; } = [];
+    public DryRunResult? DryRun { get; set; }
 
+    public string Message { get; set; } = "";
     public bool MessageOk { get; set; }
 
+    public bool IsJobsTab => string.Equals(NormalizeTab(Tab), "jobs", StringComparison.OrdinalIgnoreCase);
 
-
-    public async Task OnGetAsync()
-
+    public async Task OnGetAsync(string? status)
     {
+        Tab = NormalizeTab(Tab);
+        if (IsJobsTab)
+        {
+            await LoadJobsAsync(status);
+            return;
+        }
 
-        await LoadAsync();
-
+        await LoadPushAsync();
     }
 
-
-
     public async Task<IActionResult> OnPostPushAsync()
-
     {
-
         if (!CanOperate) return Forbid();
-
+        Tab = "push";
         EntityCode = NormalizeEntity(EntityCode);
 
         var (queued, failed, messages) = await _sync.EnqueueMasterBatchAsync(
-
             SourceDbId,
-
             SelectedSubDbIds,
-
             EntityCode,
-
             SelectedCodes,
-
             dryRun: false,
-
             CurrentEmail);
 
-
-
         MessageOk = queued > 0 && failed == 0;
-
         Message = queued == 0 && failed == 0
-
             ? string.Join(" ", messages)
-
             : $"Queued {queued} job(s)" + (failed > 0 ? $", {failed} failed." : ".")
-
               + (messages.Count == 0 ? "" : " " + string.Join(" ", messages.Take(8)));
-
         if (messages.Count > 8)
-
             Message += $" … (+{messages.Count - 8} more)";
 
-
-
-        await LoadAsync();
-
+        await LoadPushAsync();
         return Page();
-
     }
 
-
-
-    private async Task LoadAsync()
-
+    public async Task<IActionResult> OnPostDryRunAsync()
     {
+        if (!CanOperate) return Forbid();
+        Tab = "jobs";
+        DryRun = await _sync.DryRunMasterAsync(MasterDbId, SubDbId, JobEntityCode, MasterCode);
+        await LoadJobsAsync(null);
+        return Page();
+    }
 
+    public async Task<IActionResult> OnPostEnqueueAsync()
+    {
+        if (!CanOperate) return Forbid();
+        Tab = "jobs";
+        var (id, msg) = await _sync.EnqueueMasterAsync(MasterDbId, SubDbId, JobEntityCode, MasterCode, dryRun: false, CurrentEmail);
+        await _audit.WriteAsync(new AuditEntry
+        {
+            UserEmail = CurrentEmail,
+            Action = "USER EXECUTED SYNC",
+            RecordId = id.ToString(),
+            Result = "QUEUED"
+        });
+        Message = msg;
+        MessageOk = true;
+        await LoadJobsAsync(null);
+        return Page();
+    }
+
+    public async Task<IActionResult> OnPostCancelAsync(int jobId)
+    {
+        if (!CanOperate) return Forbid();
+        await _jobs.CancelAsync(jobId);
+        return RedirectToPage(new { tab = "jobs" });
+    }
+
+    private async Task LoadPushAsync()
+    {
         EntityCode = NormalizeEntity(EntityCode);
-
         var databases = await _registry.ListAsync();
-
-        SourceDatabases = databases
-
-            .OrderBy(d => d.DisplayName)
-
-            .ToList();
-
-
+        SourceDatabases = databases.OrderBy(d => d.DisplayName).ToList();
 
         if (SourceDbId == 0)
-
             SourceDbId = SourceDatabases.FirstOrDefault(d => d.DbRole is "MASTER" or "BOTH")?.DbId
-
                          ?? SourceDatabases.FirstOrDefault()?.DbId ?? 0;
 
-
-
         SelectedSource = await _registry.GetAsync(SourceDbId);
-
         TargetSubs = await ResolveTargetsAsync(SourceDbId, databases);
-
         TargetEntityHints = BuildTargetHints(SelectedSource, TargetSubs);
 
-
-
         if (SourceDbId <= 0 || SelectedSource is null)
-
             return;
 
-
-
         Records = await LoadRecordsAsync(SelectedSource, EntityCode);
-
     }
 
-
+    private async Task LoadJobsAsync(string? status)
+    {
+        Jobs = await _jobs.ListAsync(status);
+        Databases = await _registry.ListAsync();
+    }
 
     private async Task<List<RegisteredDatabase>> ResolveTargetsAsync(int sourceDbId, List<RegisteredDatabase> databases)
-
     {
-
         if (sourceDbId <= 0)
-
             return [];
-
-
 
         var source = databases.FirstOrDefault(d => d.DbId == sourceDbId);
-
         if (source is null)
-
             return [];
 
-
-
         var links = await _registry.ListLinksAsync();
-
         if (source.DbRole is "MASTER" or "BOTH")
-
         {
-
             var linkedSubIds = links
-
                 .Where(l => l.MasterDbId == sourceDbId && l.IsActive)
-
                 .Select(l => l.SubDbId)
-
                 .ToHashSet();
-
             if (linkedSubIds.Count > 0)
-
             {
-
                 return databases
-
                     .Where(d => linkedSubIds.Contains(d.DbId))
-
                     .OrderBy(d => d.DisplayName)
-
                     .ToList();
-
             }
-
         }
-
-
 
         return databases
-
             .Where(d => d.DbId != sourceDbId && d.DbRole is "SUB" or "BOTH" or "MASTER")
-
             .OrderBy(d => d.DisplayName)
-
             .ToList();
-
     }
-
-
 
     private Dictionary<int, string> BuildTargetHints(RegisteredDatabase? source, List<RegisteredDatabase> targets)
-
     {
-
         var hints = new Dictionary<int, string>();
-
         if (source is null || !PartnerSyncRules.IsPartyEntity(EntityCode))
-
             return hints;
 
-
-
         foreach (var dest in targets)
-
         {
-
             var destEntity = PartnerSyncRules.ResolveTargetEntity(source, dest, EntityCode);
-
             if (!string.Equals(destEntity, EntityCode, StringComparison.OrdinalIgnoreCase))
-
                 hints[dest.DbId] = $"Creates {destEntity} on {dest.DisplayName}";
-
         }
-
         return hints;
-
     }
 
-
+    private static string NormalizeTab(string? tab) =>
+        string.Equals(tab, "jobs", StringComparison.OrdinalIgnoreCase) ? "jobs" : "push";
 
     private static string NormalizeEntity(string entity) =>
         PushableEntityCodes.Normalize(entity, EntityCodes.Customer);
@@ -273,7 +216,4 @@ public class IndexModel : SyncPageModel
             "SUPPLIER" => _read.GetSuppliersAsync(db),
             _ => Task.FromResult(new List<MasterRecord>())
         };
-
 }
-
-

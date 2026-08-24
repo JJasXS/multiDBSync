@@ -64,6 +64,7 @@ builder.Services.Configure<SmtpOptions>(builder.Configuration.GetSection(SmtpOpt
 builder.Services.Configure<SyncOptions>(builder.Configuration.GetSection(SyncOptions.SectionName));
 builder.Services.Configure<BootstrapOptions>(builder.Configuration.GetSection(BootstrapOptions.SectionName));
 builder.Services.Configure<AwsOptions>(builder.Configuration.GetSection(AwsOptions.SectionName));
+builder.Services.Configure<FeatureOptions>(builder.Configuration.GetSection(FeatureOptions.SectionName));
 
 var awsRegion = builder.Configuration["AWS:Region"]
     ?? Environment.GetEnvironmentVariable("AWS_REGION")

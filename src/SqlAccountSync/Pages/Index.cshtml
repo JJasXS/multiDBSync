@@ -1,7 +1,11 @@
 ﻿@page
 @model SqlAccountSync.Pages.IndexModel
+@using Microsoft.Extensions.Options
+@using SqlAccountSync.Options
+@inject IOptions<FeatureOptions> FeatureOptions
 @{
     ViewData["Title"] = "Dashboard";
+    var showMappingsUi = FeatureOptions.Value.ShowMappingsUi;
 }
 <div class="stats">
     <div class="stat"><div class="n">@Model.Stats.TotalDatabases</div><div class="l">Databases</div></div>
@@ -49,6 +53,8 @@
             }
         </div>
 
+        @if (showMappingsUi)
+        {
         <div class="card">
             <div class="card-head">
                 <h3>Mappings</h3>
@@ -85,6 +91,7 @@
                 }
             }
         </div>
+        }
 
         <div class="card">
             <div class="card-head">
@@ -156,7 +163,7 @@
         <div class="card">
             <div class="card-head">
                 <h3>Synchronization jobs</h3>
-                <a asp-page="/Jobs/Index">View</a>
+                <a asp-page="/Push/Index" asp-route-tab="jobs">View</a>
             </div>
             @if (!Model.CentralConfigured)
             {

@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using SqlAccountSync.Models;
+using SqlAccountSync.Options;
 using SqlAccountSync.Services.Audit;
 using SqlAccountSync.Services.Auth;
 using SqlAccountSync.Services.Databases;
@@ -14,13 +16,20 @@ public class IndexModel : SyncPageModel
     private readonly IMappingService _mapping;
     private readonly ISqlAccountReadAdapter _read;
     private readonly IAuditService _audit;
+    private readonly FeatureOptions _features;
 
-    public IndexModel(IDatabaseRegistry registry, IMappingService mapping, ISqlAccountReadAdapter read, IAuditService audit)
+    public IndexModel(
+        IDatabaseRegistry registry,
+        IMappingService mapping,
+        ISqlAccountReadAdapter read,
+        IAuditService audit,
+        IOptions<FeatureOptions> features)
     {
         _registry = registry;
         _mapping = mapping;
         _read = read;
         _audit = audit;
+        _features = features.Value;
     }
 
     [BindProperty(SupportsGet = true)] public string Entity { get; set; } = "ITEM";
@@ -46,8 +55,14 @@ public class IndexModel : SyncPageModel
     public List<EntityMapping> Conflicts { get; set; } = [];
     public string Message { get; set; } = "";
 
-    public async Task OnGetAsync()
+    public async Task<IActionResult> OnGetAsync()
     {
+        if (!_features.ShowMappingsUi)
+        {
+            TempData["Flash"] = "Mappings UI is disabled. Codes must match across databases; use Push to create sync mappings.";
+            return RedirectToPage("/Index");
+        }
+
         Entity = NormalizeEntity(Entity);
         Databases = await _registry.ListAsync();
         if (MasterDbId == 0)
@@ -66,10 +81,16 @@ public class IndexModel : SyncPageModel
             }
         }
         Conflicts = await _mapping.ConflictsAsync();
+        return Page();
     }
 
     public async Task<IActionResult> OnPostConfirmAsync()
     {
+        if (!_features.ShowMappingsUi)
+        {
+            TempData["Flash"] = "Mappings UI is disabled. Codes must match across databases; use Push to create sync mappings.";
+            return RedirectToPage("/Index");
+        }
         if (!IsAdmin) return Forbid();
         Entity = NormalizeEntity(Entity);
         Databases = await _registry.ListAsync();
@@ -102,8 +123,8 @@ public class IndexModel : SyncPageModel
             Result = ok ? "SUCCESS" : "CONFLICT"
         });
         Message = msg;
-        await OnGetAsync();
-        return Page();
+        var load = await OnGetAsync();
+        return load is RedirectToPageResult ? load : Page();
     }
 
     private static string NormalizeEntity(string entity) =>

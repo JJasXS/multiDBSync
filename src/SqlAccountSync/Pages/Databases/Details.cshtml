@@ -1,8 +1,12 @@
 @page "{id:int}"
 @model SqlAccountSync.Pages.Databases.DetailsModel
+@using Microsoft.Extensions.Options
+@using SqlAccountSync.Options
+@inject IOptions<FeatureOptions> FeatureOptions
 @{
     ViewData["Title"] = Model.Db?.DisplayName ?? "Database";
     var d = Model.Db!;
+    var showMappingsUi = FeatureOptions.Value.ShowMappingsUi;
 }
 @if (!string.IsNullOrEmpty(Model.Message))
 {
@@ -28,8 +32,11 @@
             <button class="btn danger" type="submit">Disable database</button>
         </form>
     }
-    <a class="btn secondary" asp-page="/Mappings/Index" asp-route-entity="ITEM">View mappings</a>
+    @if (showMappingsUi)
+    {
+        <a class="btn secondary" asp-page="/Mappings/Index" asp-route-entity="ITEM">View mappings</a>
+    }
     <a class="btn secondary" href="/logs?tab=transactions">View transactions</a>
     <a class="btn secondary" asp-page="/Logs">View logs</a>
-    <a class="btn secondary" asp-page="/Jobs/Index">Sync now</a>
+    <a class="btn secondary" asp-page="/Push/Index" asp-route-tab="jobs">Sync now</a>
 </div>

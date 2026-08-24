@@ -59,7 +59,7 @@ public sealed class ValidationService : IValidationService
 
         var partyMap = await _mapping.FindPartyMapAsync(masterDbId, subDbId, EntityCodes.Customer, source.PartyCode, cancellationToken);
         if (partyMap is null)
-            errors.Add($"No customer/supplier mapping for {source.PartyCode}.");
+            errors.Add($"Supplier/customer '{source.PartyCode}' does not exist on the destination (no mapping). Push the partner from source to destination first.");
 
         foreach (var line in source.Lines)
         {

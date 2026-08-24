@@ -61,3 +61,10 @@ public sealed class AwsOptions
     public const string SectionName = "AWS";
     public string Region { get; set; } = "ap-southeast-1";
 }
+
+public sealed class FeatureOptions
+{
+    public const string SectionName = "Features";
+    /// <summary>When false, Mappings nav/links are hidden and /Mappings redirects away. Backend mapping still runs.</summary>
+    public bool ShowMappingsUi { get; set; }
+}
