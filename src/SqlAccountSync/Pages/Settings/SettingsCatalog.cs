@@ -16,5 +16,17 @@ public static class SettingsCatalog
             "users",
             "/Settings/Users",
             "accounts people"),
+        new(
+            "Error logs",
+            "Review unresolved and past sync errors.",
+            "alert",
+            "/Settings/Errors",
+            "failures exceptions troubleshooting"),
+        new(
+            "Audit logs",
+            "See who changed configuration, users, and sync actions.",
+            "clipboard",
+            "/Settings/Audit",
+            "history activity trail"),
     ];
 }

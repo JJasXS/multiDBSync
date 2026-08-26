@@ -2,152 +2,92 @@
 @model SqlAccountSync.Pages.LogsModel
 @{
     ViewData["Title"] = "Logs";
-    var tab = Model.Tab;
 }
-<nav class="entity-tabs" data-tabs>
-    <a href="/logs?tab=transactions" data-tab="transactions" class="@(tab == "transactions" ? "active" : null)">Transactions</a>
-    <a href="/logs?tab=errors" data-tab="errors" class="@(tab == "errors" ? "active" : null)">Error logs</a>
-    <a href="/logs?tab=audit" data-tab="audit" class="@(tab == "audit" ? "active" : null)">Audit logs</a>
-</nav>
 
-@if (!string.IsNullOrEmpty(Model.Message) && tab == "transactions")
+@if (!string.IsNullOrEmpty(Model.Message))
 {
     <div class="flash flash-ok">@Model.Message</div>
 }
 
-<div class="card" data-tab-panel="transactions" @(tab == "transactions" ? null : "hidden")>
-    <div class="card-head">
-        <h3>Intercompany document</h3>
+<div class="txn-layout">
+    <div class="card txn-form-card">
+        <div class="card-head">
+            <h3>Intercompany document</h3>
+        </div>
+        <form method="post" class="form-grid">
+            <div class="span-2 route-fields">
+                <div class="route-field">
+                    <label>Source</label>
+                    <select asp-for="SourceDbId">@foreach (var d in Model.Databases) { <option value="@d.DbId">@d.DisplayName</option> }</select>
+                </div>
+                <span class="route-arrow" aria-hidden="true">→</span>
+                <div class="route-field">
+                    <label>Destination</label>
+                    <select asp-for="DestDbId">@foreach (var d in Model.Databases) { <option value="@d.DbId">@d.DisplayName</option> }</select>
+                </div>
+            </div>
+            <div>
+                <label>Type</label>
+                <select asp-for="TxnType">
+                    @foreach (var t in Model.Types) { <option value="@t.Code">@t.Name</option> }
+                </select>
+            </div>
+            <div><label>Source document number</label><input asp-for="SrcDoc" placeholder="IV-00001" /></div>
+            <div><button class="btn secondary" asp-page-handler="DryRun">Dry run</button></div>
+            <div>
+                <label><input asp-for="Confirmed" /> I confirm this will create a destination accounting document</label>
+                <button class="btn" asp-page-handler="Execute" onclick="return confirm('Create the corresponding document in the destination company?');">Confirm &amp; execute</button>
+            </div>
+        </form>
+        @if (Model.DryRun is not null)
+        {
+            <div class="confirm-box">
+                <strong>@Model.DryRun.Summary</strong>
+                <ul>@foreach (var c in Model.DryRun.Checks) { <li>@(c.Ok ? "✓" : "✗") @c.Name — @c.Detail</li> }</ul>
+            </div>
+        }
     </div>
-    <form method="post" class="form-grid">
-        <div>
-            <label>Source</label>
-            <select asp-for="SourceDbId">@foreach (var d in Model.Databases) { <option value="@d.DbId">@d.DisplayName</option> }</select>
+    <div class="card txn-list-card">
+        <div class="card-head">
+            <h3>Transactions</h3>
         </div>
-        <div>
-            <label>Destination</label>
-            <select asp-for="DestDbId">@foreach (var d in Model.Databases) { <option value="@d.DbId">@d.DisplayName</option> }</select>
-        </div>
-        <div>
-            <label>Type</label>
-            <select asp-for="TxnType">
-                @foreach (var t in Model.Types) { <option value="@t.Code">@t.Name</option> }
-            </select>
-        </div>
-        <div><label>Source document number</label><input asp-for="SrcDoc" placeholder="IV-00001" /></div>
-        <div><button class="btn secondary" asp-page-handler="DryRun">Dry run</button></div>
-        <div>
-            <label><input asp-for="Confirmed" /> I confirm this will create a destination accounting document</label>
-            <button class="btn" asp-page-handler="Execute" onclick="return confirm('Create the corresponding document in the destination company?');">Confirm &amp; execute</button>
-        </div>
-    </form>
-    @if (Model.DryRun is not null)
-    {
-        <div class="confirm-box">
-            <strong>@Model.DryRun.Summary</strong>
-            <ul>@foreach (var c in Model.DryRun.Checks) { <li>@(c.Ok ? "✓" : "✗") @c.Name — @c.Detail</li> }</ul>
-        </div>
-    }
-</div>
-<div class="card" data-tab-panel="transactions" @(tab == "transactions" ? null : "hidden")>
-    <div class="card-head">
-        <h3>Transactions</h3>
+        @if (Model.Transactions.Count == 0)
+        {
+            <p class="empty">No intercompany transactions yet.</p>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>ID</th><th>Type</th><th>Source → Destination</th><th>Status</th><th class="col-actions"></th></tr></thead>
+                    <tbody>
+                    @foreach (var t in Model.Transactions)
+                    {
+                        var srcLabel = $"{t.SourceName} {t.SrcDocType} {t.SrcDocNo}".Trim();
+                        var dstLabel = $"{t.DestName} {t.DstDocType} {t.DstDocNo}".Trim();
+                        var routeTitle = $"{srcLabel} → {dstLabel}";
+                        <tr>
+                            <td><a asp-page="/Transactions/Details" asp-route-id="@t.TxnPk">@t.TxnId</a></td>
+                            <td>@t.TxnTypeCode</td>
+                            <td>
+                                <span class="route-cell cell-truncate" title="@routeTitle">
+                                    <span class="route-src">@srcLabel</span>
+                                    <span class="route-arrow" aria-hidden="true">→</span>
+                                    <span class="route-dst">@dstLabel</span>
+                                </span>
+                            </td>
+                            <td><span class="badge badge-@(t.Status.ToLowerInvariant())">@t.Status</span></td>
+                            <td class="col-actions">
+                                @if (t.Status is not "COMPLETED")
+                                {
+                                    <form method="post" asp-page-handler="Retry" asp-route-txnPk="@t.TxnPk"><button class="btn small" type="submit">Retry</button></form>
+                                }
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
     </div>
-    @if (Model.Transactions.Count == 0)
-    {
-        <p class="empty">No intercompany transactions yet.</p>
-    }
-    else
-    {
-        <div class="table-wrap">
-            <table>
-                <thead><tr><th>ID</th><th>Type</th><th>Source</th><th>Destination</th><th>Status</th><th class="col-actions"></th></tr></thead>
-                <tbody>
-                @foreach (var t in Model.Transactions)
-                {
-                    <tr>
-                        <td><a asp-page="/Transactions/Details" asp-route-id="@t.TxnPk">@t.TxnId</a></td>
-                        <td>@t.TxnTypeCode</td>
-                        <td><span class="cell-truncate" title="@t.SourceName @t.SrcDocType @t.SrcDocNo">@t.SourceName @t.SrcDocType @t.SrcDocNo</span></td>
-                        <td><span class="cell-truncate" title="@t.DestName @t.DstDocType @t.DstDocNo">@t.DestName @t.DstDocType @t.DstDocNo</span></td>
-                        <td><span class="badge badge-@(t.Status.ToLowerInvariant())">@t.Status</span></td>
-                        <td class="col-actions">
-                            @if (t.Status is not "COMPLETED")
-                            {
-                                <form method="post" asp-page-handler="Retry" asp-route-txnPk="@t.TxnPk"><button class="btn small" type="submit">Retry</button></form>
-                            }
-                        </td>
-                    </tr>
-                }
-                </tbody>
-            </table>
-        </div>
-    }
-</div>
-
-<div class="card" data-tab-panel="errors" @(tab == "errors" ? null : "hidden")>
-    <div class="card-head">
-        <h3>Error logs</h3>
-    </div>
-    <p class="muted lede">Stack traces are stored for administrators and are not shown here.</p>
-    @if (Model.Errors.Count == 0)
-    {
-        <p class="empty">No error logs yet.</p>
-    }
-    else
-    {
-        <div class="table-wrap">
-            <table>
-                <thead><tr><th>When</th><th>Type</th><th>Message</th><th>Resolved</th><th class="col-actions"></th></tr></thead>
-                <tbody>
-                @foreach (var e in Model.Errors)
-                {
-                    <tr>
-                        <td>@e.AtUtc.ToString("yyyy-MM-dd HH:mm")</td>
-                        <td>@e.ErrorType</td>
-                        <td><span class="cell-truncate" title="@e.UserMessage">@e.UserMessage</span></td>
-                        <td>@(e.Resolved ? "Yes" : "No")</td>
-                        <td class="col-actions">
-                            @if (!e.Resolved && Model.CanManage)
-                            {
-                                <form method="post" asp-page-handler="Resolve" asp-route-id="@e.ErrorId"><button class="btn small secondary">Resolve</button></form>
-                            }
-                        </td>
-                    </tr>
-                }
-                </tbody>
-            </table>
-        </div>
-    }
-</div>
-
-<div class="card" data-tab-panel="audit" @(tab == "audit" ? null : "hidden")>
-    <div class="card-head">
-        <h3>Audit logs</h3>
-    </div>
-    @if (Model.Audits.Count == 0)
-    {
-        <p class="empty">No audit logs yet.</p>
-    }
-    else
-    {
-        <div class="table-wrap">
-            <table>
-                <thead><tr><th>When</th><th>User</th><th>Action</th><th>Entity</th><th>Record</th><th>Result</th></tr></thead>
-                <tbody>
-                @foreach (var a in Model.Audits)
-                {
-                    <tr>
-                        <td>@a.AtUtc.ToString("yyyy-MM-dd HH:mm")</td>
-                        <td>@a.UserEmail</td>
-                        <td>@a.Action</td>
-                        <td>@a.Entity</td>
-                        <td>@a.RecordId</td>
-                        <td>@a.Result</td>
-                    </tr>
-                }
-                </tbody>
-            </table>
-        </div>
-    }
 </div>

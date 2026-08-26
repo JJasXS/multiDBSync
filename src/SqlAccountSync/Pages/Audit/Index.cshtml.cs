@@ -4,5 +4,5 @@ namespace SqlAccountSync.Pages.Audit;
 
 public class IndexModel : SyncPageModel
 {
-    public IActionResult OnGet() => Redirect("/logs");
+    public IActionResult OnGet() => RedirectToPage("/Settings/Audit");
 }

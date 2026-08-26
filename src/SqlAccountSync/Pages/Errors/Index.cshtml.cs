@@ -4,5 +4,5 @@ namespace SqlAccountSync.Pages.Errors;
 
 public class IndexModel : SyncPageModel
 {
-    public IActionResult OnGet() => Redirect("/logs");
+    public IActionResult OnGet() => RedirectToPage("/Settings/Errors");
 }

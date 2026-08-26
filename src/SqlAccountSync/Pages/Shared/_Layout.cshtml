@@ -21,6 +21,14 @@
         return string.Equals(Context.Request.Query["entity"].ToString(), entity, StringComparison.OrdinalIgnoreCase);
     }
     string NavClass(string page, string? entity = null) => IsActive(page, entity) ? "active" : "";
+    string SettingsNavClass()
+    {
+        var current = ViewContext.RouteData.Values["page"]?.ToString() ?? "";
+        return current.StartsWith("/Settings/", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(current, "/Settings/Index", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(current, "/Users/Index", StringComparison.OrdinalIgnoreCase)
+            ? "active" : "";
+    }
     string LogsNavClass()
     {
         var current = ViewContext.RouteData.Values["page"]?.ToString() ?? "";
@@ -65,7 +73,7 @@
             <a class="@SyncNavClass()" asp-page="/Push/Index">Synchronization</a>
             <a class="@LogsNavClass()" asp-page="/Logs">Logs</a>
             <div class="group">System</div>
-            <a class="@NavClass("/Settings/Index")" asp-page="/Settings/Index">Settings</a>
+            <a class="@SettingsNavClass()" asp-page="/Settings/Index">Settings</a>
             <div class="nav-footer">
                 <a class="nav-logout" asp-page="/Logout">Log out</a>
             </div>

@@ -28,8 +28,8 @@ public class IdempotencyTests
     [Fact]
     public void Master_data_hash_changes_with_content()
     {
-        var a = IdempotencyKey.ForMasterData("A", "B", "ITEM", "ITEM001", IdempotencyKey.ContentHash("desc1"));
-        var b = IdempotencyKey.ForMasterData("A", "B", "ITEM", "ITEM001", IdempotencyKey.ContentHash("desc2"));
+        var a = IdempotencyKey.ForMasterData("A", "B", "ITEM", "ITEM", "ITEM001", IdempotencyKey.ContentHash("desc1"));
+        var b = IdempotencyKey.ForMasterData("A", "B", "ITEM", "ITEM", "ITEM001", IdempotencyKey.ContentHash("desc2"));
         Assert.NotEqual(a, b);
     }
 }
@@ -84,8 +84,18 @@ public class ValidationTests
         public List<EntityMapping> Maps { get; } = [];
         public Task<List<EntityMapping>> ListAsync(int masterDbId, int subDbId, string entityCode, CancellationToken cancellationToken = default) => Task.FromResult(Maps);
         public Task<EntityMapping?> FindAsync(int masterDbId, int subDbId, string entityCode, string masterCode, CancellationToken cancellationToken = default) =>
-            Task.FromResult(Maps.FirstOrDefault(m => m.EntityCode == entityCode && m.MasterCode == masterCode && m.Status == MappingStatuses.Mapped));
+            FindBySourceAsync(masterDbId, subDbId, entityCode, masterCode, cancellationToken);
+        public Task<EntityMapping?> FindBySourceAsync(int sourceDbId, int destDbId, string srcEntityCode, string sourceCode, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Maps.FirstOrDefault(m =>
+                (m.SrcEntityCode == srcEntityCode || m.EntityCode == srcEntityCode)
+                && m.MasterCode == sourceCode
+                && m.Status == MappingStatuses.Mapped));
+        public Task<EntityMapping?> FindPartyMapAsync(int sourceDbId, int destDbId, string sourcePartyEntity, string sourcePartyCode, CancellationToken cancellationToken = default) =>
+            FindBySourceAsync(sourceDbId, destDbId, sourcePartyEntity, sourcePartyCode, cancellationToken);
         public Task<(bool Ok, string Message, EntityMapping? Mapping)> ConfirmAsync(EntityMapping mapping, string user, CancellationToken cancellationToken = default) => Task.FromResult<(bool, string, EntityMapping?)>((true, "", mapping));
+        public Task<(bool Ok, string Message, EntityMapping? Mapping)> ConfirmPairAsync(EntityMapping forward, string user, bool writeReverse, int? originJobId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<(bool, string, EntityMapping?)>((true, "", forward));
+        public Task TouchLastSyncAtAsync(int mappingId, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task DisableAsync(int mappingId, string user, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task<List<EntityMapping>> ConflictsAsync(CancellationToken cancellationToken = default) => Task.FromResult(new List<EntityMapping>());
         public Task<int> CountMappedAsync(CancellationToken cancellationToken = default) => Task.FromResult(Maps.Count(m => m.Status == MappingStatuses.Mapped));

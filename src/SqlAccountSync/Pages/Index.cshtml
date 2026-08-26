@@ -206,78 +206,26 @@
             {
                 <p class="empty">Central database is not configured.</p>
             }
+            else if (Model.RecentTxns.Count == 0)
+            {
+                <p class="empty">No recent transactions.</p>
+            }
             else
             {
-                <div class="dash-section">
-                    <h4>Unresolved errors</h4>
-                    @if (Model.UnresolvedErrors.Count == 0)
-                    {
-                        <p class="empty">None.</p>
-                    }
-                    else
-                    {
-                        <div class="table-wrap">
-                            <table>
-                                <tbody>
-                                @foreach (var e in Model.UnresolvedErrors)
-                                {
-                                    <tr>
-                                        <td>@e.ErrorType</td>
-                                        <td>@(e.UserMessage.Length > 72 ? e.UserMessage[..72] + "…" : e.UserMessage)</td>
-                                    </tr>
-                                }
-                                </tbody>
-                            </table>
-                        </div>
-                    }
-                </div>
-                <div class="dash-section">
-                    <h4>Recent transactions</h4>
-                    @if (Model.RecentTxns.Count == 0)
-                    {
-                        <p class="empty">None.</p>
-                    }
-                    else
-                    {
-                        <div class="table-wrap">
-                            <table>
-                                <tbody>
-                                @foreach (var t in Model.RecentTxns)
-                                {
-                                    <tr>
-                                        <td><a asp-page="/Transactions/Details" asp-route-id="@t.TxnPk">@t.TxnId</a></td>
-                                        <td>@t.TxnTypeCode</td>
-                                        <td><span class="badge badge-@(t.Status.ToLowerInvariant())">@t.Status</span></td>
-                                    </tr>
-                                }
-                                </tbody>
-                            </table>
-                        </div>
-                    }
-                </div>
-                <div class="dash-section">
-                    <h4>Recent audit</h4>
-                    @if (Model.RecentAudit.Count == 0)
-                    {
-                        <p class="empty">None.</p>
-                    }
-                    else
-                    {
-                        <div class="table-wrap">
-                            <table>
-                                <tbody>
-                                @foreach (var a in Model.RecentAudit)
-                                {
-                                    <tr>
-                                        <td>@a.AtUtc.ToString("yyyy-MM-dd HH:mm")</td>
-                                        <td>@a.Action</td>
-                                        <td>@a.Result</td>
-                                    </tr>
-                                }
-                                </tbody>
-                            </table>
-                        </div>
-                    }
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>ID</th><th>Type</th><th>Status</th></tr></thead>
+                        <tbody>
+                        @foreach (var t in Model.RecentTxns)
+                        {
+                            <tr>
+                                <td><a asp-page="/Transactions/Details" asp-route-id="@t.TxnPk">@t.TxnId</a></td>
+                                <td>@t.TxnTypeCode</td>
+                                <td><span class="badge badge-@(t.Status.ToLowerInvariant())">@t.Status</span></td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
                 </div>
             }
         </div>
