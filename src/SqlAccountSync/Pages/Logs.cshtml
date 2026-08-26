@@ -61,17 +61,17 @@
     {
         <div class="table-wrap">
             <table>
-                <thead><tr><th>ID</th><th>Type</th><th>Source</th><th>Destination</th><th>Status</th><th></th></tr></thead>
+                <thead><tr><th>ID</th><th>Type</th><th>Source</th><th>Destination</th><th>Status</th><th class="col-actions"></th></tr></thead>
                 <tbody>
                 @foreach (var t in Model.Transactions)
                 {
                     <tr>
                         <td><a asp-page="/Transactions/Details" asp-route-id="@t.TxnPk">@t.TxnId</a></td>
                         <td>@t.TxnTypeCode</td>
-                        <td>@t.SourceName @t.SrcDocType @t.SrcDocNo</td>
-                        <td>@t.DestName @t.DstDocType @t.DstDocNo</td>
+                        <td><span class="cell-truncate" title="@t.SourceName @t.SrcDocType @t.SrcDocNo">@t.SourceName @t.SrcDocType @t.SrcDocNo</span></td>
+                        <td><span class="cell-truncate" title="@t.DestName @t.DstDocType @t.DstDocNo">@t.DestName @t.DstDocType @t.DstDocNo</span></td>
                         <td><span class="badge badge-@(t.Status.ToLowerInvariant())">@t.Status</span></td>
-                        <td>
+                        <td class="col-actions">
                             @if (t.Status is not "COMPLETED")
                             {
                                 <form method="post" asp-page-handler="Retry" asp-route-txnPk="@t.TxnPk"><button class="btn small" type="submit">Retry</button></form>
@@ -98,16 +98,16 @@
     {
         <div class="table-wrap">
             <table>
-                <thead><tr><th>When</th><th>Type</th><th>Message</th><th>Resolved</th><th></th></tr></thead>
+                <thead><tr><th>When</th><th>Type</th><th>Message</th><th>Resolved</th><th class="col-actions"></th></tr></thead>
                 <tbody>
                 @foreach (var e in Model.Errors)
                 {
                     <tr>
                         <td>@e.AtUtc.ToString("yyyy-MM-dd HH:mm")</td>
                         <td>@e.ErrorType</td>
-                        <td>@e.UserMessage</td>
+                        <td><span class="cell-truncate" title="@e.UserMessage">@e.UserMessage</span></td>
                         <td>@(e.Resolved ? "Yes" : "No")</td>
-                        <td>
+                        <td class="col-actions">
                             @if (!e.Resolved && Model.CanManage)
                             {
                                 <form method="post" asp-page-handler="Resolve" asp-route-id="@e.ErrorId"><button class="btn small secondary">Resolve</button></form>

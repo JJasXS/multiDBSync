@@ -1,0 +1,68 @@
+@page
+@model SqlAccountSync.Pages.Settings.SecurityModel
+@{
+    ViewData["Title"] = "Security";
+}
+<div class="settings-section">
+    <div class="settings-section-nav">
+        <a class="settings-back" href="/Settings">← Back to Settings</a>
+    </div>
+
+    @if (!string.IsNullOrEmpty(Model.Message))
+    {
+        <div class="flash @(Model.MessageOk ? "flash-ok" : "flash-err")">@Model.Message</div>
+    }
+
+    <div class="card">
+        <div class="card-head"><h3>Secret keys</h3></div>
+        <p class="muted lede">Store secret references only (never raw passwords). Example: a Secrets Manager path or <code>sm:…</code> reference.</p>
+        @if (!Model.DbConfigured)
+        {
+            <p class="empty">Central database is not configured — set CentralDb in .env / appsettings.</p>
+        }
+        else if (!Model.IsAdmin)
+        {
+            <p class="empty">Only administrators can insert or update secret keys.</p>
+        }
+        else
+        {
+            <form method="post" class="form-grid" asp-page-handler="SaveSecret">
+                <div>
+                    <label>Key</label>
+                    <input asp-for="Key" placeholder="e.g. SMTP_PASSWORD_REF" autocomplete="off" />
+                </div>
+                <div class="span-2">
+                    <label>Value (secret reference)</label>
+                    <textarea asp-for="Value" rows="4" placeholder="e.g. sm:proacc/tenant/… or secret path" autocomplete="off"></textarea>
+                </div>
+                <div><button class="btn" type="submit">Save secret key</button></div>
+            </form>
+        }
+    </div>
+
+    <div class="card">
+        <div class="card-head"><h3>Stored secret keys</h3></div>
+        @if (!Model.DbConfigured)
+        {
+            <p class="empty">No settings available until the central database is configured.</p>
+        }
+        else if (Model.Settings.Count == 0)
+        {
+            <p class="empty">No secret keys stored yet.</p>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Key</th><th>Value</th></tr></thead>
+                    <tbody>
+                    @foreach (var kv in Model.Settings)
+                    {
+                        <tr><td>@kv.Key</td><td>@kv.Value</td></tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>

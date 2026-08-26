@@ -1,0 +1,191 @@
+{
+  "dockey": 0,
+  "code": "",
+  "description": "",
+  "description2": "",
+  "description3": "DCNaDLdOtsX3nkb+QDfV28t6NafuWDX55gWzFo00NC6kPOORm6YD8wUmDGEf+hx7",
+  "stockgroup": "",
+  "stockcontrol": true,
+  "costingmethod": 0,
+  "serialnumber": true,
+  "shelf": "",
+  "minqty": "0.00",
+  "maxqty": "0.00",
+  "suom": "",
+  "reorderlevel": "0.00",
+  "reorderqty": "0.00",
+  "sltax": "",
+  "phtax": "",
+  "tariff": "",
+  "irbm_classification": "",
+  "stockmatrix": "",
+  "defuom_st": "",
+  "defuom_sl": "",
+  "defuom_ph": "",
+  "scriptcode": "",
+  "isactive": true,
+  "creationdate": "2026-06-03",
+  "picture": "VTe3Mzpqcus5dJviT5W2lmRSGFHII18iaKIyWrtlg3K9C7J9ei5HbQFAKOK6iIBK",
+  "pictureclass": "",
+  "attachments": "GTWU/Q9AhNpiNpEKW6LD8B6jlSpa07UpRJ3VMPWBOiuNIiF5ohQZtgTV4gCyXotf",
+  "note": "Ap7I4ABJnphhhU/FrPCAS0LeBNp8UI9UBKAgWAnv656BeAQAq1UvOmh2its1s+3m",
+  "uom": "",
+  "refcost": "0.00",
+  "refprice": "0.00",
+  "itemtype": "",
+  "leadtime": 0,
+  "bom_leadtime": 0,
+  "bom_asmcost": "0.00",
+  "balsqty": "0.00",
+  "balsuomqty": "0.00",
+  "remark1": "",
+  "remark2": "",
+  "barcode": "",
+  "lastmodified": 0,
+  "dirty": true,
+  "sdsuom": [
+    {
+      "code": "",
+      "uom": "",
+      "rate": "0.00",
+      "refcost": "0.00",
+      "refprice": "0.00",
+      "mincost": "0.00",
+      "maxcost": "0.00",
+      "minprice": "0.00",
+      "maxprice": "0.00",
+      "isbase": true
+    }
+  ],
+  "sdsopeningbalance": [
+    {
+      "dockey": 0,
+      "itemcode": "",
+      "location": "",
+      "batch": "",
+      "project": "",
+      "seq": 0,
+      "qty": "0.00",
+      "suomqty": "0.00",
+      "cost": "0.00",
+      "utdcost": "0.00",
+      "total": "0.00"
+    }
+  ],
+  "sdscustomerprice": [
+    {
+      "dtlkey": 0,
+      "code": "",
+      "tagtype": "",
+      "seq": 0,
+      "pricetag": "",
+      "uom": "",
+      "qty": "0.00",
+      "stockvalue": "0.00",
+      "discount": "",
+      "company": "",
+      "datefrom": "2026-06-03",
+      "dateto": "2026-06-03",
+      "note": "X+O7Yd+nkCbWUhcEpgw72sD8C1P6ErNyErnkVJ3qFBUVUjpIm5QIoq3bsaH6PsFm"
+    }
+  ],
+  "sdssupplierprice": [
+    {
+      "dtlkey": 0,
+      "code": "",
+      "tagtype": "",
+      "seq": 0,
+      "pricetag": "",
+      "uom": "",
+      "qty": "0.00",
+      "stockvalue": "0.00",
+      "discount": "",
+      "company": "",
+      "datefrom": "2026-06-03",
+      "dateto": "2026-06-03",
+      "note": "MEOu9hF3IK9ZwYWC9eRD56UnNpKTh9GyFZEWeMU50gymfdg18twLaMW+fQvcYwoK"
+    }
+  ],
+  "sdscategory": [
+    {
+      "code": "",
+      "category": ""
+    }
+  ],
+  "sdsbom": [
+    {
+      "autokey": 0,
+      "code": "",
+      "subcode": "",
+      "seq": 0,
+      "location": "",
+      "batch": "",
+      "bompackage": "",
+      "refcost": "0.00",
+      "qty": "0.00",
+      "overheadcost": "0.00",
+      "uom": "",
+      "isdefault": true,
+      "iswastage": true,
+      "number": "",
+      "description2": "",
+      "description3": "LDsOpbxRWvuCa0GEnOD1ceLiITtYcQ6wVctYgEz8JpBaajmPEGZqgiBDU0PVZTY4",
+      "remark1": "",
+      "remark2": ""
+    }
+  ],
+  "sdsaltstockitem": [
+    {
+      "code": "",
+      "altcode": "",
+      "uom": ""
+    }
+  ],
+  "sdscustomeritem": [
+    {
+      "code": "",
+      "company": "",
+      "ctype": "",
+      "companyitemcode": "",
+      "description": ""
+    }
+  ],
+  "sdssupplieritem": [
+    {
+      "code": "",
+      "company": "",
+      "ctype": "",
+      "companyitemcode": "",
+      "description": ""
+    }
+  ],
+  "sdsbarcode": [
+    {
+      "autokey": 0,
+      "barcode": "",
+      "code": "",
+      "uom": ""
+    }
+  ],
+  "udf_stdprice": "0.00",
+  "udf_dleadtime": "0.00",
+  "udf_moq": "0.00",
+  "udf_bundle": "0.00",
+  "udf_thickness": "0.00",
+  "udf_width": "0.00",
+  "udf_length": "0.00",
+  "udf_ds": "0.00",
+  "udf_dp": "0.00",
+  "udf_dsys": "0.00",
+  "udf_dfs": "0.00",
+  "udf_dfp": "0.00",
+  "udf_dfsys": "0.00",
+  "udf_wts": "0.00",
+  "udf_wtp": "0.00",
+  "udf_wtsys": "0.00",
+  "udf_2uom": "",
+  "udf_formula": "",
+  "udf_pricekg": "0.00",
+  "udf_costkg": "0.00",
+  "udf_mtype": ""
+}

@@ -83,7 +83,7 @@
                                                @(selected ? "checked" : null) />
                                     </td>
                                     <td>@r.Code</td>
-                                    <td>@r.Description</td>
+                                    <td><span class="cell-truncate" title="@r.Description">@r.Description</span></td>
                                 </tr>
                             }
                             </tbody>
@@ -169,29 +169,31 @@ else
         }
     </div>
     <div class="card">
-        <table>
-            <thead><tr><th>Job</th><th>Kind</th><th>Status</th><th>Attempts</th><th>Error</th><th></th></tr></thead>
-            <tbody>
-            @foreach (var j in Model.Jobs)
-            {
-                <tr>
-                    <td>@j.JobId</td>
-                    <td>@j.JobKind @(j.DryRun ? "(dry run)" : "")</td>
-                    <td><span class="badge badge-@(j.Status.ToLowerInvariant())">@j.Status</span></td>
-                    <td>@j.Attempts / @j.MaxAttempts</td>
-                    <td>@j.ErrorMessage</td>
-                    <td>
-                        @if (j.Status is "PENDING" or "RETRYING" or "FAILED")
-                        {
-                            <form method="post" asp-page-handler="Cancel" asp-route-jobId="@j.JobId">
-                                <input type="hidden" name="Tab" value="jobs" />
-                                <button class="btn small secondary" type="submit">Cancel</button>
-                            </form>
-                        }
-                    </td>
-                </tr>
-            }
-            </tbody>
-        </table>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Job</th><th>Kind</th><th>Status</th><th>Attempts</th><th>Error</th><th class="col-actions"></th></tr></thead>
+                <tbody>
+                @foreach (var j in Model.Jobs)
+                {
+                    <tr>
+                        <td>@j.JobId</td>
+                        <td>@j.JobKind @(j.DryRun ? "(dry run)" : "")</td>
+                        <td><span class="badge badge-@(j.Status.ToLowerInvariant())">@j.Status</span></td>
+                        <td>@j.Attempts / @j.MaxAttempts</td>
+                        <td><span class="cell-truncate" title="@j.ErrorMessage">@j.ErrorMessage</span></td>
+                        <td class="col-actions">
+                            @if (j.Status is "PENDING" or "RETRYING" or "FAILED")
+                            {
+                                <form method="post" asp-page-handler="Cancel" asp-route-jobId="@j.JobId">
+                                    <input type="hidden" name="Tab" value="jobs" />
+                                    <button class="btn small secondary" type="submit">Cancel</button>
+                                </form>
+                            }
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
     </div>
 }

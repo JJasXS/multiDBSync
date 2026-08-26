@@ -1,0 +1,40 @@
+{
+  "pagination": {
+    "offset": 0,
+    "limit": 50,
+    "count": 1
+  },
+  "data": [
+    {
+      "dockey": 10,
+      "docno": "IV-00003",
+      "docnoex": null,
+      "code": "300-L0001",
+      "journal": "SALES",
+      "docdate": "2026-08-24",
+      "postdate": "2026-08-24",
+      "taxdate": "2026-08-24",
+      "terms": "30 Days",
+      "duedate": "2026-09-23",
+      "description": "Sales",
+      "area": "SENAI",
+      "agent": "SalesJB",
+      "project": "----",
+      "currencycode": "----",
+      "currencyrate": "1",
+      "docamt": "0",
+      "localdocamt": "0",
+      "paymentamt": "0",
+      "fromdoctype": "IV",
+      "taxexemptno": null,
+      "gltransid": 9,
+      "cancelled": false,
+      "status": 0,
+      "updatecount": 1,
+      "attachments": null,
+      "note": null,
+      "approvestate": null,
+      "lastmodified": 1787555891
+    }
+  ]
+}

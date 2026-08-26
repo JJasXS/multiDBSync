@@ -8,72 +8,85 @@
 {
     <div class="flash @(Model.Error ? "flash-err" : "flash-ok")">@Model.Message</div>
 }
-<div class="map-layout">
-    <div class="map-layout-left">
-        <div class="card">
-            <div class="card-head">
-                <h3>Add user</h3>
-            </div>
-            <form method="post" class="form-stack">
-                <div><label>Email</label><input asp-for="Email" type="email" required /></div>
-                <div><label>Name</label><input asp-for="DisplayName" required /></div>
-                <div>
-                    <label>Role</label>
-                    <select asp-for="Role">
-                        <option>ADMIN</option><option>MANAGER</option><option>OPERATOR</option><option>VIEWER</option>
-                    </select>
-                </div>
-                <div><button class="btn" type="submit">Save</button></div>
-            </form>
+<div class="users-page">
+    <div class="card users-form-card">
+        <div class="card-head">
+            <h3>Add user</h3>
         </div>
+        <p class="muted users-form-lede">Invite someone with an email, display name, and role.</p>
+        <form method="post" class="users-form">
+            <div class="users-field">
+                <label asp-for="Email">Email</label>
+                <input asp-for="Email" type="email" required placeholder="name@company.com" autocomplete="email" />
+            </div>
+            <div class="users-field">
+                <label asp-for="DisplayName">Name</label>
+                <input asp-for="DisplayName" required placeholder="Display name" autocomplete="name" />
+            </div>
+            <div class="users-field users-field-role">
+                <label asp-for="Role">Role</label>
+                <select asp-for="Role">
+                    <option>ADMIN</option>
+                    <option>MANAGER</option>
+                    <option>OPERATOR</option>
+                    <option>VIEWER</option>
+                </select>
+            </div>
+            <div class="users-form-actions">
+                <button class="btn" type="submit">Save</button>
+            </div>
+        </form>
     </div>
-    <div class="map-layout-right">
-        <div class="card card-fill">
-            <div class="card-head">
-                <h3>Users</h3>
-            </div>
-            <p class="muted lede">At least one active ADMIN is always required.</p>
-            @if (Model.Users.Count == 0)
-            {
-                <p class="empty">No users yet.</p>
-            }
-            else
-            {
-                <div class="table-wrap">
-                    <table>
-                        <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Active</th><th></th></tr></thead>
-                        <tbody>
-                        @foreach (var u in Model.Users)
-                        {
-                            var isAdmin = AppRoles.Rank(u.Role) >= AppRoles.Rank(AppRoles.Admin);
-                            var isLastAdmin = u.IsActive && isAdmin && activeAdminCount <= 1;
-                            <tr>
-                                <td>@u.DisplayName</td>
-                                <td>@u.Email</td>
-                                <td>@u.Role</td>
-                                <td>@(u.IsActive ? "Yes" : "No")</td>
-                                <td>
-                                    @if (!u.IsActive)
-                                    {
-                                        <span class="muted">—</span>
-                                    }
-                                    else if (isLastAdmin)
-                                    {
-                                        <span class="muted">Cannot disable (last admin)</span>
-                                    }
-                                    else
-                                    {
-                                        <form method="post" asp-page-handler="Disable" asp-route-id="@u.UserId">
-                                            <button class="btn small danger" type="submit">Disable</button>
-                                        </form>
-                                    }
-                                </td>
-                            </tr>
-                        }
-                        </tbody>
-                    </table>
-                </div>
-            }
+
+    <div class="card users-list-card">
+        <div class="card-head">
+            <h3>Users</h3>
         </div>
+        <p class="muted lede">At least one active ADMIN is always required.</p>
+        @if (Model.Users.Count == 0)
+        {
+            <p class="empty">No users yet.</p>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Active</th><th class="col-actions"></th></tr></thead>
+                    <tbody>
+                    @foreach (var u in Model.Users)
+                    {
+                        var isAdmin = AppRoles.Rank(u.Role) >= AppRoles.Rank(AppRoles.Admin);
+                        var isLastAdmin = u.IsActive && isAdmin && activeAdminCount <= 1;
+                        <tr>
+                            <td>@u.DisplayName</td>
+                            <td>@u.Email</td>
+                            <td>@u.Role</td>
+                            <td>
+                                <span class="badge @(u.IsActive ? "badge-online" : "badge-disabled")">
+                                    @(u.IsActive ? "Yes" : "No")
+                                </span>
+                            </td>
+                            <td class="col-actions">
+                                @if (!u.IsActive)
+                                {
+                                    <span class="muted">—</span>
+                                }
+                                else if (isLastAdmin)
+                                {
+                                    <span class="muted">Cannot disable (last admin)</span>
+                                }
+                                else
+                                {
+                                    <form method="post" asp-page-handler="Disable" asp-route-id="@u.UserId">
+                                        <button class="btn small danger" type="submit">Disable</button>
+                                    </form>
+                                }
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
     </div>
 </div>

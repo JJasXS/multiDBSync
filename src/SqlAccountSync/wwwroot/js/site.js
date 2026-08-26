@@ -5,8 +5,10 @@
   const toggle = shell.querySelector("[data-nav-toggle]");
   const backdrop = shell.querySelector(".nav-backdrop");
   const closers = shell.querySelectorAll("[data-nav-close]");
+  const mq = window.matchMedia("(max-width: 900px)");
 
   const setOpen = (open) => {
+    if (!mq.matches) open = false;
     shell.classList.toggle("nav-open", open);
     document.body.classList.toggle("nav-locked", open);
     if (toggle) toggle.setAttribute("aria-expanded", open ? "true" : "false");
@@ -16,9 +18,13 @@
 
   toggle?.addEventListener("click", () => setOpen(!shell.classList.contains("nav-open")));
   closers.forEach((el) => el.addEventListener("click", () => setOpen(false)));
+  shell.querySelectorAll(".nav a").forEach((link) => {
+    link.addEventListener("click", () => setOpen(false));
+  });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") setOpen(false);
   });
+  mq.addEventListener("change", () => setOpen(false));
 })();
 
 (() => {
@@ -121,4 +127,28 @@
       });
     });
   });
+})();
+
+(() => {
+  const input = document.getElementById("settingsSearch");
+  const list = document.querySelector("[data-settings-list]");
+  if (!input || !list) return;
+
+  const items = Array.from(list.querySelectorAll("[data-settings-item]"));
+  const empty = list.querySelector("[data-settings-empty]");
+
+  const apply = () => {
+    const q = (input.value || "").trim().toLowerCase();
+    let visible = 0;
+    items.forEach((el) => {
+      const hay = (el.getAttribute("data-settings-search") || "").toLowerCase();
+      const show = !q || hay.includes(q);
+      el.hidden = !show;
+      if (show) visible += 1;
+    });
+    if (empty) empty.hidden = visible > 0;
+  };
+
+  input.addEventListener("input", apply);
+  apply();
 })();

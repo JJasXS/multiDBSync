@@ -1,0 +1,20 @@
+SQL Accounting API samples (from Postman / chat).
+Used by SqlAccountSync to match GET vs POST shapes.
+
+01-master-data
+  supplier
+    GET-supplier-list.json                  GET /supplier/*          (Sub partner flip)
+  stockitem
+    GET-stockitem-list.json                 GET /stockitem/*         (ITEM push)
+    POST-stockitem-create-template.json     POST /stockitem          (ITEM create)
+
+02-documents  (Sub1 Customer Invoice -> Sub2 Purchase Invoice)
+  customerinvoice
+    GET-customerinvoice-list.json           GET /customerinvoice     (source SI / IV)
+    POST-customerinvoice-create-template.json  POST /customerinvoice
+  purchaseinvoice
+    GET-purchaseinvoice-detail.json         GET /purchaseinvoice/*   (dest PI)
+    POST-purchaseinvoice-create-template.json  POST /purchaseinvoice  (SI->PI create)
+
+Not collected yet:
+  GET/POST /customer   (working in app; add here if you paste it)

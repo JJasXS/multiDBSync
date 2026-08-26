@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8" />
@@ -32,6 +32,7 @@
         return current is "/Push/Index" or "/Jobs/Index" ? "active" : "";
     }
     var showMappingsUi = FeatureOptions.Value.ShowMappingsUi;
+    var showSyncConfigUi = FeatureOptions.Value.ShowSyncConfigUi;
 }
 @if (User.Identity?.IsAuthenticated == true)
 {
@@ -48,18 +49,26 @@
             <div class="group">Overview</div>
             <a class="@NavClass("/Index")" asp-page="/Index">Dashboard</a>
             <a class="@NavClass("/Databases/Index")" asp-page="/Databases/Index">Databases</a>
-            <div class="group">Configuration</div>
-            <a class="@NavClass("/SyncConfig")" asp-page="/SyncConfig">Sync configuration</a>
-            @if (showMappingsUi)
+            @if (showSyncConfigUi || showMappingsUi)
             {
-                <a class="@NavClass("/Mappings/Index")" asp-page="/Mappings/Index" asp-route-entity="ITEM">Mappings</a>
+                <div class="group">Configuration</div>
+                @if (showSyncConfigUi)
+                {
+                    <a class="@NavClass("/SyncConfig")" asp-page="/SyncConfig">Sync configuration</a>
+                }
+                @if (showMappingsUi)
+                {
+                    <a class="@NavClass("/Mappings/Index")" asp-page="/Mappings/Index" asp-route-entity="ITEM">Mappings</a>
+                }
             }
             <div class="group">Operations</div>
             <a class="@SyncNavClass()" asp-page="/Push/Index">Synchronization</a>
             <a class="@LogsNavClass()" asp-page="/Logs">Logs</a>
             <div class="group">System</div>
-            <a class="@NavClass("/Users/Index")" asp-page="/Users/Index">Users</a>
             <a class="@NavClass("/Settings/Index")" asp-page="/Settings/Index">Settings</a>
+            <div class="nav-footer">
+                <a class="nav-logout" asp-page="/Logout">Log out</a>
+            </div>
         </nav>
         <div class="main">
             <div class="topbar">
@@ -70,7 +79,7 @@
                     <h2>@ViewData["Title"]</h2>
                 </div>
                 <div class="topbar-actions">@RenderSection("TopbarActions", required: false)</div>
-                <div class="meta">@User.Identity?.Name · <a asp-page="/Logout">Sign out</a></div>
+                <div class="meta">@User.Identity?.Name</div>
             </div>
             @if (TempData["Flash"] is string flash && !string.IsNullOrWhiteSpace(flash))
             {

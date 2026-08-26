@@ -1,25 +1,26 @@
 @page
 @model SqlAccountSync.Pages.Settings.IndexModel
 @{
-    ViewData["Title"] = "System settings";
+    ViewData["Title"] = "Settings";
 }
-<div class="card">
-    <p>Central database configured: @(Model.DbConfigured ? "Yes" : "No — set CentralDb in .env / appsettings")</p>
-    <p class="muted">Passwords and API secrets are never stored in settings. Use secret references only.</p>
-    <table>
-        <thead><tr><th>Key</th><th>Value</th></tr></thead>
-        <tbody>
-        @foreach (var kv in Model.Settings)
+<div class="settings-page">
+    <div class="settings-hero">
+        <div class="settings-hero-copy">
+            <h3 class="settings-hero-title">Settings</h3>
+            <p class="settings-hero-sub muted">Manage your system preferences and configuration</p>
+        </div>
+        <div class="settings-search-wrap">
+            <label class="sr-only" for="settingsSearch">Search settings</label>
+            <input id="settingsSearch" class="settings-search" type="search"
+                   placeholder="Search settings..." autocomplete="off" />
+        </div>
+    </div>
+
+    <div class="settings-list" data-settings-list>
+        @foreach (var item in Model.Items)
         {
-            <tr><td>@kv.Key</td><td>@kv.Value</td></tr>
+            <partial name="_SettingsRow" model="item" />
         }
-        </tbody>
-    </table>
-</div>
-<div class="card">
-    <form method="post" class="form-grid">
-        <div><label>Key</label><input asp-for="Key" /></div>
-        <div><label>Value</label><input asp-for="Value" /></div>
-        <div><button class="btn" type="submit">Save</button></div>
-    </form>
+        <p class="settings-empty empty" data-settings-empty hidden>No settings found</p>
+    </div>
 </div>

@@ -67,4 +67,6 @@ public sealed class FeatureOptions
     public const string SectionName = "Features";
     /// <summary>When false, Mappings nav/links are hidden and /Mappings redirects away. Backend mapping still runs.</summary>
     public bool ShowMappingsUi { get; set; }
+    /// <summary>When false, Sync configuration nav/links are hidden and /SyncConfig redirects away. Rules still apply if configured.</summary>
+    public bool ShowSyncConfigUi { get; set; }
 }

@@ -1,4 +1,4 @@
-﻿@page
+@page
 @model SqlAccountSync.Pages.IndexModel
 @using Microsoft.Extensions.Options
 @using SqlAccountSync.Options
@@ -6,6 +6,7 @@
 @{
     ViewData["Title"] = "Dashboard";
     var showMappingsUi = FeatureOptions.Value.ShowMappingsUi;
+    var showSyncConfigUi = FeatureOptions.Value.ShowSyncConfigUi;
 }
 <div class="stats">
     <div class="stat"><div class="n">@Model.Stats.TotalDatabases</div><div class="l">Databases</div></div>
@@ -124,6 +125,8 @@
     </div>
 
     <div class="map-layout-right">
+        @if (showSyncConfigUi)
+        {
         <div class="card">
             <div class="card-head">
                 <h3>Sync configuration</h3>
@@ -159,6 +162,7 @@
                 }
             }
         </div>
+        }
 
         <div class="card">
             <div class="card-head">

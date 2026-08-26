@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using SqlAccountSync.Models;
+using SqlAccountSync.Options;
 using SqlAccountSync.Services.Audit;
 using SqlAccountSync.Services.Auth;
 using SqlAccountSync.Services.Databases;
@@ -12,12 +14,18 @@ public class SyncConfigModel : SyncPageModel
     private readonly IDatabaseRegistry _registry;
     private readonly ISyncOrchestrator _sync;
     private readonly IAuditService _audit;
+    private readonly FeatureOptions _features;
 
-    public SyncConfigModel(IDatabaseRegistry registry, ISyncOrchestrator sync, IAuditService audit)
+    public SyncConfigModel(
+        IDatabaseRegistry registry,
+        ISyncOrchestrator sync,
+        IAuditService audit,
+        IOptions<FeatureOptions> features)
     {
         _registry = registry;
         _sync = sync;
         _audit = audit;
+        _features = features.Value;
     }
 
     public List<DatabaseLink> Links { get; set; } = [];
@@ -33,17 +41,23 @@ public class SyncConfigModel : SyncPageModel
     [BindProperty] public string RecordCode { get; set; } = "";
     [BindProperty] public bool ScopeEnabled { get; set; } = true;
 
-    public async Task OnGetAsync(int? linkId)
+    public async Task<IActionResult> OnGetAsync(int? linkId)
     {
+        if (!_features.ShowSyncConfigUi)
+            return RedirectToPage("/Index");
+
         Links = await _registry.ListLinksAsync();
         DatabaseCount = (await _registry.ListAsync()).Count;
         LinkId = linkId ?? Links.FirstOrDefault()?.LinkId ?? 0;
         if (LinkId > 0)
             Rules = await _sync.ListRulesAsync(LinkId);
+        return Page();
     }
 
     public async Task<IActionResult> OnPostSaveRuleAsync()
     {
+        if (!_features.ShowSyncConfigUi)
+            return RedirectToPage("/Index");
         if (!CanManage) return Forbid();
         await _sync.SaveRuleAsync(new SyncRule
         {
@@ -61,6 +75,8 @@ public class SyncConfigModel : SyncPageModel
 
     public async Task<IActionResult> OnPostSaveScopeAsync()
     {
+        if (!_features.ShowSyncConfigUi)
+            return RedirectToPage("/Index");
         if (!CanManage) return Forbid();
         await _sync.SaveScopeAsync(RuleId, RecordCode, ScopeEnabled);
         return RedirectToPage(new { linkId = LinkId });
