@@ -1,0 +1,17 @@
+{
+  "name": "SQL Account Sync",
+  "install": "bash .cursor/install.sh",
+  "start": "bash .cursor/start.sh",
+  "terminals": [
+    {
+      "name": "app",
+      "command": "cd src/SqlAccountSync && ASPNETCORE_URLS=http://0.0.0.0:5030 dotnet run --launch-profile http"
+    }
+  ],
+  "ports": [
+    {
+      "name": "web",
+      "port": 5030
+    }
+  ]
+}
