@@ -9,7 +9,7 @@ public sealed class CentralDbOptions
     public string User { get; set; } = "SYSDBA";
     public string Charset { get; set; } = "UTF8";
     public int Dialect { get; set; } = 3;
-    public string PasswordSecretRef { get; set; } = "env:CENTRAL_FB_PASSWORD";
+    public string PasswordSecretRef { get; set; } = "env:CENTRAL_FB_MASTERKEY";
     public bool Pooling { get; set; } = true;
 }
 

@@ -87,10 +87,14 @@ public sealed class SqlAccountApiWriteAdapter : ISqlAccountWriteAdapter
     public Task<WriteResult> CreateDocumentAsync(RegisteredDatabase db, string apiPath, DocumentHeader document, string txnStamp, CancellationToken cancellationToken = default)
     {
         var path = string.IsNullOrWhiteSpace(apiPath) ? "/purchaseinvoice" : apiPath;
-        var isPurchaseInvoice = path.Contains("purchaseinvoice", StringComparison.OrdinalIgnoreCase)
-                                || path.Contains("purchase", StringComparison.OrdinalIgnoreCase);
         string payload;
-        if (isPurchaseInvoice)
+        if (path.Contains("goodsreceived", StringComparison.OrdinalIgnoreCase))
+        {
+            var dict = GoodsReceivedMapper.ToApiPayload(document, txnStamp);
+            payload = GoodsReceivedMapper.SerializePayload(dict);
+        }
+        else if (path.Contains("purchaseinvoice", StringComparison.OrdinalIgnoreCase)
+                 || path.Contains("purchase", StringComparison.OrdinalIgnoreCase))
         {
             var dict = PurchaseInvoiceMapper.ToApiPayload(document, txnStamp);
             payload = PurchaseInvoiceMapper.SerializePayload(dict);
@@ -158,12 +162,24 @@ public sealed class SqlAccountApiWriteAdapter : ISqlAccountWriteAdapter
                 Success = false,
                 Message = string.IsNullOrWhiteSpace(detail)
                     ? $"SQL Accounting API returned {(int)response.StatusCode}."
-                    : $"SQL Accounting API returned {(int)response.StatusCode}: {detail}"
+                    : EnhanceApiErrorMessage(detail, relative)
             };
         }
 
         var (docKey, docNo) = ParseCreated(body);
         return new WriteResult { Success = true, DocKey = docKey, DocNo = docNo, Message = "Created." };
+    }
+
+    private static string EnhanceApiErrorMessage(string detail, string path)
+    {
+        var msg = $"SQL Accounting API returned 500: {detail}";
+        if (!detail.Contains("No corresponding master", StringComparison.OrdinalIgnoreCase))
+            return msg;
+
+        var hint = path.Contains("stockitem", StringComparison.OrdinalIgnoreCase)
+            ? " A prerequisite master may be missing on the destination API (stock group, UOM, or category). SqlAccountSync attempts to create stock group via API before item push; if UOM API is unavailable on this tenant, contact eStream support."
+            : " A related master record is missing on the destination database. Create it on the sub in SQL Account first, then retry.";
+        return msg + hint;
     }
 
     private static string SummarizeApiError(string? body)
@@ -373,12 +389,12 @@ public sealed class DryRunWriteAdapter : ISqlAccountWriteAdapter
             && !string.Equals(sourceEntityCode, targetEntityCode, StringComparison.OrdinalIgnoreCase);
         var label = flip ? $"{sourceEntityCode}→{targetEntityCode}" : targetEntityCode;
         Actions.Add($"WOULD create {label} {record.Code} on {db.DisplayName}");
-        return Task.FromResult(new WriteResult { Success = true, Message = "Dry run — no data was modified.", DocNo = record.Code });
+        return Task.FromResult(new WriteResult { Success = true, Message = "Dry run: no data was modified.", DocNo = record.Code });
     }
 
     public Task<WriteResult> CreateDocumentAsync(RegisteredDatabase db, string apiPath, DocumentHeader document, string txnStamp, CancellationToken cancellationToken = default)
     {
         Actions.Add($"WOULD POST {apiPath} as {document.DocType} on {db.DisplayName} ({document.Lines.Count} lines, {document.Amount:N2})");
-        return Task.FromResult(new WriteResult { Success = true, Message = "Dry run — no data was modified." });
+        return Task.FromResult(new WriteResult { Success = true, Message = "Dry run: no data was modified." });
     }
 }

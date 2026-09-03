@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 
 using SqlAccountSync.Data;
@@ -13,6 +14,8 @@ using SqlAccountSync.Services.Databases;
 using SqlAccountSync.Services.Mapping;
 
 using SqlAccountSync.Services.Queue;
+
+using SqlAccountSync.Services.Items;
 
 using SqlAccountSync.Services.SqlAccount;
 
@@ -84,6 +87,8 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
 
     private readonly IErrorLogService _errors;
 
+    private readonly IItemPrerequisiteService _itemPrereqs;
+
 
 
     public SyncOrchestrator(
@@ -104,7 +109,9 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
 
         IAuditService audit,
 
-        IErrorLogService errors)
+        IErrorLogService errors,
+
+        IItemPrerequisiteService itemPrereqs)
 
     {
 
@@ -125,6 +132,8 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
         _audit = audit;
 
         _errors = errors;
+
+        _itemPrereqs = itemPrereqs;
 
     }
 
@@ -388,11 +397,15 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
 
             RecordId = masterCode,
 
-            Result = "QUEUED"
+            Result = "QUEUED",
+
+            RequestId = jobId.ToString(CultureInfo.InvariantCulture)
 
         }, cancellationToken).ConfigureAwait(false);
 
-        return (jobId, dryRun ? "Dry-run job queued." : "Synchronization job queued.");
+        return (jobId, dryRun
+            ? "Dry-run job queued."
+            : $"Queued {masterCode} to {dest!.DisplayName} (job #{jobId}).");
 
     }
 
@@ -456,6 +469,38 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
 
 
 
+        var dbById = new Dictionary<int, RegisteredDatabase>();
+
+        if (sourceDbId > 0)
+
+        {
+
+            var sourceDb = await _registry.GetAsync(sourceDbId, cancellationToken).ConfigureAwait(false);
+
+            if (sourceDb is not null)
+
+                dbById[sourceDbId] = sourceDb;
+
+        }
+
+        foreach (var destId in dests)
+
+        {
+
+            var db = await _registry.GetAsync(destId, cancellationToken).ConfigureAwait(false);
+
+            if (db is not null)
+
+                dbById[destId] = db;
+
+        }
+
+
+
+        string DestLabel(int id) => dbById.TryGetValue(id, out var db) ? db.DisplayName : $"database {id}";
+
+
+
         foreach (var code in codes)
 
         {
@@ -474,7 +519,7 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
 
                     queued++;
 
-                    messages.Add($"{code} → dest {destId}: job #{jobId}");
+                    messages.Add($"{code} to {DestLabel(destId)} (job #{jobId})");
 
                 }
 
@@ -484,7 +529,7 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
 
                     failed++;
 
-                    messages.Add($"{code} → dest {destId}: {msg}");
+                    messages.Add($"{code} to {DestLabel(destId)}: {msg}");
 
                 }
 
@@ -522,7 +567,7 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
 
             result.WouldSucceed = false;
 
-            result.Summary = "Cannot continue — database registry is incomplete.";
+            result.Summary = "Cannot continue. Database registry is incomplete.";
 
             return result;
 
@@ -574,11 +619,51 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
 
             Detail = map is null
 
-                ? $"No mapping yet — a new {destEntity} record would be created on the destination."
+                ? $"No mapping yet. A new {destEntity} record would be created on the destination."
 
                 : $"Mapped to {map.SubCode} ({map.DstEntityCode})."
 
         });
+
+
+
+        if (string.Equals(destEntity, EntityCodes.Item, StringComparison.OrdinalIgnoreCase) && map is null)
+
+        {
+
+            var existsOnDest = await _read.MasterExistsByCodeAsync(dest, destEntity, masterCode, cancellationToken).ConfigureAwait(false);
+
+            result.Checks.Add(new DryRunCheck
+
+            {
+
+                Name = "Destination item code",
+
+                Ok = true,
+
+                Detail = existsOnDest
+
+                    ? $"Code {masterCode} already exists on destination. Would link mapping only; no API create."
+
+                    : $"Code {masterCode} not found on destination. Would call POST /stockitem."
+
+            });
+
+            if (!existsOnDest && record is not null)
+
+            {
+
+                foreach (var check in await _itemPrereqs.CheckAsync(dest, source, record, cancellationToken).ConfigureAwait(false))
+
+                {
+
+                    result.Checks.Add(new DryRunCheck { Name = check.Name, Ok = check.Ok, Detail = check.Detail });
+
+                }
+
+            }
+
+        }
 
 
 
@@ -754,17 +839,97 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
 
         }
 
+        else if (string.Equals(destEntity, EntityCodes.Item, StringComparison.OrdinalIgnoreCase)
+
+                 && await _read.MasterExistsByCodeAsync(dest!, destEntity, record.Code, cancellationToken).ConfigureAwait(false))
+
+        {
+
+            var enriched = await LoadSourceRecordAsync(src!, sourceEntity, record.Code, cancellationToken).ConfigureAwait(false) ?? record;
+
+            if (!job.DryRun)
+
+            {
+
+                await _mapping.ConfirmPairAsync(new EntityMapping
+
+                {
+
+                    MasterDbId = job.SourceDbId,
+
+                    SubDbId = job.DestDbId,
+
+                    EntityCode = sourceEntity,
+
+                    SrcEntityCode = sourceEntity,
+
+                    DstEntityCode = destEntity,
+
+                    MasterCode = enriched.Code,
+
+                    SubCode = enriched.Code,
+
+                    MasterDesc = enriched.Description,
+
+                    SubDesc = enriched.Description
+
+                }, job.CreatedBy,
+
+                    writeReverse: false,
+
+                    originJobId: job.JobId,
+
+                    cancellationToken).ConfigureAwait(false);
+
+            }
+
+            write = new WriteResult
+
+            {
+
+                Success = true,
+
+                DocNo = enriched.Code,
+
+                Message = "Destination already has this item code. Mapping linked; no duplicate created."
+
+            };
+
+        }
+
         else
 
         {
 
-            var enriched = PartnerSyncRules.IsPartyEntity(sourceEntity)
+            var enriched = await LoadSourceRecordAsync(src!, sourceEntity, record.Code, cancellationToken).ConfigureAwait(false) ?? record;
 
-                ? await LoadSourceRecordAsync(src!, sourceEntity, record.Code, cancellationToken).ConfigureAwait(false) ?? record
+            string? prereqDiagnosis = null;
 
-                : record;
+            if (string.Equals(destEntity, EntityCodes.Item, StringComparison.OrdinalIgnoreCase) && !job.DryRun)
+
+            {
+
+                var prereq = await _itemPrereqs.EnsureAsync(dest!, src, enriched, cancellationToken).ConfigureAwait(false);
+
+                if (!prereq.Ok)
+
+                {
+
+                    await _queue.CompleteAsync(job.JobId, JobStatuses.Failed, prereq.Message, cancellationToken).ConfigureAwait(false);
+
+                    return;
+
+                }
+
+                prereqDiagnosis = prereq.LastApiDiagnosis;
+
+            }
 
             write = await writer.CreateMasterAsync(dest!, destEntity, enriched, stamp, src, sourceEntity, cancellationToken).ConfigureAwait(false);
+
+            if (!write.Success && !string.IsNullOrWhiteSpace(prereqDiagnosis))
+
+                write = new WriteResult { Success = false, Message = write.Message + " " + prereqDiagnosis };
 
             if (write.Success && !job.DryRun)
 

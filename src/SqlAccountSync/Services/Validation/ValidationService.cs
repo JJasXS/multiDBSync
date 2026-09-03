@@ -7,7 +7,7 @@ public interface IValidationService
 {
     ValidationResult ValidateMaster(MasterRecord record, string entityCode);
     Task<ValidationResult> ValidateMappedDocumentAsync(
-        DocumentHeader source, int masterDbId, int subDbId, CancellationToken cancellationToken = default);
+        DocumentHeader source, int masterDbId, int subDbId, string? destPartyEntity = null, CancellationToken cancellationToken = default);
     ValidationResult ValidateDatabase(RegisteredDatabase? db, string label);
 }
 
@@ -41,7 +41,7 @@ public sealed class ValidationService : IValidationService
     }
 
     public async Task<ValidationResult> ValidateMappedDocumentAsync(
-        DocumentHeader source, int masterDbId, int subDbId, CancellationToken cancellationToken = default)
+        DocumentHeader source, int masterDbId, int subDbId, string? destPartyEntity = null, CancellationToken cancellationToken = default)
     {
         var errors = new List<string>();
         if (string.IsNullOrWhiteSpace(source.DocNo))
@@ -57,7 +57,7 @@ public sealed class ValidationService : IValidationService
         if (source.Lines.Count == 0)
             errors.Add("Document has no lines.");
 
-        var partyMap = await _mapping.FindPartyMapAsync(masterDbId, subDbId, EntityCodes.Customer, source.PartyCode, cancellationToken);
+        var partyMap = await _mapping.FindPartyMapAsync(masterDbId, subDbId, EntityCodes.Customer, source.PartyCode, destPartyEntity, cancellationToken);
         if (partyMap is null)
             errors.Add($"Supplier/customer '{source.PartyCode}' does not exist on the destination (no mapping). Push the partner from source to destination first.");
 

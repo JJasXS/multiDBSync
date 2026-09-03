@@ -152,3 +152,34 @@
   input.addEventListener("input", apply);
   apply();
 })();
+
+(() => {
+  const root = document.getElementById("toast-root");
+  if (!root) return;
+
+  document.querySelectorAll("[data-auto-toast]").forEach((source) => {
+    const variant = source.getAttribute("data-toast-variant") || "warn";
+    const duration = Number(source.getAttribute("data-toast-duration") || 5000);
+
+    const toast = document.createElement("div");
+    toast.className = `toast toast--${variant}`;
+    toast.setAttribute("role", "status");
+    toast.innerHTML = source.innerHTML;
+    root.appendChild(toast);
+
+    requestAnimationFrame(() => {
+      toast.classList.add("is-visible");
+    });
+
+    const dismiss = () => {
+      if (toast.classList.contains("is-leaving")) return;
+      toast.classList.remove("is-visible");
+      toast.classList.add("is-leaving");
+      toast.addEventListener("transitionend", () => toast.remove(), { once: true });
+    };
+
+    toast.querySelector(".toast-dismiss")?.addEventListener("click", dismiss);
+    window.setTimeout(dismiss, duration);
+    source.remove();
+  });
+})();

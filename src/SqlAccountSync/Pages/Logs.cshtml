@@ -3,61 +3,158 @@
 @{
     ViewData["Title"] = "Logs";
 }
+@section TopbarActions {
+    @if (Model.CanOperate)
+    {
+        <button class="btn secondary" type="submit" form="logsForm" asp-page-handler="DryRun">Dry run</button>
+        <button class="btn" type="submit" form="logsForm" asp-page-handler="Execute"
+                onclick="return confirm('Create destination documents for the selected rows and databases?');">Transfer</button>
+    }
+}
 
-@if (!string.IsNullOrEmpty(Model.Message))
+@if (Model.FlashToast is not null)
 {
-    <div class="flash flash-ok">@Model.Message</div>
+    <partial name="_FlashToast" model="Model.FlashToast" />
 }
 
 <div class="txn-layout">
     <div class="card txn-form-card">
-        <div class="card-head">
-            <h3>Intercompany document</h3>
-        </div>
-        <form method="post" class="form-grid">
-            <div class="span-2 route-fields">
+        <div class="push-workspace">
+        <form method="get" class="push-source-form">
+            <div class="route-fields push-route-fields">
                 <div class="route-field">
-                    <label>Source</label>
-                    <select asp-for="SourceDbId">@foreach (var d in Model.Databases) { <option value="@d.DbId">@d.DisplayName</option> }</select>
+                    <label for="logsSourceDb">Source</label>
+                    <select id="logsSourceDb" name="SourceDbId" onchange="this.form.submit()">
+                        @foreach (var d in Model.Databases)
+                        {
+                            <option value="@d.DbId" selected="@(d.DbId == Model.SourceDbId)">@d.DisplayName</option>
+                        }
+                    </select>
                 </div>
-                <span class="route-arrow" aria-hidden="true">→</span>
+                <span class="route-arrow push-route-arrow" aria-hidden="true">→</span>
                 <div class="route-field">
-                    <label>Destination</label>
-                    <select asp-for="DestDbId">@foreach (var d in Model.Databases) { <option value="@d.DbId">@d.DisplayName</option> }</select>
+                    <label for="logsTxnType">Type</label>
+                    <select id="logsTxnType" name="TxnType" onchange="this.form.submit()">
+                        @foreach (var t in Model.Types)
+                        {
+                            <option value="@t.Code" selected="@(t.Code == Model.TxnType)">@SyncDisplayNames.TxnType(t.Code, t.Name)</option>
+                        }
+                    </select>
                 </div>
-            </div>
-            <div>
-                <label>Type</label>
-                <select asp-for="TxnType">
-                    @foreach (var t in Model.Types) { <option value="@t.Code">@t.Name</option> }
-                </select>
-            </div>
-            <div><label>Source document number</label><input asp-for="SrcDoc" placeholder="IV-00001" /></div>
-            <div><button class="btn secondary" asp-page-handler="DryRun">Dry run</button></div>
-            <div>
-                <label><input asp-for="Confirmed" /> I confirm this will create a destination accounting document</label>
-                <button class="btn" asp-page-handler="Execute" onclick="return confirm('Create the corresponding document in the destination company?');">Confirm &amp; execute</button>
             </div>
         </form>
-        @if (Model.DryRun is not null)
-        {
-            <div class="confirm-box">
-                <strong>@Model.DryRun.Summary</strong>
-                <ul>@foreach (var c in Model.DryRun.Checks) { <li>@(c.Ok ? "✓" : "✗") @c.Name — @c.Detail</li> }</ul>
+
+        <form id="logsForm" method="post" class="txn-transfer-form">
+            <input type="hidden" asp-for="SourceDbId" />
+            <input type="hidden" asp-for="TxnType" />
+
+            <div class="push-layout">
+                <div class="push-panel-table-wrap">
+                    <div class="push-panel-head">
+                        <h3>Documents</h3>
+                    </div>
+                    <table class="push-panel-table">
+                        <thead>
+                            <tr>
+                                <th class="col-check">
+                                    <input type="checkbox" data-check-all="txn-docs" aria-label="Select all documents"
+                                           @(Model.Documents.Count == 0 ? "disabled" : null) />
+                                </th>
+                                <th>Document</th>
+                                <th>Date</th>
+                                <th>Party</th>
+                                <th>Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (Model.Documents.Count == 0)
+                            {
+                                <tr>
+                                    <td colspan="5" class="empty">No documents. Pick source and type.</td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var doc in Model.Documents)
+                                {
+                                    var docId = string.IsNullOrWhiteSpace(doc.DocNo) ? doc.DocKey : doc.DocNo;
+                                    var selected = Model.SelectedDocs.Contains(docId, StringComparer.OrdinalIgnoreCase);
+                                    <tr>
+                                        <td class="col-check">
+                                            <input type="checkbox" name="SelectedDocs" value="@docId" data-check-group="txn-docs"
+                                                   @(selected ? "checked" : null) />
+                                        </td>
+                                        <td>@doc.DocNo</td>
+                                        <td>@(doc.DocDate?.ToString("yyyy-MM-dd") ?? "")</td>
+                                        <td><span class="cell-truncate" title="@doc.PartyName">@doc.PartyCode</span></td>
+                                        <td>@doc.Amount.ToString("N2")</td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="push-flow-bridge" aria-hidden="true">
+                    <span class="push-flow-arrow">→</span>
+                </div>
+
+                <div class="push-panel-table-wrap">
+                    <table class="push-panel-table">
+                        <thead>
+                            @if (Model.TargetDatabases.Count > 0)
+                            {
+                                <tr>
+                                    <th class="col-check">
+                                        <input type="checkbox" data-check-all="txn-dests" aria-label="Select all target databases" />
+                                    </th>
+                                    <th>Database</th>
+                                    <th>Code</th>
+                                </tr>
+                            }
+                        </thead>
+                        <tbody>
+                            @if (Model.TargetDatabases.Count == 0)
+                            {
+                                <tr>
+                                    <td colspan="3" class="empty">No target databases.</td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var d in Model.TargetDatabases)
+                                {
+                                    var selected = Model.SelectedDestDbIds.Contains(d.DbId);
+                                    <tr>
+                                        <td class="col-check">
+                                            <input type="checkbox" name="SelectedDestDbIds" value="@d.DbId" data-check-group="txn-dests"
+                                                   @(selected ? "checked" : null) />
+                                        </td>
+                                        <td class="push-target-name">@d.DisplayName</td>
+                                        <td class="muted">@d.DbCode</td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
             </div>
-        }
+
+            <div class="txn-form-actions">
+                <label class="check"><input asp-for="Confirmed" /> <span>I confirm this will create destination accounting documents</span></label>
+            </div>
+        </form>
+        <partial name="_DryRunToast" model="Model.DryRun" />
     </div>
+
     <div class="card txn-list-card">
-        <div class="card-head">
-            <h3>Transactions</h3>
-        </div>
         @if (Model.Transactions.Count == 0)
         {
             <p class="empty">No intercompany transactions yet.</p>
         }
         else
         {
-            <div class="table-wrap">
+            <div class="table-wrap push-jobs-table-wrap">
                 <table>
                     <thead><tr><th>ID</th><th>Type</th><th>Source → Destination</th><th>Status</th><th class="col-actions"></th></tr></thead>
                     <tbody>
@@ -68,7 +165,7 @@
                         var routeTitle = $"{srcLabel} → {dstLabel}";
                         <tr>
                             <td><a asp-page="/Transactions/Details" asp-route-id="@t.TxnPk">@t.TxnId</a></td>
-                            <td>@t.TxnTypeCode</td>
+                            <td>@SyncDisplayNames.TxnType(t.TxnTypeCode)</td>
                             <td>
                                 <span class="route-cell cell-truncate" title="@routeTitle">
                                     <span class="route-src">@srcLabel</span>

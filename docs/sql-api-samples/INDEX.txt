@@ -2,11 +2,15 @@ SQL Accounting API samples (from Postman / chat).
 Used by SqlAccountSync to match GET vs POST shapes.
 
 01-master-data
+  customer
+    GET-customer-list.json                  GET /customer?offset=&limit=
+    POST-customer-create-template.json      POST /customer           (works on sub API)
   supplier
     GET-supplier-list.json                  GET /supplier/*          (Sub partner flip)
+    POST-supplier-create-template.json      POST /supplier           (works on sub API)
   stockitem
     GET-stockitem-list.json                 GET /stockitem/*         (ITEM push)
-    POST-stockitem-create-template.json     POST /stockitem          (ITEM create)
+    POST-stockitem-create-template.json     POST /stockitem          (ITEM create — tenant API may 500)
 
 02-documents  (Sub1 Customer Invoice -> Sub2 Purchase Invoice)
   customerinvoice
@@ -15,6 +19,9 @@ Used by SqlAccountSync to match GET vs POST shapes.
   purchaseinvoice
     GET-purchaseinvoice-detail.json         GET /purchaseinvoice/*   (dest PI)
     POST-purchaseinvoice-create-template.json  POST /purchaseinvoice  (SI->PI create)
-
-Not collected yet:
-  GET/POST /customer   (working in app; add here if you paste it)
+  deliveryorder
+    GET-deliveryorder-detail.json           GET /deliveryorder/*     (source DO)
+    POST-deliveryorder-create-template.json POST /deliveryorder      (DO create)
+  goodsreceived
+    GET-goodsreceived-detail.json           GET /goodsreceived/*     (dest GR)
+    POST-goodsreceived-create-template.json POST /goodsreceived      (DO->GR create)

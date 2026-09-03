@@ -378,12 +378,12 @@ MATCHING (ENTITYCODE)", new Dictionary<string, object?> { ["C"] = code, ["N"] = 
 
         var types = new (string Code, string Name, string Src, string Dst, string SrcPath, string DstPath)[]
         {
-            ("SI_TO_PI", "Sales Invoice → Purchase Invoice", "IV", "PI", "/customerinvoice", "/purchaseinvoice"),
-            ("DO_TO_GR", "Delivery Order → Goods Received", "DO", "GR", "/deliveryorder", "/goodsreceived"),
-            ("ST_TO_ST", "Stock Transfer → Stock Transfer", "ST", "ST", "/stocktransfer", "/stocktransfer"),
-            ("SR_TO_PR", "Sales Return → Purchase Return", "SR", "PR", "/salesreturn", "/purchasereturn"),
-            ("CN_TO_DN", "Credit Note → Debit Note", "CN", "DN", "/creditnote", "/debitnote"),
-            ("DN_TO_CN", "Debit Note → Credit Note", "DN", "CN", "/debitnote", "/creditnote"),
+            ("SI_TO_PI", "Sales → Purchase", "IV", "PI", "/customerinvoice", "/purchaseinvoice"),
+            ("DO_TO_GR", "Delivery → Goods received", "DO", "GR", "/deliveryorder", "/goodsreceived"),
+            ("ST_TO_ST", "Stock transfer", "ST", "ST", "/stocktransfer", "/stocktransfer"),
+            ("SR_TO_PR", "Sales return → Purchase return", "SR", "PR", "/salesreturn", "/purchasereturn"),
+            ("CN_TO_DN", "Credit note → Debit note", "CN", "DN", "/creditnote", "/debitnote"),
+            ("DN_TO_CN", "Debit note → Credit note", "DN", "CN", "/debitnote", "/creditnote"),
         };
         foreach (var t in types)
         {

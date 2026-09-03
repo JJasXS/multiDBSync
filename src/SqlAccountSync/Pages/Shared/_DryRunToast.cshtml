@@ -1,0 +1,17 @@
+@model SqlAccountSync.Models.DryRunResult?
+@if (Model is not null)
+{
+    <div hidden
+         data-auto-toast
+         data-toast-variant="@(Model.WouldSucceed ? "ok" : "warn")"
+         data-toast-duration="5000">
+        <button type="button" class="toast-dismiss" aria-label="Dismiss">&times;</button>
+        <div class="toast-title">@Model.Summary</div>
+        <ul class="toast-list">
+            @foreach (var c in Model.Checks)
+            {
+                <li class="@(c.Ok ? "toast-ok" : "toast-fail")">@(c.Ok ? "✓" : "✗") @c.Name: @c.Detail</li>
+            }
+        </ul>
+    </div>
+}

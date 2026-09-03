@@ -118,7 +118,7 @@ public class EditModel : SyncPageModel
             if (string.IsNullOrWhiteSpace(Db.FbHost))
                 Db.FbHost = "localhost";
             if (string.IsNullOrWhiteSpace(Db.FbCredRef))
-                Db.FbCredRef = "env:CENTRAL_FB_PASSWORD";
+                Db.FbCredRef = "masterkey";
         }
         return Page();
     }

@@ -9,6 +9,10 @@ public sealed class StockItemUom
     public string Rate { get; set; } = "1";
     public string RefCost { get; set; } = "0";
     public string RefPrice { get; set; } = "0";
+    public string MinCost { get; set; } = "0";
+    public string MaxCost { get; set; } = "0";
+    public string MinPrice { get; set; } = "0";
+    public string MaxPrice { get; set; } = "0";
     public bool IsBase { get; set; } = true;
 }
 
@@ -53,6 +57,7 @@ public sealed class StockItem
     public string Remark1 { get; set; } = "";
     public string Remark2 { get; set; } = "";
     public string Barcode { get; set; } = "";
+    public string CreationDate { get; set; } = "";
     public List<StockItemUom> Uoms { get; set; } = [];
     public List<StockItemCategory> Categories { get; set; } = [];
     public Dictionary<string, string> UdfFields { get; set; } = new(StringComparer.OrdinalIgnoreCase);
@@ -60,6 +65,19 @@ public sealed class StockItem
 
 public static class StockItemMapper
 {
+    private static readonly string[] NumericUdfKeys =
+    [
+        "udf_stdprice", "udf_dleadtime", "udf_moq", "udf_bundle",
+        "udf_thickness", "udf_width", "udf_length",
+        "udf_ds", "udf_dp", "udf_dsys", "udf_dfs", "udf_dfp", "udf_dfsys",
+        "udf_wts", "udf_wtp", "udf_wtsys", "udf_pricekg", "udf_costkg"
+    ];
+
+    private static readonly string[] StringUdfKeys =
+    [
+        "udf_2uom", "udf_formula", "udf_mtype", "udf_uom", "udf_stockgroup"
+    ];
+
     public static StockItem FromMasterRecord(MasterRecord record)
     {
         var f = record.Fields;
@@ -98,7 +116,8 @@ public static class StockItemMapper
             BomAsmCost = FieldOr(f, "0", "bom_asmcost"),
             Remark1 = Field(f, "remark1"),
             Remark2 = Field(f, "remark2"),
-            Barcode = Field(f, "barcode")
+            Barcode = Field(f, "barcode"),
+            CreationDate = Field(f, "creationdate")
         };
 
         if (TryParseUoms(f, out var uoms))
@@ -125,11 +144,13 @@ public static class StockItemMapper
                 item.UdfFields[k.ToLowerInvariant()] = v.Trim();
         }
 
+        NormalizeUoms(item);
         return item;
     }
 
     public static Dictionary<string, object?> ToApiPayload(StockItem item, string suggestedCode, string txnStamp)
     {
+        NormalizeUoms(item);
         var code = (suggestedCode ?? "").Trim();
         if (code.Length == 0)
             code = item.Code;
@@ -151,6 +172,10 @@ public static class StockItemMapper
             ["rate"] = NullIfEmpty(u.Rate) ?? "1",
             ["refcost"] = NullIfEmpty(u.RefCost) ?? "0",
             ["refprice"] = NullIfEmpty(u.RefPrice) ?? "0",
+            ["mincost"] = NullIfEmpty(u.MinCost) ?? "0",
+            ["maxcost"] = NullIfEmpty(u.MaxCost) ?? "0",
+            ["minprice"] = NullIfEmpty(u.MinPrice) ?? "0",
+            ["maxprice"] = NullIfEmpty(u.MaxPrice) ?? "0",
             ["isbase"] = u.IsBase
         }).ToList();
 
@@ -164,6 +189,9 @@ public static class StockItemMapper
 
         var payload = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
         {
+            ["dockey"] = 0,
+            ["dirty"] = true,
+            ["lastmodified"] = 0,
             ["code"] = code,
             ["description"] = item.Description,
             ["description2"] = NullIfEmpty(item.Description2),
@@ -188,6 +216,7 @@ public static class StockItemMapper
             ["defuom_ph"] = NullIfEmpty(item.DefUomPh),
             ["scriptcode"] = NullIfEmpty(item.ScriptCode),
             ["isactive"] = item.IsActive,
+            ["creationdate"] = NormalizeCreationDate(item.CreationDate) ?? DateTime.UtcNow.ToString("yyyy-MM-dd"),
             ["uom"] = uom,
             ["refcost"] = item.RefCost,
             ["refprice"] = item.RefPrice,
@@ -195,6 +224,8 @@ public static class StockItemMapper
             ["leadtime"] = item.LeadTime,
             ["bom_leadtime"] = item.BomLeadTime,
             ["bom_asmcost"] = item.BomAsmCost,
+            ["balsqty"] = "0",
+            ["balsuomqty"] = "0",
             ["remark1"] = NullIfEmpty(remark1),
             ["remark2"] = NullIfEmpty(item.Remark2),
             ["barcode"] = NullIfEmpty(item.Barcode),
@@ -213,9 +244,46 @@ public static class StockItemMapper
             payload["sdscategory"] = sdscategory;
 
         foreach (var (k, v) in item.UdfFields)
-            payload[k] = v;
+            payload[k] = k.Equals("udf_direct", StringComparison.OrdinalIgnoreCase)
+                ? ParseUdfDirect(v)
+                : v;
+
+        ApplyUdfDefaults(payload, item.UdfFields);
 
         return payload;
+    }
+
+    private static void ApplyUdfDefaults(Dictionary<string, object?> payload, Dictionary<string, string> sourceUdfs)
+    {
+        foreach (var key in NumericUdfKeys)
+        {
+            if (payload.ContainsKey(key))
+                continue;
+            payload[key] = "0";
+        }
+
+        foreach (var key in StringUdfKeys)
+        {
+            if (payload.ContainsKey(key))
+                continue;
+            payload[key] = "";
+        }
+
+        if (!payload.ContainsKey("udf_direct") && sourceUdfs.TryGetValue("udf_direct", out var directVal))
+            payload["udf_direct"] = ParseUdfDirect(directVal);
+    }
+
+    private static object? ParseUdfDirect(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+        if (bool.TryParse(value, out var b))
+            return b;
+        if (value is "1" or "Y" or "T")
+            return true;
+        if (value is "0" or "N" or "F")
+            return false;
+        return null;
     }
 
     public static string SerializePayload(Dictionary<string, object?> payload) =>
@@ -231,7 +299,10 @@ public static class StockItemMapper
             return false;
         try
         {
-            var list = JsonSerializer.Deserialize<List<StockItemUom>>(json);
+            var list = JsonSerializer.Deserialize<List<StockItemUom>>(json, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            });
             if (list is null || list.Count == 0)
                 return false;
             uoms = list;
@@ -303,4 +374,51 @@ public static class StockItemMapper
 
     private static string? NullIfEmpty(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static string? NormalizeCreationDate(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+        var trimmed = value.Trim();
+        if (DateTime.TryParse(trimmed, out var dt))
+            return dt.ToString("yyyy-MM-dd");
+        return trimmed.Length >= 10 ? trimmed[..10] : trimmed;
+    }
+
+    private static void NormalizeUoms(StockItem item)
+    {
+        if (item.Uoms.Count == 0)
+        {
+            var uom = string.IsNullOrWhiteSpace(item.Uom) ? "PCS" : item.Uom.Trim();
+            item.Uom = uom;
+            if (string.IsNullOrWhiteSpace(item.Suom))
+                item.Suom = uom;
+            item.Uoms = [new StockItemUom { Uom = uom, Rate = "1", RefCost = item.RefCost, RefPrice = item.RefPrice, IsBase = true }];
+            return;
+        }
+
+        if (!item.Uoms.Any(u => u.IsBase))
+            item.Uoms[0].IsBase = true;
+
+        var baseCount = item.Uoms.Count(u => u.IsBase);
+        if (baseCount > 1)
+        {
+            var first = true;
+            foreach (var u in item.Uoms)
+            {
+                if (!u.IsBase) continue;
+                if (first) { first = false; continue; }
+                u.IsBase = false;
+            }
+        }
+
+        var baseUom = item.Uoms.First(u => u.IsBase);
+        var baseCode = (baseUom.Uom ?? "").Trim();
+        if (baseCode.Length > 0)
+        {
+            item.Uom = baseCode;
+            if (string.IsNullOrWhiteSpace(item.Suom))
+                item.Suom = baseCode;
+        }
+    }
 }

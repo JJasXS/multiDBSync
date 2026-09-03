@@ -12,7 +12,7 @@
 copy src\SqlAccountSync\.env.example src\SqlAccountSync\.env
 ```
 
-Set `CENTRAL_FB_PASSWORD` and `CentralDb` path. Then:
+Set `CENTRAL_FB_MASTERKEY` and `CentralDb` path. Then:
 
 ```powershell
 dotnet run --project src\SqlAccountSync --launch-profile http

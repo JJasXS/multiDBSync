@@ -9,7 +9,7 @@ public class AuditModel : SyncPageModel
 
     public AuditModel(IAuditService audit) => _audit = audit;
 
-    public List<AuditEntry> Audits { get; set; } = [];
+    public List<AuditListItem> Audits { get; set; } = [];
 
-    public async Task OnGetAsync() => Audits = await _audit.ListAsync();
+    public async Task OnGetAsync() => Audits = await _audit.ListDetailedAsync();
 }

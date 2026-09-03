@@ -71,6 +71,7 @@
             }
             <div class="group">Operations</div>
             <a class="@SyncNavClass()" asp-page="/Push/Index">Synchronization</a>
+            <a class="@NavClass("/Partners/Create")" asp-page="/Partners/Create">Create partners</a>
             <a class="@LogsNavClass()" asp-page="/Logs">Logs</a>
             <div class="group">System</div>
             <a class="@SettingsNavClass()" asp-page="/Settings/Index">Settings</a>
@@ -96,6 +97,7 @@
             @RenderBody()
         </div>
     </div>
+    <div id="toast-root" class="toast-root" aria-live="polite" aria-atomic="true"></div>
 }
 else
 {

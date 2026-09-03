@@ -122,6 +122,27 @@
     return digits.map((d) => d.value.replace(/\D/g, "")).join("");
   }
 
+  function fillOtpCode(code) {
+    const text = String(code || "").replace(/\D/g, "").slice(0, 6);
+    if (text.length !== 6) return false;
+    text.split("").forEach((ch, i) => {
+      const digit = digits[i];
+      if (!digit) return;
+      digit.value = ch;
+      digit.classList.toggle("otp-digit--filled", !!ch);
+      digit.disabled = false;
+    });
+    otpBoxes?.classList.remove("is-locked");
+    otpExpired = false;
+    return true;
+  }
+
+  function applyDebugOtp(code) {
+    if (!fillOtpCode(code)) return;
+    showError(otpError, `Development: using OTP ${code}`, true);
+    setTimeout(() => otpForm?.requestSubmit(), 150);
+  }
+
   function fillDigit(index, ch) {
     const digit = digits[index];
     if (!digit || otpExpired || digit.disabled) return;
@@ -162,8 +183,12 @@
         return false;
       }
       showOtpStep(email);
-      showError(otpError, data.message || "Code sent.", true);
-      setTimeout(() => showError(otpError, ""), 2500);
+      if (data.debugOtp) {
+        applyDebugOtp(data.debugOtp);
+      } else {
+        showError(otpError, data.message || "Code sent.", true);
+        setTimeout(() => showError(otpError, ""), 2500);
+      }
       return true;
     } catch {
       showError(emailError, "Network error. Try again.");

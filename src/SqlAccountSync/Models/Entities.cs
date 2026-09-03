@@ -15,7 +15,7 @@ public sealed class RegisteredDatabase
     public string FbCharset { get; set; } = "UTF8";
     public int FbDialect { get; set; } = 3;
     public string FbUser { get; set; } = "SYSDBA";
-    public string FbCredRef { get; set; } = "";
+    public string FbCredRef { get; set; } = "masterkey";
     public string ApiBaseUrl { get; set; } = "";
     public string ApiCredRef { get; set; } = "";
     public string Environment { get; set; } = AppEnvironments.Development;
@@ -161,6 +161,17 @@ public sealed class AuditEntry
     public string AfterJson { get; set; } = "";
 }
 
+public sealed class AuditListItem
+{
+    public AuditEntry Entry { get; set; } = new();
+    public string DisplayResult { get; set; } = "";
+    public string? StatusDetail { get; set; }
+    public int? JobId { get; set; }
+    public int? TxnPk { get; set; }
+    public string? LinkUrl { get; set; }
+    public string LinkLabel { get; set; } = "";
+}
+
 public sealed class ErrorEntry
 {
     public int ErrorId { get; set; }
@@ -249,6 +260,17 @@ public sealed class DocumentLine
     public Dictionary<string, string> Fields { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
+public sealed class DocumentListItem
+{
+    public string DocType { get; set; } = "";
+    public string DocKey { get; set; } = "";
+    public string DocNo { get; set; } = "";
+    public DateTime? DocDate { get; set; }
+    public string PartyCode { get; set; } = "";
+    public string PartyName { get; set; } = "";
+    public decimal Amount { get; set; }
+}
+
 public sealed class ConnectionTestResult
 {
     public string Status { get; set; } = ConnectionResults.UnknownError;
@@ -278,6 +300,13 @@ public sealed class DryRunCheck
     public string Name { get; set; } = "";
     public bool Ok { get; set; }
     public string Detail { get; set; } = "";
+}
+
+public sealed class FlashToastModel
+{
+    public string Title { get; set; } = "";
+    public List<string> Lines { get; set; } = [];
+    public bool Ok { get; set; } = true;
 }
 
 public sealed class WriteResult

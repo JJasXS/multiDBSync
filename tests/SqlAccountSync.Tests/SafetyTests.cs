@@ -90,7 +90,7 @@ public class ValidationTests
                 (m.SrcEntityCode == srcEntityCode || m.EntityCode == srcEntityCode)
                 && m.MasterCode == sourceCode
                 && m.Status == MappingStatuses.Mapped));
-        public Task<EntityMapping?> FindPartyMapAsync(int sourceDbId, int destDbId, string sourcePartyEntity, string sourcePartyCode, CancellationToken cancellationToken = default) =>
+        public Task<EntityMapping?> FindPartyMapAsync(int sourceDbId, int destDbId, string sourcePartyEntity, string sourcePartyCode, string? destPartyEntity = null, CancellationToken cancellationToken = default) =>
             FindBySourceAsync(sourceDbId, destDbId, sourcePartyEntity, sourcePartyCode, cancellationToken);
         public Task<(bool Ok, string Message, EntityMapping? Mapping)> ConfirmAsync(EntityMapping mapping, string user, CancellationToken cancellationToken = default) => Task.FromResult<(bool, string, EntityMapping?)>((true, "", mapping));
         public Task<(bool Ok, string Message, EntityMapping? Mapping)> ConfirmPairAsync(EntityMapping forward, string user, bool writeReverse, int? originJobId, CancellationToken cancellationToken = default) =>

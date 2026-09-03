@@ -10,7 +10,7 @@ public interface IMappingService
     Task<List<EntityMapping>> ListAsync(int masterDbId, int subDbId, string entityCode, CancellationToken cancellationToken = default);
     Task<EntityMapping?> FindAsync(int masterDbId, int subDbId, string entityCode, string masterCode, CancellationToken cancellationToken = default);
     Task<EntityMapping?> FindBySourceAsync(int sourceDbId, int destDbId, string srcEntityCode, string sourceCode, CancellationToken cancellationToken = default);
-    Task<EntityMapping?> FindPartyMapAsync(int sourceDbId, int destDbId, string sourcePartyEntity, string sourcePartyCode, CancellationToken cancellationToken = default);
+    Task<EntityMapping?> FindPartyMapAsync(int sourceDbId, int destDbId, string sourcePartyEntity, string sourcePartyCode, string? destPartyEntity = null, CancellationToken cancellationToken = default);
     Task<(bool Ok, string Message, EntityMapping? Mapping)> ConfirmAsync(EntityMapping mapping, string user, CancellationToken cancellationToken = default);
     Task<(bool Ok, string Message, EntityMapping? Mapping)> ConfirmPairAsync(EntityMapping forward, string user, bool writeReverse, int? originJobId, CancellationToken cancellationToken = default);
     Task TouchLastSyncAtAsync(int mappingId, CancellationToken cancellationToken = default);
@@ -56,8 +56,35 @@ WHERE MASTERDBID=@MASTERDBID AND SUBDBID=@SUBDBID
     }
 
     public async Task<EntityMapping?> FindPartyMapAsync(
-        int sourceDbId, int destDbId, string sourcePartyEntity, string sourcePartyCode, CancellationToken cancellationToken = default)
+        int sourceDbId, int destDbId, string sourcePartyEntity, string sourcePartyCode,
+        string? destPartyEntity = null, CancellationToken cancellationToken = default)
     {
+        if (string.Equals(sourcePartyEntity, EntityCodes.Customer, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(destPartyEntity, EntityCodes.Supplier, StringComparison.OrdinalIgnoreCase))
+        {
+            var supplier = await _db.QuerySingleAsync(@"
+SELECT FIRST 1 * FROM SYNC_MAPPING
+WHERE MASTERDBID=@MASTERDBID AND SUBDBID=@SUBDBID AND STATUS='MAPPED'
+  AND UPPER(MASTERCODE)=UPPER(@MASTERCODE)
+  AND (SRCENTITYCODE='CUSTOMER' OR ENTITYCODE='CUSTOMER')
+  AND DSTENTITYCODE='SUPPLIER'",
+                Map,
+                new { MASTERDBID = sourceDbId, SUBDBID = destDbId, MASTERCODE = sourcePartyCode },
+                cancellationToken).ConfigureAwait(false);
+            if (supplier is not null)
+                return supplier;
+
+            return await _db.QuerySingleAsync(@"
+SELECT FIRST 1 * FROM SYNC_MAPPING
+WHERE MASTERDBID=@MASTERDBID AND SUBDBID=@SUBDBID AND STATUS='MAPPED'
+  AND UPPER(MASTERCODE)=UPPER(@MASTERCODE)
+  AND (SRCENTITYCODE='CUSTOMER' OR ENTITYCODE='CUSTOMER')
+  AND DSTENTITYCODE IS NULL AND ENTITYCODE='SUPPLIER'",
+                Map,
+                new { MASTERDBID = sourceDbId, SUBDBID = destDbId, MASTERCODE = sourcePartyCode },
+                cancellationToken).ConfigureAwait(false);
+        }
+
         var direct = await FindBySourceAsync(sourceDbId, destDbId, sourcePartyEntity, sourcePartyCode, cancellationToken)
             .ConfigureAwait(false);
         if (direct is not null)

@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using SqlAccountSync.Helpers;
 using SqlAccountSync.Models;
@@ -40,7 +41,7 @@ public class IndexModel : SyncPageModel
 
     [BindProperty] public int MasterDbId { get; set; }
     [BindProperty] public int SubDbId { get; set; }
-    [BindProperty] public string JobEntityCode { get; set; } = "ITEM";
+    [BindProperty] public string JobEntityCode { get; set; } = "CUSTOMER";
     [BindProperty] public string MasterCode { get; set; } = "";
 
     public List<RegisteredDatabase> SourceDatabases { get; set; } = [];
@@ -53,8 +54,7 @@ public class IndexModel : SyncPageModel
     public List<RegisteredDatabase> Databases { get; set; } = [];
     public DryRunResult? DryRun { get; set; }
 
-    public string Message { get; set; } = "";
-    public bool MessageOk { get; set; }
+    public FlashToastModel? FlashToast { get; set; }
 
     public bool IsJobsTab => string.Equals(NormalizeTab(Tab), "jobs", StringComparison.OrdinalIgnoreCase);
 
@@ -84,13 +84,30 @@ public class IndexModel : SyncPageModel
             dryRun: false,
             CurrentEmail);
 
-        MessageOk = queued > 0 && failed == 0;
-        Message = queued == 0 && failed == 0
-            ? string.Join(" ", messages)
-            : $"Queued {queued} job(s)" + (failed > 0 ? $", {failed} failed." : ".")
-              + (messages.Count == 0 ? "" : " " + string.Join(" ", messages.Take(8)));
-        if (messages.Count > 8)
-            Message += $" … (+{messages.Count - 8} more)";
+        if (queued == 0 && failed == 0)
+        {
+            FlashToast = new FlashToastModel
+            {
+                Title = messages.FirstOrDefault() ?? "Nothing queued.",
+                Ok = false
+            };
+        }
+        else
+        {
+            var lines = messages;
+            if (lines.Count > 12)
+            {
+                lines = [.. lines.Take(12), $"+{messages.Count - 12} more"];
+            }
+
+            FlashToast = new FlashToastModel
+            {
+                Title = $"Queued {queued} job{(queued == 1 ? "" : "s")}."
+                    + (failed > 0 ? $" {failed} could not be queued." : ""),
+                Lines = lines,
+                Ok = queued > 0 && failed == 0
+            };
+        }
 
         await LoadPushAsync();
         return Page();
@@ -114,11 +131,15 @@ public class IndexModel : SyncPageModel
         {
             UserEmail = CurrentEmail,
             Action = "USER EXECUTED SYNC",
-            RecordId = id.ToString(),
-            Result = "QUEUED"
+            RecordId = id.ToString(CultureInfo.InvariantCulture),
+            Result = "QUEUED",
+            RequestId = id.ToString(CultureInfo.InvariantCulture)
         });
-        Message = msg;
-        MessageOk = true;
+        FlashToast = new FlashToastModel
+        {
+            Title = msg,
+            Ok = id > 0
+        };
         await LoadJobsAsync(null);
         return Page();
     }

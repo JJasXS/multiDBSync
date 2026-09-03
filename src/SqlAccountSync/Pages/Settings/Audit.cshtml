@@ -18,19 +18,38 @@
         }
         else
         {
-            <div class="table-wrap">
+            <div class="table-wrap push-jobs-table-wrap">
                 <table>
-                    <thead><tr><th>When</th><th>User</th><th>Action</th><th>Entity</th><th>Record</th><th>Result</th></tr></thead>
+                    <thead><tr><th>When</th><th>User</th><th>Action</th><th>Entity</th><th>Record</th><th>Result</th><th class="col-actions"></th></tr></thead>
                     <tbody>
-                    @foreach (var a in Model.Audits)
+                    @foreach (var row in Model.Audits)
                     {
+                        var a = row.Entry;
+                        var badge = SyncDisplayNames.AuditResultBadgeClass(row.DisplayResult);
                         <tr>
                             <td>@a.AtUtc.ToString("yyyy-MM-dd HH:mm")</td>
                             <td>@a.UserEmail</td>
-                            <td>@a.Action</td>
-                            <td>@a.Entity</td>
-                            <td>@a.RecordId</td>
-                            <td>@a.Result</td>
+                            <td>@SyncDisplayNames.AuditAction(a.Action)</td>
+                            <td>@(string.IsNullOrWhiteSpace(a.Entity) ? "—" : SyncDisplayNames.TxnType(a.Entity))</td>
+                            <td>
+                                @if (!string.IsNullOrWhiteSpace(row.LinkUrl))
+                                {
+                                    <a href="@row.LinkUrl">@a.RecordId</a>
+                                }
+                                else
+                                {
+                                    @a.RecordId
+                                }
+                            </td>
+                            <td>
+                                <span class="badge @badge" title="@row.StatusDetail">@row.DisplayResult</span>
+                            </td>
+                            <td class="col-actions">
+                                @if (!string.IsNullOrWhiteSpace(row.LinkUrl))
+                                {
+                                    <a class="btn small secondary" href="@row.LinkUrl">@row.LinkLabel</a>
+                                }
+                            </td>
                         </tr>
                     }
                     </tbody>

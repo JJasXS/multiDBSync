@@ -20,7 +20,10 @@ public interface ISqlAccountReadAdapter
     Task<MasterRecord?> GetPartyDetailAsync(RegisteredDatabase db, string entityCode, string code, CancellationToken cancellationToken = default);
     Task<MasterRecord?> GetItemDetailAsync(RegisteredDatabase db, string code, CancellationToken cancellationToken = default);
     Task<bool> PartyExistsByStampAsync(RegisteredDatabase db, string entityCode, string txnStamp, CancellationToken cancellationToken = default);
+    Task<bool> MasterExistsByCodeAsync(RegisteredDatabase db, string entityCode, string code, CancellationToken cancellationToken = default);
+    Task<StockGroupRecord?> GetStockGroupAsync(RegisteredDatabase db, string code, CancellationToken cancellationToken = default);
     Task<DocumentHeader?> GetDocumentAsync(RegisteredDatabase db, string docType, string docKeyOrNo, CancellationToken cancellationToken = default);
+    Task<List<DocumentListItem>> ListDocumentsAsync(RegisteredDatabase db, string docType, int take = 200, CancellationToken cancellationToken = default);
     Task<ReconcileResult> FindByTxnStampAsync(RegisteredDatabase db, string txnId, CancellationToken cancellationToken = default);
     Task<ReconcileResult> FindTransferAsync(RegisteredDatabase db, string fromDocType, string fromDocKey, CancellationToken cancellationToken = default);
     Task<SchemaDiscoveryReport> DiscoverSchemaAsync(RegisteredDatabase db, CancellationToken cancellationToken = default);
@@ -100,6 +103,86 @@ public sealed class FirebirdReadAdapter : ISqlAccountReadAdapter
 
             return false;
         }, fallback: false, cancellationToken);
+
+    public Task<bool> MasterExistsByCodeAsync(RegisteredDatabase db, string entityCode, string code, CancellationToken cancellationToken = default)
+    {
+        var key = (code ?? "").Trim();
+        if (key.Length == 0)
+            return Task.FromResult(false);
+
+        if (string.Equals(entityCode, EntityCodes.Item, StringComparison.OrdinalIgnoreCase))
+        {
+            return WithReadTxOrFallback(db, async (conn, tx) =>
+            {
+                if (!await TableExistsConn(conn, tx, "ST_ITEM", cancellationToken).ConfigureAwait(false))
+                    return false;
+                await using var cmd = conn.CreateCommand();
+                cmd.Transaction = tx;
+                cmd.CommandText = "SELECT COUNT(*) FROM ST_ITEM WHERE UPPER(TRIM(CODE))=UPPER(@C)";
+                SqlGuard.EnsureSelectOnly(cmd.CommandText);
+                CentralDb.Bind(cmd, new Dictionary<string, object?> { ["C"] = key });
+                return Convert.ToInt32(await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false)) > 0;
+            }, fallback: false, cancellationToken);
+        }
+
+        if (!PartnerSyncRules.IsPartyEntity(entityCode))
+            return Task.FromResult(false);
+
+        return WithReadTxOrFallback(db, async (conn, tx) =>
+        {
+            var table = await ResolvePartyTable(db, entityCode, conn, tx, cancellationToken).ConfigureAwait(false);
+            if (table is null)
+                return false;
+            await using var cmd = conn.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = $"SELECT COUNT(*) FROM {table} WHERE UPPER(TRIM(CODE))=UPPER(@C)";
+            SqlGuard.EnsureSelectOnly(cmd.CommandText);
+            CentralDb.Bind(cmd, new Dictionary<string, object?> { ["C"] = key });
+            return Convert.ToInt32(await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false)) > 0;
+        }, fallback: false, cancellationToken);
+    }
+
+    public Task<StockGroupRecord?> GetStockGroupAsync(RegisteredDatabase db, string code, CancellationToken cancellationToken = default)
+    {
+        var key = (code ?? "").Trim();
+        if (key.Length == 0)
+            return Task.FromResult<StockGroupRecord?>(null);
+
+        return WithReadTxOrFallback(db, async (conn, tx) =>
+        {
+            if (!await TableExistsConn(conn, tx, "ST_GROUP", cancellationToken).ConfigureAwait(false))
+                return null;
+            await using var cmd = conn.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = @"
+SELECT FIRST 1 TRIM(CODE) AS CODE, TRIM(COALESCE(DESCRIPTION, CODE)) AS DESCRIPTION,
+       TRIM(COALESCE(SALES, '')) AS SALES, TRIM(COALESCE(SALESRETURNED, '')) AS SALESRETURNED,
+       TRIM(COALESCE(CASHSALES, '')) AS CASHSALES, TRIM(COALESCE(PURCHASE, '')) AS PURCHASE,
+       TRIM(COALESCE(CASHPURCHASE, '')) AS CASHPURCHASE, TRIM(COALESCE(PURCHASERETURNED, '')) AS PURCHASERETURNED,
+       TRIM(COALESCE(BALANCESTOCK, '')) AS BALANCESTOCK, COALESCE(COSTINGMETHOD, 1) AS COSTINGMETHOD,
+       COALESCE(ISACTIVE, 1) AS ISACTIVE
+FROM ST_GROUP WHERE UPPER(TRIM(CODE))=UPPER(@C)";
+            SqlGuard.EnsureSelectOnly(cmd.CommandText);
+            CentralDb.Bind(cmd, new Dictionary<string, object?> { ["C"] = key });
+            await using var r = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            if (!await r.ReadAsync(cancellationToken).ConfigureAwait(false))
+                return null;
+            return new StockGroupRecord
+            {
+                Code = Convert.ToString(r["CODE"])?.Trim() ?? key,
+                Description = Convert.ToString(r["DESCRIPTION"])?.Trim() ?? key,
+                Sales = Convert.ToString(r["SALES"])?.Trim() ?? "",
+                SalesReturned = Convert.ToString(r["SALESRETURNED"])?.Trim() ?? "",
+                CashSales = Convert.ToString(r["CASHSALES"])?.Trim() ?? "",
+                Purchase = Convert.ToString(r["PURCHASE"])?.Trim() ?? "",
+                CashPurchase = Convert.ToString(r["CASHPURCHASE"])?.Trim() ?? "",
+                PurchaseReturned = Convert.ToString(r["PURCHASERETURNED"])?.Trim() ?? "",
+                BalanceStock = Convert.ToString(r["BALANCESTOCK"])?.Trim() ?? "",
+                CostingMethod = Convert.ToInt32(r["COSTINGMETHOD"]),
+                IsActive = Convert.ToInt32(r["ISACTIVE"]) != 0
+            };
+        }, fallback: null, cancellationToken);
+    }
 
     public Task<List<MasterRecord>> GetWarehousesAsync(RegisteredDatabase db, CancellationToken cancellationToken = default) =>
         QueryMaster(db, "SELECT FIRST 500 TRIM(CODE) AS CODE, TRIM(COALESCE(DESCRIPTION,'')) AS DESCRIPTION FROM ST_LOCATION ORDER BY CODE", cancellationToken);
@@ -376,6 +459,7 @@ FROM {table} ORDER BY CODE";
                     ("remark2", ["REMARK2"]),
                     ("barcode", ["BARCODE"]),
                     ("category", ["CATEGORY"]),
+                    ("creationdate", ["CREATIONDATE"]),
                     ("udf_stdprice", ["UDF_STDPRICE"]),
                     ("udf_dleadtime", ["UDF_DLEADTIME"]),
                     ("udf_moq", ["UDF_MOQ"]),
@@ -396,6 +480,7 @@ FROM {table} ORDER BY CODE";
                     ("udf_formula", ["UDF_FORMULA"]),
                     ("udf_pricekg", ["UDF_PRICEKG"]),
                     ("udf_costkg", ["UDF_COSTKG"]),
+                    ("udf_uom", ["UDF_UOM"]),
                     ("udf_mtype", ["UDF_MTYPE"]),
                     ("udf_stockgroup", ["UDF_STOCKGROUP"]),
                     ("udf_direct", ["UDF_DIRECT"])
@@ -475,6 +560,10 @@ FROM {table} ORDER BY CODE";
             if (Col("RATE") is { } rateCol) select.Add($"TRIM(COALESCE(CAST({rateCol} AS VARCHAR(40)), '')) AS RATE");
             if (Col("REFCOST") is { } rcCol) select.Add($"TRIM(COALESCE(CAST({rcCol} AS VARCHAR(40)), '')) AS REFCOST");
             if (Col("REFPRICE") is { } rpCol) select.Add($"TRIM(COALESCE(CAST({rpCol} AS VARCHAR(40)), '')) AS REFPRICE");
+            if (Col("MINCOST") is { } mcCol) select.Add($"TRIM(COALESCE(CAST({mcCol} AS VARCHAR(40)), '')) AS MINCOST");
+            if (Col("MAXCOST") is { } xcCol) select.Add($"TRIM(COALESCE(CAST({xcCol} AS VARCHAR(40)), '')) AS MAXCOST");
+            if (Col("MINPRICE") is { } mpCol) select.Add($"TRIM(COALESCE(CAST({mpCol} AS VARCHAR(40)), '')) AS MINPRICE");
+            if (Col("MAXPRICE") is { } xpCol) select.Add($"TRIM(COALESCE(CAST({xpCol} AS VARCHAR(40)), '')) AS MAXPRICE");
             if (Col("ISBASE") is { } ibCol) select.Add($"TRIM(COALESCE(CAST({ibCol} AS VARCHAR(10)), '')) AS ISBASE");
 
             var sql = $"SELECT {string.Join(", ", select)} FROM {table} WHERE UPPER(TRIM(CODE))=UPPER(@C)";
@@ -496,6 +585,10 @@ FROM {table} ORDER BY CODE";
                     Rate = HasCol(r, "RATE") ? Convert.ToString(r["RATE"])?.Trim() ?? "1" : "1",
                     RefCost = HasCol(r, "REFCOST") ? Convert.ToString(r["REFCOST"])?.Trim() ?? "0" : "0",
                     RefPrice = HasCol(r, "REFPRICE") ? Convert.ToString(r["REFPRICE"])?.Trim() ?? "0" : "0",
+                    MinCost = HasCol(r, "MINCOST") ? Convert.ToString(r["MINCOST"])?.Trim() ?? "0" : "0",
+                    MaxCost = HasCol(r, "MAXCOST") ? Convert.ToString(r["MAXCOST"])?.Trim() ?? "0" : "0",
+                    MinPrice = HasCol(r, "MINPRICE") ? Convert.ToString(r["MINPRICE"])?.Trim() ?? "0" : "0",
+                    MaxPrice = HasCol(r, "MAXPRICE") ? Convert.ToString(r["MAXPRICE"])?.Trim() ?? "0" : "0",
                     IsBase = !HasCol(r, "ISBASE") || Convert.ToString(r["ISBASE"])?.Trim() is "1" or "Y" or "T" or "true"
                 });
             }
@@ -835,6 +928,73 @@ WHERE CAST(DOCKEY AS VARCHAR(40)) = @K OR UPPER(TRIM(DOCNO)) = UPPER(@K)";
 
             return doc;
         }, cancellationToken).ConfigureAwait(false);
+    }
+
+    public Task<List<DocumentListItem>> ListDocumentsAsync(RegisteredDatabase db, string docType, int take = 200, CancellationToken cancellationToken = default)
+    {
+        var (header, _, typeCode) = ResolveDocTables(docType);
+        if (header is null)
+            return Task.FromResult(new List<DocumentListItem>());
+
+        take = Math.Clamp(take, 1, 500);
+        return WithReadTx(db, async (conn, tx) =>
+        {
+            if (!await TableExistsConn(conn, tx, header, cancellationToken).ConfigureAwait(false))
+                return new List<DocumentListItem>();
+
+            var cols = await Columns(conn, tx, header, cancellationToken).ConfigureAwait(false);
+            string? Col(params string[] names) => names.FirstOrDefault(n => cols.Contains(n, StringComparer.OrdinalIgnoreCase));
+            if (Col("DOCNO") is null || Col("DOCKEY") is null)
+                return new List<DocumentListItem>();
+
+            var select = new List<string>
+            {
+                "DOCKEY",
+                "TRIM(DOCNO) AS DOCNO",
+                "DOCDATE"
+            };
+            void Add(string alias, params string[] names)
+            {
+                var c = Col(names);
+                if (c is not null)
+                    select.Add($"TRIM(COALESCE(CAST({c} AS VARCHAR(500)), '')) AS {alias}");
+            }
+            void AddNum(string alias, params string[] names)
+            {
+                var c = Col(names);
+                if (c is not null)
+                    select.Add($"COALESCE({c}, 0) AS {alias}");
+            }
+
+            Add("PARTYCODE", "CODE");
+            Add("PARTYNAME", "COMPANYNAME", "CODE");
+            AddNum("AMOUNT", "DOCAMT", "LOCALDOCAMT");
+
+            var orderBy = Col("DOCDATE") is not null ? "DOCDATE DESC, DOCNO DESC" : "DOCNO DESC";
+            await using var cmd = conn.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = $"SELECT FIRST {take} {string.Join(", ", select)} FROM {header} ORDER BY {orderBy}";
+            SqlGuard.EnsureSelectOnly(cmd.CommandText);
+
+            var list = new List<DocumentListItem>();
+            await using var r = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await r.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                string S(string name) => HasCol(r, name) ? Convert.ToString(r[name])?.Trim() ?? "" : "";
+                DateTime? D(string name) => HasCol(r, name) && r[name] is DateTime dt ? dt : null;
+                list.Add(new DocumentListItem
+                {
+                    DocType = typeCode,
+                    DocKey = Convert.ToString(r["DOCKEY"]) ?? "",
+                    DocNo = S("DOCNO"),
+                    DocDate = D("DOCDATE"),
+                    PartyCode = S("PARTYCODE"),
+                    PartyName = S("PARTYNAME"),
+                    Amount = HasCol(r, "AMOUNT") ? Convert.ToDecimal(r["AMOUNT"]) : 0m
+                });
+            }
+            return list;
+        }, cancellationToken);
     }
 
     private async Task AppendDocumentLinesAsync(
@@ -1181,6 +1341,10 @@ ORDER BY 1";
             "GR" or "GOODSRECEIVED" => ("PH_GR", "PH_GRDTL", "GR"),
             "DN" => ("SL_DN", "SL_DNDTL", "DN"),
             "PI" or "PURCHASEINVOICE" => ("PH_IV", "PH_IVDTL", "PI"),
+            "ST" or "STOCKTRANSFER" => ("ST_TRFR", "ST_TRFRDTL", "ST"),
+            "SR" or "SALESRETURN" => ("SL_SR", "SL_SRDTL", "SR"),
+            "PR" or "PURCHASERETURN" => ("PH_PR", "PH_PRDTL", "PR"),
+            "CN" or "CREDITNOTE" => ("SL_CN", "SL_CNDTL", "CN"),
             _ => (null, null, docType)
         };
 }

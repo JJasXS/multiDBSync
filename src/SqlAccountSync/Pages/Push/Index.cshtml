@@ -11,130 +11,164 @@
         <button class="btn" type="submit" form="pushForm"
                 onclick="return confirm('Push selected records to the selected target databases?');">Push</button>
     }
+    @if (isJobs && Model.CanOperate)
+    {
+        <button class="btn secondary" type="submit" form="manualSyncForm" asp-page-handler="DryRun">Dry run</button>
+        <button class="btn" type="submit" form="manualSyncForm" asp-page-handler="Enqueue"
+                onclick="return confirm('Queue a live synchronization? Destination data may be created.');">Sync now</button>
+    }
 }
 
-<div class="entity-tabs" role="tablist" aria-label="Synchronization">
-    <a class="@(!isJobs ? "active" : "")" asp-page="/Push/Index" asp-route-tab="push" role="tab" aria-selected="@(!isJobs)">Push</a>
-    <a class="@(isJobs ? "active" : "")" asp-page="/Push/Index" asp-route-tab="jobs" role="tab" aria-selected="@isJobs">Jobs</a>
-</div>
-
-@if (!string.IsNullOrEmpty(Model.Message))
+@if (Model.FlashToast is not null)
 {
-    <div class="flash @(Model.MessageOk ? "flash-ok" : "flash-err")">@Model.Message</div>
+    <partial name="_FlashToast" model="Model.FlashToast" />
 }
+
+<div class="card sync-page-card">
+    <div class="card-head manual-sync-head manual-sync-head--compact">
+        <div class="manual-sync-head-end">
+            <nav class="entity-tabs entity-tabs--head" role="tablist" aria-label="Synchronization">
+                <a class="@(!isJobs ? "active" : "")" asp-page="/Push/Index" asp-route-tab="push" role="tab" aria-selected="@(!isJobs)">
+                    <span class="entity-tab-label">Push</span>
+                    <span class="entity-tab-desc">Multiple rows</span>
+                </a>
+                <a class="@(isJobs ? "active" : "")" asp-page="/Push/Index" asp-route-tab="jobs" role="tab" aria-selected="@isJobs">
+                    <span class="entity-tab-label">Jobs</span>
+                    <span class="entity-tab-desc">One row</span>
+                </a>
+            </nav>
+        </div>
+    </div>
 
 @if (!isJobs)
 {
-    <div class="card">
-        <div class="card-head">
-            <h3>Source database</h3>
-        </div>
-        <form method="get" class="form-grid">
+    <div class="push-workspace">
+        <form method="get" class="push-source-form">
             <input type="hidden" name="tab" value="push" />
-            <div>
-                <label>Source</label>
-                <select name="SourceDbId" onchange="this.form.submit()">
-                    @foreach (var d in Model.SourceDatabases)
-                    {
-                        <option value="@d.DbId" selected="@(d.DbId == Model.SourceDbId)">@d.DisplayName (@d.DbRole)</option>
-                    }
-                </select>
-            </div>
-            <div>
-                <label>Entity</label>
-                <select name="EntityCode" onchange="this.form.submit()">
-                    @foreach (var e in entities)
-                    {
-                        <option value="@e" selected="@(e == Model.EntityCode)">@e</option>
-                    }
-                </select>
+            <div class="route-fields push-route-fields">
+                <div class="route-field">
+                    <label for="pushSourceDb">Source</label>
+                    <select id="pushSourceDb" name="SourceDbId" onchange="this.form.submit()">
+                        @foreach (var d in Model.SourceDatabases)
+                        {
+                            <option value="@d.DbId" selected="@(d.DbId == Model.SourceDbId)">@d.DisplayName (@d.DbRole)</option>
+                        }
+                    </select>
+                </div>
+                <span class="route-arrow push-route-arrow" aria-hidden="true">→</span>
+                <div class="route-field">
+                    <label for="pushEntityCode">Entity</label>
+                    <select id="pushEntityCode" name="EntityCode" onchange="this.form.submit()">
+                        @foreach (var e in entities)
+                        {
+                            <option value="@e" selected="@(e == Model.EntityCode)">@e</option>
+                        }
+                    </select>
+                </div>
             </div>
         </form>
-        <p class="muted">Select records and one or more target databases, then Push. Master→Sub copies the same type; Sub→Sub flips Customer↔Supplier for party entities.</p>
-    </div>
 
-    <form id="pushForm" method="post" asp-page-handler="Push">
-        <input type="hidden" name="Tab" value="push" />
-        <input type="hidden" asp-for="SourceDbId" />
-        <input type="hidden" asp-for="EntityCode" />
+        <form id="pushForm" method="post" asp-page-handler="Push">
+            <input type="hidden" name="Tab" value="push" />
+            <input type="hidden" asp-for="SourceDbId" />
+            <input type="hidden" asp-for="EntityCode" />
 
-        <div class="push-layout">
-            <div class="card card-fill">
-                <div class="card-head">
-                    <h3>@Model.EntityCode records</h3>
-                    <label class="check-all"><input type="checkbox" data-check-all="master-codes" /> Select all</label>
-                </div>
-                @if (Model.Records.Count == 0)
-                {
-                    <p class="empty">No records loaded. Pick a source database and entity.</p>
-                }
-                else
-                {
-                    <div class="table-wrap">
-                        <table>
-                            <thead><tr><th class="col-check"></th><th>Code</th><th>Description</th></tr></thead>
-                            <tbody>
-                            @foreach (var r in Model.Records)
+            <div class="push-layout">
+                <div class="push-panel-table-wrap">
+                    <table class="push-panel-table">
+                        <thead>
+                            @if (Model.Records.Count > 0)
                             {
-                                var selected = Model.SelectedCodes.Contains(r.Code, StringComparer.OrdinalIgnoreCase);
                                 <tr>
-                                    <td class="col-check">
-                                        <input type="checkbox" name="SelectedCodes" value="@r.Code" data-check-group="master-codes"
-                                               @(selected ? "checked" : null) />
-                                    </td>
-                                    <td>@r.Code</td>
-                                    <td><span class="cell-truncate" title="@r.Description">@r.Description</span></td>
+                                    <th class="col-check">
+                                        <input type="checkbox" data-check-all="master-codes" aria-label="Select all records" />
+                                    </th>
+                                    <th>Code</th>
+                                    <th>Description</th>
                                 </tr>
                             }
-                            </tbody>
-                        </table>
-                    </div>
-                }
-            </div>
-
-            <div class="card card-fill">
-                <div class="card-head">
-                    <h3>Target databases</h3>
-                    <label class="check-all"><input type="checkbox" data-check-all="sub-dbs" /> Select all</label>
+                        </thead>
+                        <tbody>
+                            @if (Model.Records.Count == 0)
+                            {
+                                <tr>
+                                    <td colspan="3" class="empty">No records. Pick source and entity.</td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var r in Model.Records)
+                                {
+                                    var selected = Model.SelectedCodes.Contains(r.Code, StringComparer.OrdinalIgnoreCase);
+                                    <tr>
+                                        <td class="col-check">
+                                            <input type="checkbox" name="SelectedCodes" value="@r.Code" data-check-group="master-codes"
+                                                   @(selected ? "checked" : null) />
+                                        </td>
+                                        <td>@r.Code</td>
+                                        <td><span class="cell-truncate" title="@r.Description">@r.Description</span></td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
                 </div>
-                @if (Model.TargetSubs.Count == 0)
-                {
-                    <p class="empty">No target databases available for this source.</p>
-                }
-                else
-                {
-                    <ul class="check-list">
-                        @foreach (var s in Model.TargetSubs)
-                        {
-                            var selected = Model.SelectedSubDbIds.Contains(s.DbId);
-                            Model.TargetEntityHints.TryGetValue(s.DbId, out var hint);
-                            <li>
-                                <label>
-                                    <input type="checkbox" name="SelectedSubDbIds" value="@s.DbId" data-check-group="sub-dbs"
-                                           @(selected ? "checked" : null) />
-                                    @s.DisplayName <span class="muted">(@s.DbCode)</span>
-                                    @if (!string.IsNullOrEmpty(hint))
-                                    {
-                                        <span class="muted"> — @hint</span>
-                                    }
-                                </label>
-                            </li>
-                        }
-                    </ul>
-                }
-            </div>
-        </div>
-    </form>
 
-    <p class="muted">Queued jobs appear under the <a asp-page="/Push/Index" asp-route-tab="jobs">Jobs</a> tab.</p>
+                <div class="push-flow-bridge" aria-hidden="true">
+                    <span class="push-flow-arrow">→</span>
+                </div>
+
+                <div class="push-panel-table-wrap">
+                    <table class="push-panel-table">
+                        <thead>
+                            @if (Model.TargetSubs.Count > 0)
+                            {
+                                <tr>
+                                    <th class="col-check">
+                                        <input type="checkbox" data-check-all="sub-dbs" aria-label="Select all target databases" />
+                                    </th>
+                                    <th>Database</th>
+                                    <th>Code</th>
+                                    <th>Note</th>
+                                </tr>
+                            }
+                        </thead>
+                        <tbody>
+                            @if (Model.TargetSubs.Count == 0)
+                            {
+                                <tr>
+                                    <td colspan="4" class="empty">No targets for this source.</td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var s in Model.TargetSubs)
+                                {
+                                    var selected = Model.SelectedSubDbIds.Contains(s.DbId);
+                                    Model.TargetEntityHints.TryGetValue(s.DbId, out var hint);
+                                    <tr>
+                                        <td class="col-check">
+                                            <input type="checkbox" name="SelectedSubDbIds" value="@s.DbId" data-check-group="sub-dbs"
+                                                   @(selected ? "checked" : null) />
+                                        </td>
+                                        <td class="push-target-name">@s.DisplayName</td>
+                                        <td class="muted">@s.DbCode</td>
+                                        <td class="push-target-note muted">@hint</td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </form>
+    </div>
 }
 else
 {
-    <div class="card">
-        <h3>Manual master-data sync</h3>
-        <p class="muted">Sync one code at a time. For several records, use the <a asp-page="/Push/Index" asp-route-tab="push">Push</a> tab.</p>
-        <form method="post" class="form-grid">
-            <input type="hidden" name="Tab" value="jobs" />
+    <form id="manualSyncForm" method="post" class="manual-sync-form">
+        <input type="hidden" name="Tab" value="jobs" />
+        <div class="form-grid manual-sync-fields">
             <div>
                 <label>Master</label>
                 <select asp-for="MasterDbId">@foreach (var d in Model.Databases) { <option value="@d.DbId">@d.DisplayName</option> }</select>
@@ -146,41 +180,27 @@ else
             <div>
                 <label>Entity</label>
                 <select asp-for="JobEntityCode">
-                    <option value="ITEM">ITEM</option>
                     <option value="CUSTOMER">CUSTOMER</option>
                     <option value="SUPPLIER">SUPPLIER</option>
                 </select>
             </div>
             <div><label>Code</label><input asp-for="MasterCode" /></div>
-            <div><button class="btn secondary" asp-page-handler="DryRun" type="submit">Dry run</button></div>
-            <div><button class="btn" asp-page-handler="Enqueue" type="submit" onclick="return confirm('Queue a live synchronization? Destination data may be created.');">Sync now</button></div>
-        </form>
-        @if (Model.DryRun is not null)
-        {
-            <div class="confirm-box">
-                <strong>@Model.DryRun.Summary</strong>
-                <ul>
-                    @foreach (var c in Model.DryRun.Checks)
-                    {
-                        <li>@(c.Ok ? "✓" : "✗") @c.Name — @c.Detail</li>
-                    }
-                </ul>
-            </div>
-        }
-    </div>
-    <div class="card">
-        <div class="table-wrap">
+        </div>
+    </form>
+    <partial name="_DryRunToast" model="Model.DryRun" />
+    <div class="sync-jobs-section">
+        <div class="table-wrap push-jobs-table-wrap">
             <table>
-                <thead><tr><th>Job</th><th>Kind</th><th>Status</th><th>Attempts</th><th>Error</th><th class="col-actions"></th></tr></thead>
+                <thead><tr><th>Job</th><th>Kind</th><th>Status</th><th>Attempts</th><th class="col-job-error">Error</th><th class="col-actions"></th></tr></thead>
                 <tbody>
                 @foreach (var j in Model.Jobs)
                 {
-                    <tr>
+                    <tr id="job-@j.JobId">
                         <td>@j.JobId</td>
-                        <td>@j.JobKind @(j.DryRun ? "(dry run)" : "")</td>
+                        <td>@SyncDisplayNames.JobKind(j.JobKind, j.DryRun)</td>
                         <td><span class="badge badge-@(j.Status.ToLowerInvariant())">@j.Status</span></td>
                         <td>@j.Attempts / @j.MaxAttempts</td>
-                        <td><span class="cell-truncate" title="@j.ErrorMessage">@j.ErrorMessage</span></td>
+                        <td class="col-job-error"><span class="job-error-text">@j.ErrorMessage</span></td>
                         <td class="col-actions">
                             @if (j.Status is "PENDING" or "RETRYING" or "FAILED")
                             {
@@ -197,3 +217,4 @@ else
         </div>
     </div>
 }
+</div>

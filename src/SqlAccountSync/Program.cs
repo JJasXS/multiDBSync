@@ -14,6 +14,7 @@ using SqlAccountSync.Services.Databases;
 using SqlAccountSync.Services.Mapping;
 using SqlAccountSync.Services.Queue;
 using SqlAccountSync.Services.Secrets;
+using SqlAccountSync.Services.Items;
 using SqlAccountSync.Services.SqlAccount;
 using SqlAccountSync.Services.Sync;
 using SqlAccountSync.Services.Tenants;
@@ -87,6 +88,11 @@ builder.Services.AddHttpClient<SqlAccountApiWriteAdapter>(client =>
     client.DefaultRequestHeaders.UserAgent.ParseAdd(
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36");
 });
+builder.Services.AddHttpClient<ISqlAccountApiClient, SqlAccountApiClient>(client =>
+{
+    client.DefaultRequestHeaders.UserAgent.ParseAdd(
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36");
+});
 builder.Services.AddHttpClient<ITenantEmailBootstrap, TenantEmailBootstrap>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(30);
@@ -103,6 +109,7 @@ builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddScoped<IErrorLogService, ErrorLogService>();
 builder.Services.AddScoped<IConnectionTestService, ConnectionTestService>();
 builder.Services.AddScoped<ISqlAccountReadAdapter, FirebirdReadAdapter>();
+builder.Services.AddScoped<IItemPrerequisiteService, ItemPrerequisiteService>();
 builder.Services.AddScoped<ISqlAccountWriteAdapter>(sp => sp.GetRequiredService<SqlAccountApiWriteAdapter>());
 builder.Services.AddScoped<IMappingService, MappingService>();
 builder.Services.AddScoped<IValidationService, ValidationService>();

@@ -32,7 +32,7 @@ public class IndexModel : SyncPageModel
         _features = features.Value;
     }
 
-    [BindProperty(SupportsGet = true)] public string Entity { get; set; } = "ITEM";
+    [BindProperty(SupportsGet = true)] public string Entity { get; set; } = "CUSTOMER";
     [BindProperty(SupportsGet = true)] public int MasterDbId { get; set; }
     [BindProperty(SupportsGet = true)] public int SubDbId { get; set; }
     public string EntityTitle => Entity switch
@@ -128,7 +128,7 @@ public class IndexModel : SyncPageModel
     }
 
     private static string NormalizeEntity(string entity) =>
-        PushableEntityCodes.Normalize(entity, EntityCodes.Item);
+        PushableEntityCodes.Normalize(entity, EntityCodes.Customer);
 
     private async Task<List<MasterRecord>> Load(RegisteredDatabase db, string entity)
     {

@@ -1,0 +1,206 @@
+@page "/partners/create"
+@model SqlAccountSync.Pages.Partners.CreateModel
+@{
+    ViewData["Title"] = "Create " + Model.EntityTitle;
+}
+@section TopbarActions {
+    @if (Model.CanOperate)
+    {
+        <button class="btn" type="submit" form="createPartnerForm"
+                onclick="return confirm('Create this @Model.EntityTitle.ToLowerInvariant() on the selected database via SQL Accounting API?');">
+            Create @Model.EntityTitle.ToLowerInvariant()
+        </button>
+    }
+}
+
+@if (Model.FlashToast is not null)
+{
+    <partial name="_FlashToast" model="Model.FlashToast" />
+}
+
+<div class="entity-tabs" role="tablist" aria-label="Partner type">
+    <a class="@(Model.EntityCode == "CUSTOMER" ? "active" : "")"
+       asp-page="/Partners/Create" asp-route-entityCode="CUSTOMER" asp-route-dbId="@Model.DbId"
+       role="tab" aria-selected="@(Model.EntityCode == "CUSTOMER")">Customer</a>
+    <a class="@(Model.EntityCode == "SUPPLIER" ? "active" : "")"
+       asp-page="/Partners/Create" asp-route-entityCode="SUPPLIER" asp-route-dbId="@Model.DbId"
+       role="tab" aria-selected="@(Model.EntityCode == "SUPPLIER")">Supplier</a>
+</div>
+
+<div class="panel-grid two partner-create">
+    <div class="card">
+        <div class="card-head">
+            <h3>Create @Model.EntityTitle.ToLowerInvariant()</h3>
+        </div>
+
+        @if (!Model.CanOperate)
+        {
+            <p class="empty">Operator access is required to create partners.</p>
+        }
+        else
+        {
+            <form id="createPartnerForm" method="post" asp-page-handler="Create" class="form-stack">
+                <input type="hidden" asp-for="EntityCode" />
+
+                <div class="field-group">
+                    <div class="field-group-label">Company</div>
+                    <div>
+                        <label for="DbId">Database</label>
+                        <select asp-for="DbId" id="DbId" onchange="location.href='?entityCode=@Model.EntityCode&amp;dbId=' + this.value">
+                            @foreach (var d in Model.Databases)
+                            {
+                                <option value="@d.DbId">@d.DisplayName (@d.DbCode)</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label for="CompanyName">Company name</label>
+                        <input asp-for="CompanyName" id="CompanyName" required maxlength="100" autofocus placeholder="e.g. John Trading Sdn Bhd" />
+                    </div>
+                    <div class="field-pair equal">
+                        <div>
+                            <label for="Code">Code <span class="label-badge">auto</span></label>
+                            <input asp-for="Code" id="Code" required maxlength="10" readonly
+                                   class="input-readonly code-preview"
+                                   pattern="[A-Za-z0-9\-]+"
+                                   title="From company name first letter + next number in that series"
+                                   data-control="@(Model.EntityCode == "SUPPLIER" ? "400" : "300")"
+                                   data-existing-codes='@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Existing.Select(r => r.Code).ToList()))'
+                                   placeholder="@(Model.EntityCode == "SUPPLIER" ? "400-X0001" : "300-X0001")" />
+                            <p class="field-hint">First letter of company name + next free number.</p>
+                        </div>
+                        <div>
+                            <label for="CreditTerm">Credit term</label>
+                            <input asp-for="CreditTerm" id="CreditTerm" placeholder="30 Days" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="field-group">
+                    <div class="field-group-label">Address</div>
+                    <div class="address-stack" role="group" aria-label="Address lines">
+                        <input asp-for="Address1" id="Address1" maxlength="40" placeholder="Line 1" aria-label="Address line 1" />
+                        <input asp-for="Address2" id="Address2" maxlength="40" placeholder="Line 2" aria-label="Address line 2" />
+                        <input asp-for="Address3" id="Address3" maxlength="40" placeholder="Line 3" aria-label="Address line 3" />
+                        <input asp-for="Address4" id="Address4" maxlength="40" placeholder="Line 4" aria-label="Address line 4" />
+                    </div>
+                </div>
+
+                <div class="field-group">
+                    <div class="field-group-label">Contact</div>
+                    <div class="field-pair equal">
+                        <div>
+                            <label for="Phone1">Phone</label>
+                            <input asp-for="Phone1" id="Phone1" maxlength="25" placeholder="Optional" />
+                        </div>
+                        <div>
+                            <label for="Email">Email</label>
+                            <input asp-for="Email" id="Email" maxlength="80" type="email" placeholder="Optional" />
+                        </div>
+                    </div>
+                    <div>
+                        <label for="Remark">Remark</label>
+                        <input asp-for="Remark" id="Remark" maxlength="80" placeholder="Optional note" />
+                    </div>
+                </div>
+            </form>
+        }
+    </div>
+
+    <div class="card card-fill">
+        <div class="card-head">
+            <h3>Existing on selected database</h3>
+            @if (Model.Existing.Count > 0)
+            {
+                <span class="muted count-pill">@Model.Existing.Count</span>
+            }
+        </div>
+        <div class="table-wrap partner-existing">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Code</th>
+                        <th>Name</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @if (Model.Existing.Count == 0)
+                {
+                    <tr><td colspan="2" class="empty">No @Model.EntityTitle.ToLowerInvariant()s loaded.</td></tr>
+                }
+                else
+                {
+                    @foreach (var r in Model.Existing.Take(40))
+                    {
+                        <tr>
+                            <td class="code-cell">@r.Code</td>
+                            <td><span class="cell-truncate" title="@r.Description">@r.Description</span></td>
+                        </tr>
+                    }
+                }
+                </tbody>
+            </table>
+        </div>
+        @if (Model.Existing.Count >= 40)
+        {
+            <p class="muted table-foot">Showing first 40.</p>
+        }
+    </div>
+</div>
+
+@if (Model.CanOperate)
+{
+<script>
+(function () {
+  var codeEl = document.getElementById('Code');
+  var nameEl = document.getElementById('CompanyName');
+  if (!codeEl || !nameEl) return;
+
+  var control = codeEl.getAttribute('data-control') || '300';
+  var codes = [];
+  try { codes = JSON.parse(codeEl.getAttribute('data-existing-codes') || '[]'); } catch (e) { codes = []; }
+
+  function letterFromName(name) {
+    var s = String(name || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    return s.length ? s.charAt(0) : 'X';
+  }
+
+  function suggest(name) {
+    var letter = letterFromName(name);
+    var rx = new RegExp('^' + control + '-' + letter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\d{1,6})$', 'i');
+    var bestNum = 0;
+    var digitWidth = 4;
+    var existing = {};
+    for (var i = 0; i < codes.length; i++) {
+      var raw = String(codes[i] || '').trim();
+      if (!raw) continue;
+      existing[raw.toUpperCase()] = true;
+      var m = raw.match(rx);
+      if (!m) continue;
+      var num = parseInt(m[1], 10);
+      if (num > bestNum) {
+        bestNum = num;
+        digitWidth = Math.max(4, Math.min(6, m[1].length));
+      }
+    }
+    var next = bestNum + 1;
+    for (var n = 0; n < 10000; n++, next++) {
+      var digits = String(next).padStart(digitWidth, '0');
+      var candidate = control + '-' + letter + digits;
+      if (candidate.length > 10) {
+        digitWidth = Math.max(1, 10 - control.length - 2);
+        digits = String(next).padStart(digitWidth, '0');
+        candidate = control + '-' + letter + digits;
+        if (candidate.length > 10) break;
+      }
+      if (!existing[candidate.toUpperCase()]) return candidate;
+    }
+    return control + '-' + letter + '0001';
+  }
+
+  function refresh() { codeEl.value = suggest(nameEl.value); }
+  nameEl.addEventListener('input', refresh);
+  refresh();
+})();
+</script>
+}

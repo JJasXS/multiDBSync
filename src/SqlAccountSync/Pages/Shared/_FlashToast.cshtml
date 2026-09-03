@@ -1,0 +1,20 @@
+@model SqlAccountSync.Models.FlashToastModel
+@{
+    var duration = 5000 + Math.Min(Model.Lines.Count, 10) * 500;
+}
+<div hidden
+     data-auto-toast
+     data-toast-variant="@(Model.Ok ? "ok" : "err")"
+     data-toast-duration="@duration">
+    <button type="button" class="toast-dismiss" aria-label="Dismiss">&times;</button>
+    <div class="toast-title">@Model.Title</div>
+    @if (Model.Lines.Count > 0)
+    {
+        <ul class="toast-list">
+            @foreach (var line in Model.Lines)
+            {
+                <li class="@(Model.Ok ? "toast-ok" : "toast-fail")">@line</li>
+            }
+        </ul>
+    }
+</div>

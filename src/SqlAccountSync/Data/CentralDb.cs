@@ -203,11 +203,19 @@ public sealed class CompanyConnectionFactory
         var password = await _secrets.ResolveAsync(db.FbCredRef, cancellationToken).ConfigureAwait(false);
         if (string.IsNullOrEmpty(password))
         {
+            // Local Firebird default when the reference is blank / unset.
+            password = Environment.GetEnvironmentVariable("CENTRAL_FB_MASTERKEY")
+                ?? Environment.GetEnvironmentVariable("CENTRAL_FB_PASSWORD")
+                ?? "masterkey";
+        }
+
+        if (string.IsNullOrEmpty(password))
+        {
             var r = (db.FbCredRef ?? "").Trim();
             throw new InvalidOperationException(
                 string.IsNullOrEmpty(r)
-                    ? "Firebird password secret reference is empty. Use env:VAR, sm:secret-id, or dpapi:file."
-                    : $"Could not resolve Firebird credential reference '{r}'. Use env:CENTRAL_FB_PASSWORD (not the raw password).");
+                    ? "Firebird password secret reference is empty. Use masterkey, env:VAR, sm:secret-id, or dpapi:file."
+                    : $"Could not resolve Firebird credential reference '{r}'. Use masterkey (default SYSDBA), env:CENTRAL_FB_MASTERKEY, sm:, or dpapi:.");
         }
 
         var csb = new FbConnectionStringBuilder

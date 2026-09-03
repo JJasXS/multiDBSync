@@ -41,14 +41,15 @@ public class LoginModel : PageModel
         if (!await ValidateAntiForgeryAsync().ConfigureAwait(false))
             return new JsonResult(new { success = false, message = "Invalid session. Refresh and try again." });
 
-        var (ok, msg) = await _auth.SendOtpAsync(email ?? "");
+        var (ok, msg, debugCode) = await _auth.SendOtpAsync(email ?? "");
         return new JsonResult(new
         {
             success = ok,
             message = msg,
             email = (email ?? "").Trim(),
             expiresInSeconds = OtpSeconds,
-            resendCooldownSeconds = 30
+            resendCooldownSeconds = 30,
+            debugOtp = debugCode
         });
     }
 

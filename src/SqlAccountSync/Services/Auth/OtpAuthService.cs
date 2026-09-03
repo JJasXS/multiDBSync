@@ -54,15 +54,16 @@ public sealed class OtpAuthService
         _aws = aws;
     }
 
-    public async Task<(bool Ok, string Message)> SendOtpAsync(string email, CancellationToken cancellationToken = default)
+    public async Task<(bool Ok, string Message, string? DebugCode)> SendOtpAsync(string email, CancellationToken cancellationToken = default)
     {
         var user = await _users.FindByEmailAsync(email, cancellationToken).ConfigureAwait(false);
         if (user is null)
-            return (false, "No active user matches that email.");
+            return (false, "No active user matches that email.", null);
 
-        var code = RandomNumberGenerator.GetInt32(100000, 999999).ToString();
+        var code = GenerateOtpCode();
         var minutes = Math.Clamp(_sync.OtpMinutes, 2, 30);
         _cache.Set("otp:" + email.Trim().ToLowerInvariant(), code, TimeSpan.FromMinutes(minutes));
+        var debugCode = DevDebugOtpEnabled ? code : null;
 
         var subject = "Your Login OTP Code";
         var html = $@"
@@ -74,16 +75,30 @@ public sealed class OtpAuthService
 
         var (sent, err) = await TrySendEmailAsync(email, subject, html, cancellationToken).ConfigureAwait(false);
         if (sent)
-            return (true, "A sign-in code was sent to your email.");
+            return (true, "A sign-in code was sent to your email.", debugCode);
 
-        if (_env.IsDevelopment() && _sync.DebugOtpToConsole)
+        if (DevDebugOtpEnabled)
         {
             Console.WriteLine($"[OTP] {email}: {code}");
             _logger.LogWarning("OTP email not delivered ({Error}); code written to console in development.", err);
-            return (true, "Email send failed; OTP written to the server console in development.");
+            return (true, "Development mode: OTP auto-filled below.", debugCode);
         }
 
-        return (false, string.IsNullOrWhiteSpace(err) ? "Could not send the sign-in email." : err);
+        return (false, string.IsNullOrWhiteSpace(err) ? "Could not send the sign-in email." : err, null);
+    }
+
+    private bool DevDebugOtpEnabled => _env.IsDevelopment() && _sync.DebugOtpToConsole;
+
+    private string GenerateOtpCode()
+    {
+        if (DevDebugOtpEnabled)
+        {
+            var mock = (_sync.MockSignInCode ?? "").Trim();
+            if (mock.Length == 6 && mock.All(char.IsDigit))
+                return mock;
+        }
+
+        return RandomNumberGenerator.GetInt32(100000, 999999).ToString();
     }
 
     public async Task<(bool Ok, AppUser? User, string Message)> VerifyAsync(string email, string code, CancellationToken cancellationToken = default)

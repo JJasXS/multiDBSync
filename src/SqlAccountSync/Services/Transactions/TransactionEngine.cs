@@ -165,7 +165,8 @@ VALUES (@TXNPK, @TXNID, @TXNTYPECODE, @SOURCEDBID, @DESTDBID, @SRCDOCTYPE, @SRCD
             DbId = destDbId,
             Entity = txnTypeCode,
             RecordId = txnId,
-            Result = "QUEUED"
+            Result = "QUEUED",
+            RequestId = txnPk.ToString(CultureInfo.InvariantCulture)
         }, cancellationToken).ConfigureAwait(false);
         return (txnPk, txnId, dryRun ? "Dry-run queued. The destination will not be modified." : "Transaction queued for execution.");
     }
@@ -213,8 +214,9 @@ VALUES (@TXNPK, @TXNID, @TXNTYPECODE, @SOURCEDBID, @DESTDBID, @SRCDOCTYPE, @SRCD
             return result;
         }
         result.Checks.Add(new DryRunCheck { Name = "Source document", Ok = true, Detail = $"{source.DocType} {source.DocNo}" });
-        var mapped = await TranslateAsync(source, sourceDbId, destDbId, cancellationToken).ConfigureAwait(false);
-        var v = await _validation.ValidateMappedDocumentAsync(source, sourceDbId, destDbId, cancellationToken).ConfigureAwait(false);
+        var destParty = DestPartyEntityFor(type.Dst);
+        var mapped = await TranslateAsync(source, sourceDbId, destDbId, destParty, cancellationToken).ConfigureAwait(false);
+        var v = await _validation.ValidateMappedDocumentAsync(source, sourceDbId, destDbId, destParty, cancellationToken).ConfigureAwait(false);
         Add(result, "Mappings and fields", v);
         foreach (var line in source.Lines)
         {
@@ -272,7 +274,8 @@ VALUES (@TXNPK, @TXNID, @TXNTYPECODE, @SOURCEDBID, @DESTDBID, @SRCDOCTYPE, @SRCD
                 return;
             }
 
-            var v = await _validation.ValidateMappedDocumentAsync(source, txn.SourceDbId, txn.DestDbId, cancellationToken).ConfigureAwait(false);
+            var destParty = DestPartyEntityFor(txn.DstDocType);
+            var v = await _validation.ValidateMappedDocumentAsync(source, txn.SourceDbId, txn.DestDbId, destParty, cancellationToken).ConfigureAwait(false);
             await AddEvent(txn.TxnPk, "Validation", v.Ok ? "SUCCESS" : "FAIL", v.Ok ? "Passed" : string.Join(" ", v.Errors), cancellationToken).ConfigureAwait(false);
             if (!v.Ok)
             {
@@ -283,7 +286,7 @@ VALUES (@TXNPK, @TXNID, @TXNTYPECODE, @SOURCEDBID, @DESTDBID, @SRCDOCTYPE, @SRCD
                 return;
             }
 
-            var translated = await TranslateAsync(source, txn.SourceDbId, txn.DestDbId, cancellationToken).ConfigureAwait(false);
+            var translated = await TranslateAsync(source, txn.SourceDbId, txn.DestDbId, destParty, cancellationToken).ConfigureAwait(false);
             await AddEvent(txn.TxnPk, "Mapping", "SUCCESS", "All required mappings found.", cancellationToken).ConfigureAwait(false);
 
             ISqlAccountWriteAdapter writer = job.DryRun ? new DryRunWriteAdapter() : _write;
@@ -358,7 +361,7 @@ WHERE TXNPK=@TXNPK",
             IdemKey = IdempotencyKey.Hash(txn.IdemKey + "|RETRY|" + Guid.NewGuid().ToString("N")[..8]),
             CreatedBy = user
         }, cancellationToken).ConfigureAwait(false);
-        await _audit.WriteAsync(new AuditEntry { UserEmail = user, Action = "TXN_RETRY", RecordId = txn.TxnId, Result = "QUEUED" }, cancellationToken);
+        await _audit.WriteAsync(new AuditEntry { UserEmail = user, Action = "TXN_RETRY", RecordId = txn.TxnId, Result = "QUEUED", RequestId = txn.TxnPk.ToString(CultureInfo.InvariantCulture) }, cancellationToken);
     }
 
     public Task<SyncTransaction?> GetAsync(int txnPk, CancellationToken cancellationToken = default) =>
@@ -433,7 +436,7 @@ WHERE TXNPK=@TXNPK",
         await _queue.CompleteAsync(job.JobId, status, message, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<DocumentHeader> TranslateAsync(DocumentHeader source, int masterDbId, int subDbId, CancellationToken cancellationToken)
+    private async Task<DocumentHeader> TranslateAsync(DocumentHeader source, int masterDbId, int subDbId, string? destPartyEntity, CancellationToken cancellationToken)
     {
         var dest = new DocumentHeader
         {
@@ -454,7 +457,7 @@ WHERE TXNPK=@TXNPK",
             Note = source.Note,
             Fields = new Dictionary<string, string>(source.Fields, StringComparer.OrdinalIgnoreCase)
         };
-        var party = await _mapping.FindPartyMapAsync(masterDbId, subDbId, EntityCodes.Customer, source.PartyCode, cancellationToken).ConfigureAwait(false);
+        var party = await _mapping.FindPartyMapAsync(masterDbId, subDbId, EntityCodes.Customer, source.PartyCode, destPartyEntity, cancellationToken).ConfigureAwait(false);
         dest.PartyCode = party?.SubCode ?? source.PartyCode;
         if (!string.IsNullOrWhiteSpace(party?.SubDesc))
             dest.PartyName = party.SubDesc;
@@ -492,6 +495,12 @@ WHERE TXNPK=@TXNPK",
         }
         return dest;
     }
+
+    private static string? DestPartyEntityFor(string dstDocType) => dstDocType.ToUpperInvariant() switch
+    {
+        "PI" or "GR" or "PR" => EntityCodes.Supplier,
+        _ => null
+    };
 
     private static bool NeedsMap(string? code)
     {

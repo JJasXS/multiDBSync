@@ -45,7 +45,7 @@ flowchart TD
 
 ```powershell
 copy src\SqlAccountSync\.env.example src\SqlAccountSync\.env
-# Set CENTRAL_FB_PASSWORD and CentralDb path to an empty central Firebird database
+# Set CENTRAL_FB_MASTERKEY and CentralDb path to an empty central Firebird database
 dotnet run --project src\SqlAccountSync --launch-profile http
 ```
 
@@ -64,7 +64,7 @@ Automated tests use fakes and do not touch a company database.
 ## Security
 
 - Company writes are API-only; `SqlGuard` blocks non-SELECT SQL.
-- Passwords use `PasswordSecretRef` (for example `env:CENTRAL_FB_PASSWORD`).
+- Passwords use `PasswordSecretRef` (for example `env:CENTRAL_FB_MASTERKEY`).
 - See [`docs/ENTERPRISE.md`](docs/ENTERPRISE.md) and [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
 
 ## License

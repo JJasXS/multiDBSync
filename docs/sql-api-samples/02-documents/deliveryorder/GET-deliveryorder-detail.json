@@ -1,0 +1,41 @@
+{
+  "data": [
+    {
+      "dockey": 1,
+      "docno": "DO-00001",
+      "docdate": "2026-06-03",
+      "postdate": "2026-06-03",
+      "taxdate": "2026-06-03",
+      "code": "300-C0001",
+      "companyname": "Customer EXO1",
+      "country": "MY",
+      "area": "----",
+      "agent": "----",
+      "project": "----",
+      "terms": "30 Days",
+      "currencycode": "----",
+      "currencyrate": "1",
+      "description": "Delivery order sample",
+      "cancelled": false,
+      "status": 0,
+      "docamt": "0",
+      "localdocamt": "0",
+      "transferable": true,
+      "sdsdocdetail": [
+        {
+          "seq": 1000,
+          "itemcode": "Dogs",
+          "location": "----",
+          "project": "----",
+          "description": "Dogs",
+          "qty": "1",
+          "uom": "UNIT",
+          "rate": "1",
+          "unitprice": "0",
+          "amount": "0",
+          "transferable": true
+        }
+      ]
+    }
+  ]
+}

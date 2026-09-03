@@ -31,7 +31,7 @@ See `Data/SchemaBootstrap.cs`. Version tracked in `SYNC_SCHEMA_VER`.
 ## How to run
 
 1. Copy `src/SqlAccountSync/.env.example` to `.env`.
-2. Create an empty central Firebird database and set `CentralDb__Path` / `CENTRAL_FB_PASSWORD`.
+2. Create an empty central Firebird database and set `CentralDb__Path` / `CENTRAL_FB_MASTERKEY`.
 3. `dotnet run --project src/SqlAccountSync`
 4. Sign in with the bootstrap admin email (OTP; console in Development).
 

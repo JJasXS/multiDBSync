@@ -187,7 +187,7 @@
                         {
                             <tr>
                                 <td>@j.JobId</td>
-                                <td>@j.JobKind @(j.DryRun ? "(dry run)" : "")</td>
+                                <td>@SyncDisplayNames.JobKind(j.JobKind, j.DryRun)</td>
                                 <td><span class="badge badge-@(j.Status.ToLowerInvariant())">@j.Status</span></td>
                             </tr>
                         }
@@ -220,7 +220,7 @@
                         {
                             <tr>
                                 <td><a asp-page="/Transactions/Details" asp-route-id="@t.TxnPk">@t.TxnId</a></td>
-                                <td>@t.TxnTypeCode</td>
+                                <td>@SyncDisplayNames.TxnType(t.TxnTypeCode)</td>
                                 <td><span class="badge badge-@(t.Status.ToLowerInvariant())">@t.Status</span></td>
                             </tr>
                         }

@@ -43,9 +43,7 @@ public sealed class SecretResolver : ISecretResolver
 
         if (r.StartsWith("env:", StringComparison.OrdinalIgnoreCase))
         {
-            var name = r[4..].Trim();
-            var v = Environment.GetEnvironmentVariable(name);
-            return string.IsNullOrWhiteSpace(v) ? null : v;
+            return ResolveEnv(r[4..].Trim());
         }
 
         if (r.StartsWith("sm:", StringComparison.OrdinalIgnoreCase))
@@ -107,8 +105,45 @@ public sealed class SecretResolver : ISecretResolver
         }
 
         // Bare environment variable name fallback
-        var envVal = Environment.GetEnvironmentVariable(r);
-        return string.IsNullOrWhiteSpace(envVal) ? null : envVal;
+        var fromEnv = ResolveEnv(r);
+        if (!string.IsNullOrWhiteSpace(fromEnv))
+            return fromEnv;
+
+        // Classic Firebird SYSDBA default: allow typing "masterkey" as the reference.
+        if (r.Equals("masterkey", StringComparison.OrdinalIgnoreCase))
+            return Environment.GetEnvironmentVariable("CENTRAL_FB_MASTERKEY")
+                ?? Environment.GetEnvironmentVariable("CENTRAL_FB_PASSWORD")
+                ?? "masterkey";
+
+        return null;
+    }
+
+    private static string? ResolveEnv(string name)
+    {
+        if (name.Length == 0)
+            return null;
+
+        var v = Environment.GetEnvironmentVariable(name);
+        if (!string.IsNullOrWhiteSpace(v))
+            return v;
+
+        // Legacy alias between renamed Firebird master key env vars.
+        if (name.Equals("CENTRAL_FB_PASSWORD", StringComparison.OrdinalIgnoreCase))
+        {
+            v = Environment.GetEnvironmentVariable("CENTRAL_FB_MASTERKEY");
+            if (!string.IsNullOrWhiteSpace(v))
+                return v;
+            return "masterkey";
+        }
+        if (name.Equals("CENTRAL_FB_MASTERKEY", StringComparison.OrdinalIgnoreCase))
+        {
+            v = Environment.GetEnvironmentVariable("CENTRAL_FB_PASSWORD");
+            if (!string.IsNullOrWhiteSpace(v))
+                return v;
+            return "masterkey";
+        }
+
+        return null;
     }
 
     [SupportedOSPlatform("windows")]
