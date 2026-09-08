@@ -69,6 +69,15 @@ WHERE JOBID=@JOBID",
                     new { PAYLOADJSON = job.PayloadJson, CREATEDBY = job.CreatedBy, JOBID = existing.JobId },
                     cancellationToken).ConfigureAwait(false);
             }
+            else if (existing.Status is JobStatuses.Retrying)
+            {
+                // Auto-push / re-enqueue: don't wait for exponential backoff — retry with current code path.
+                await _db.ExecuteAsync(@"
+UPDATE SYNC_JOB SET NEXTRUNAT=CURRENT_TIMESTAMP, PAYLOADJSON=@PAYLOADJSON
+WHERE JOBID=@JOBID AND STATUS='RETRYING'",
+                    new { PAYLOADJSON = job.PayloadJson, JOBID = existing.JobId },
+                    cancellationToken).ConfigureAwait(false);
+            }
             return existing.JobId;
         }
     }

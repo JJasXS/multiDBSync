@@ -15,7 +15,11 @@ public interface ISqlAccountReadAdapter
     Task<List<MasterRecord>> GetWarehousesAsync(RegisteredDatabase db, CancellationToken cancellationToken = default);
     Task<List<MasterRecord>> GetTaxCodesAsync(RegisteredDatabase db, CancellationToken cancellationToken = default);
     Task<List<MasterRecord>> GetAccountsAsync(RegisteredDatabase db, CancellationToken cancellationToken = default);
+    /// <summary>Full Maintain Account chart (GL_ACC) with dockey/parent for tree display.</summary>
+    Task<List<Services.Accounts.GlAccountRow>> GetGlChartAsync(RegisteredDatabase db, CancellationToken cancellationToken = default);
     Task<List<MasterRecord>> GetUomsAsync(RegisteredDatabase db, CancellationToken cancellationToken = default);
+    /// <summary>Active credit terms from TERMS (code used as AR/AP creditterm).</summary>
+    Task<List<MasterRecord>> GetTermsAsync(RegisteredDatabase db, CancellationToken cancellationToken = default);
     Task<MasterRecord?> FindAsync(RegisteredDatabase db, string entityCode, string code, CancellationToken cancellationToken = default);
     Task<MasterRecord?> GetPartyDetailAsync(RegisteredDatabase db, string entityCode, string code, CancellationToken cancellationToken = default);
     Task<MasterRecord?> GetItemDetailAsync(RegisteredDatabase db, string code, CancellationToken cancellationToken = default);
@@ -32,6 +36,8 @@ public interface ISqlAccountReadAdapter
 public interface ISqlAccountWriteAdapter
 {
     Task<WriteResult> CreateMasterAsync(RegisteredDatabase db, string targetEntityCode, MasterRecord record, string txnStamp, RegisteredDatabase? sourceDb = null, string? sourceEntityCode = null, CancellationToken cancellationToken = default);
+    Task<WriteResult> UpdateMasterAsync(RegisteredDatabase db, string targetEntityCode, MasterRecord record, string txnStamp, int destDocKey, int destParentDocKey, CancellationToken cancellationToken = default);
+    Task<WriteResult> DeleteMasterAsync(RegisteredDatabase db, string targetEntityCode, string code, CancellationToken cancellationToken = default);
     Task<WriteResult> CreateDocumentAsync(RegisteredDatabase db, string apiPath, DocumentHeader document, string txnStamp, CancellationToken cancellationToken = default);
 }
 
@@ -125,6 +131,23 @@ public sealed class FirebirdReadAdapter : ISqlAccountReadAdapter
             }, fallback: false, cancellationToken);
         }
 
+        if (string.Equals(entityCode, EntityCodes.Account, StringComparison.OrdinalIgnoreCase))
+        {
+            return WithReadTxOrFallback(db, async (conn, tx) =>
+            {
+                var table = await FirstExistingConn(conn, tx, ["GL_ACC", "GL_ACCOUNT", "ACCOUNT"], cancellationToken)
+                    .ConfigureAwait(false);
+                if (table is null)
+                    return false;
+                await using var cmd = conn.CreateCommand();
+                cmd.Transaction = tx;
+                cmd.CommandText = $"SELECT COUNT(*) FROM {table} WHERE UPPER(TRIM(CODE))=UPPER(@C)";
+                SqlGuard.EnsureSelectOnly(cmd.CommandText);
+                CentralDb.Bind(cmd, new Dictionary<string, object?> { ["C"] = key });
+                return Convert.ToInt32(await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false)) > 0;
+            }, fallback: false, cancellationToken);
+        }
+
         if (!PartnerSyncRules.IsPartyEntity(entityCode))
             return Task.FromResult(false);
 
@@ -198,11 +221,78 @@ FROM ST_GROUP WHERE UPPER(TRIM(CODE))=UPPER(@C)";
 
     public async Task<List<MasterRecord>> GetAccountsAsync(RegisteredDatabase db, CancellationToken cancellationToken = default)
     {
+        var chart = await GetGlChartAsync(db, cancellationToken).ConfigureAwait(false);
+        return chart.Select(a => new MasterRecord
+        {
+            Code = a.Code,
+            Description = a.Description,
+            Key = a.Code.Length > 0 ? a.Code : a.DocKey.ToString()
+        }).ToList();
+    }
+
+    public async Task<List<Services.Accounts.GlAccountRow>> GetGlChartAsync(
+        RegisteredDatabase db, CancellationToken cancellationToken = default)
+    {
         var table = await FirstExisting(db, ["GL_ACC", "GL_ACCOUNT", "ACCOUNT"], cancellationToken).ConfigureAwait(false);
         if (table is null)
             return [];
-        var desc = await FirstColumn(db, table, ["DESCRIPTION", "NAME"], cancellationToken).ConfigureAwait(false) ?? "CODE";
-        return await QueryMaster(db, $"SELECT FIRST 500 TRIM(CODE) AS CODE, TRIM(COALESCE({desc}, CODE, '')) AS DESCRIPTION FROM {table} ORDER BY CODE", cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            return await WithReadTx(db, async (conn, tx) =>
+            {
+                var cols = await Columns(conn, tx, table, cancellationToken).ConfigureAwait(false);
+                bool Has(string name) => cols.Contains(name, StringComparer.OrdinalIgnoreCase);
+                if (!Has("DOCKEY") || !Has("CODE"))
+                    return [];
+
+                var desc = Has("DESCRIPTION") ? "DESCRIPTION" : (Has("NAME") ? "NAME" : "CODE");
+                var sql = $@"
+SELECT DOCKEY,
+       {(Has("PARENT") ? "PARENT" : "0 AS PARENT")},
+       TRIM(CODE) AS CODE,
+       TRIM(COALESCE({desc}, CODE, '')) AS DESCRIPTION,
+       {(Has("DESCRIPTION2") ? "DESCRIPTION2" : "CAST(NULL AS VARCHAR(1)) AS DESCRIPTION2")},
+       {(Has("ACCTYPE") ? "ACCTYPE" : "CAST(NULL AS VARCHAR(1)) AS ACCTYPE")},
+       {(Has("SPECIALACCTYPE") ? "SPECIALACCTYPE" : "CAST(NULL AS VARCHAR(1)) AS SPECIALACCTYPE")},
+       {(Has("TAX") ? "TAX" : "CAST(NULL AS VARCHAR(1)) AS TAX")},
+       {(Has("CASHFLOWTYPE") ? "CASHFLOWTYPE" : "0 AS CASHFLOWTYPE")},
+       {(Has("SIC") ? "SIC" : "CAST(NULL AS VARCHAR(1)) AS SIC")}
+FROM {table}
+ORDER BY CODE";
+                SqlGuard.EnsureSelectOnly(sql);
+                await using var cmd = conn.CreateCommand();
+                cmd.Transaction = tx;
+                cmd.CommandText = sql;
+                await using var r = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                var list = new List<Services.Accounts.GlAccountRow>();
+                while (await r.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    list.Add(new Services.Accounts.GlAccountRow
+                    {
+                        DocKey = r["DOCKEY"] is DBNull ? 0 : Convert.ToInt32(r["DOCKEY"]),
+                        Parent = r["PARENT"] is DBNull ? 0 : Convert.ToInt32(r["PARENT"]),
+                        Code = Convert.ToString(r["CODE"])?.Trim() ?? "",
+                        Description = Convert.ToString(r["DESCRIPTION"])?.Trim() ?? "",
+                        Description2 = NullIfEmpty(Convert.ToString(r["DESCRIPTION2"])),
+                        AccType = NullIfEmpty(Convert.ToString(r["ACCTYPE"])),
+                        SpecialAccType = NullIfEmpty(Convert.ToString(r["SPECIALACCTYPE"])),
+                        Tax = NullIfEmpty(Convert.ToString(r["TAX"])),
+                        CashFlowType = r["CASHFLOWTYPE"] is DBNull ? 0 : Convert.ToInt32(r["CASHFLOWTYPE"]),
+                        Sic = NullIfEmpty(Convert.ToString(r["SIC"]))
+                    });
+                }
+                return Services.Accounts.GlAccountTree.OrderTree(list);
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "GL chart read failed for {Db}", db.DbCode);
+            return [];
+        }
+
+        static string? NullIfEmpty(string? s) =>
+            string.IsNullOrWhiteSpace(s) ? null : s.Trim();
     }
 
     public async Task<List<MasterRecord>> GetUomsAsync(RegisteredDatabase db, CancellationToken cancellationToken = default)
@@ -212,6 +302,58 @@ FROM ST_GROUP WHERE UPPER(TRIM(CODE))=UPPER(@C)";
             return [];
         var desc = await FirstColumn(db, table, ["DESCRIPTION", "NAME"], cancellationToken).ConfigureAwait(false) ?? "CODE";
         return await QueryMaster(db, $"SELECT FIRST 200 TRIM(CODE) AS CODE, TRIM(COALESCE({desc}, CODE, '')) AS DESCRIPTION FROM {table} ORDER BY CODE", cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<MasterRecord>> GetTermsAsync(RegisteredDatabase db, CancellationToken cancellationToken = default)
+    {
+        var table = await FirstExisting(db, ["TERMS", "TERM", "AR_TERM"], cancellationToken).ConfigureAwait(false);
+        if (table is null)
+            return [];
+
+        try
+        {
+            return await WithReadTx(db, async (conn, tx) =>
+            {
+                var cols = await Columns(conn, tx, table, cancellationToken).ConfigureAwait(false);
+                bool Has(string name) => cols.Contains(name, StringComparer.OrdinalIgnoreCase);
+                if (!Has("CODE"))
+                    return [];
+
+                var desc = Has("DESCRIPTION") ? "DESCRIPTION" : "CODE";
+                var activeFilter = Has("ISACTIVE")
+                    ? "WHERE COALESCE(ISACTIVE, TRUE) = TRUE"
+                    : "";
+                var sql = $@"
+SELECT FIRST 200 TRIM(CODE) AS CODE, TRIM(COALESCE({desc}, CODE, '')) AS DESCRIPTION
+FROM {table}
+{activeFilter}
+ORDER BY CODE";
+                SqlGuard.EnsureSelectOnly(sql);
+                await using var cmd = conn.CreateCommand();
+                cmd.Transaction = tx;
+                cmd.CommandText = sql;
+                await using var r = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                var list = new List<MasterRecord>();
+                while (await r.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    var code = Convert.ToString(r["CODE"])?.Trim() ?? "";
+                    if (code.Length == 0)
+                        continue;
+                    list.Add(new MasterRecord
+                    {
+                        Code = code,
+                        Description = Convert.ToString(r["DESCRIPTION"])?.Trim() ?? code,
+                        Key = code
+                    });
+                }
+                return list;
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Terms read failed for {Db}", db.DbCode);
+            return [];
+        }
     }
 
     public async Task<MasterRecord?> FindAsync(RegisteredDatabase db, string entityCode, string code, CancellationToken cancellationToken = default)
@@ -1292,6 +1434,17 @@ ORDER BY 1";
         foreach (var n in names)
         {
             if (await TableExists(db, n, ct).ConfigureAwait(false))
+                return n;
+        }
+        return null;
+    }
+
+    private static async Task<string?> FirstExistingConn(
+        FbConnection conn, FbTransaction tx, IEnumerable<string> names, CancellationToken ct)
+    {
+        foreach (var n in names)
+        {
+            if (await TableExistsConn(conn, tx, n, ct).ConfigureAwait(false))
                 return n;
         }
         return null;

@@ -1,0 +1,347 @@
+@model SqlAccountSync.Pages.Accounts.IndexModel
+
+<div class="card-head accounts-card-head">
+    <div class="accounts-card-head-copy">
+        <h3>Master → Sub (ACCOUNT)</h3>
+        <span class="muted">Create missing GL accounts on linked subs. Pencil opens edit; trash asks before delete.</span>
+    </div>
+    <div class="accounts-search-field">
+        <label class="sr-only" for="accountsCodeSearch">Search code</label>
+        <input id="accountsCodeSearch" type="search" placeholder="Filter by code…"
+               autocomplete="off" spellcheck="false" />
+    </div>
+</div>
+
+@if (Model.MasterDatabases.Count == 0)
+{
+    <p class="empty">No Master or BOTH databases are registered.</p>
+    <p class="empty-actions"><a class="btn" asp-page="/Databases/Index">Databases</a></p>
+}
+else
+{
+    <div class="push-workspace">
+        <form method="get" class="push-source-form">
+            <input type="hidden" name="tab" value="accounts" />
+            <div class="route-fields push-route-fields">
+                <div class="route-field">
+                    <label for="accountsSourceDb">Master source</label>
+                    <select id="accountsSourceDb" name="SourceDbId" onchange="this.form.submit()">
+                        @foreach (var d in Model.MasterDatabases)
+                        {
+                            <option value="@d.DbId" selected="@(d.DbId == Model.SourceDbId)">
+                                @d.DisplayName (@d.DbCode · @d.DbRole)
+                            </option>
+                        }
+                    </select>
+                </div>
+                <span class="route-arrow push-route-arrow" aria-hidden="true">→</span>
+                <div class="route-field">
+                    <label>Entity</label>
+                    <input type="text" value="ACCOUNT" readonly class="input-readonly" />
+                </div>
+            </div>
+        </form>
+
+        @if (!Model.CanOperate)
+        {
+            <p class="empty">Operator access is required to push accounts.</p>
+        }
+        else
+        {
+            <form id="accountsPushForm" method="post" asp-page-handler="Push">
+                <input type="hidden" name="Tab" value="accounts" />
+                <input type="hidden" asp-for="SourceDbId" />
+
+                <div class="push-layout">
+                    <div class="push-panel-table-wrap">
+                        <table class="push-panel-table" id="accountsChartTable">
+                            <thead>
+                                @if (Model.Records.Count > 0)
+                                {
+                                    <tr>
+                                        <th class="col-check">
+                                            <input type="checkbox" data-check-all="account-codes" aria-label="Select all accounts" />
+                                        </th>
+                                        <th>Code</th>
+                                        <th>Description</th>
+                                        <th class="col-actions">Actions</th>
+                                    </tr>
+                                }
+                            </thead>
+                            <tbody>
+                                @if (Model.Records.Count == 0)
+                                {
+                                    <tr>
+                                        <td colspan="4" class="empty">No accounts loaded for this master.</td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach (var r in Model.Records)
+                                    {
+                                        var selected = Model.SelectedCodes.Contains(r.Code, StringComparer.OrdinalIgnoreCase);
+                                        var indent = r.Fields.TryGetValue("indent", out var ind) ? ind : "";
+                                        var desc = string.IsNullOrEmpty(indent) ? r.Description : indent + r.Description;
+                                        var needsUpdate = Model.NeedsUpdateCodes.Contains(r.Code);
+                                        string Field(string key) => r.Fields.TryGetValue(key, out var v) ? v ?? "" : "";
+                                        <tr class="@(needsUpdate ? "accounts-row-drift" : null)"
+                                            data-account-code="@r.Code">
+                                            <td class="col-check">
+                                                <input type="checkbox" name="SelectedCodes" value="@r.Code"
+                                                       data-check-group="account-codes"
+                                                       @(selected ? "checked" : null) />
+                                            </td>
+                                            <td class="code-cell">@r.Code</td>
+                                            <td><span class="cell-truncate" title="@r.Description">@desc</span></td>
+                                            <td class="col-actions">
+                                                <div class="accounts-row-actions">
+                                                    <button type="button"
+                                                            class="accounts-icon-btn accounts-status-edit"
+                                                            title="@(needsUpdate ? "Edit &amp; push update (differs on sub)" : "Edit account")"
+                                                            aria-label="Edit @r.Code"
+                                                            data-accounts-edit
+                                                            data-code="@r.Code"
+                                                            data-description="@r.Description"
+                                                            data-description2="@Field("description2")"
+                                                            data-acctype="@Field("acctype")"
+                                                            data-specialacctype="@Field("specialacctype")"
+                                                            data-tax="@Field("tax")"
+                                                            data-cashflowtype="@Field("cashflowtype")"
+                                                            data-sic="@Field("sic")">
+                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                                            <path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
+                                                        </svg>
+                                                    </button>
+                                                    <button type="submit"
+                                                            class="accounts-icon-btn accounts-status-delete"
+                                                            form="accountsDeleteFromSubsForm"
+                                                            name="DeleteCode"
+                                                            value="@r.Code"
+                                                            title="Delete from linked subs"
+                                                            aria-label="Delete @r.Code from linked subs"
+                                                            onclick="return confirm('Delete account @r.Code from all linked sub databases? Master account is kept.');">
+                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                                            <path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/>
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                    <tr id="accountsSearchEmpty" class="accounts-search-empty" hidden>
+                                        <td colspan="4" class="empty">No accounts match that code.</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="push-flow-bridge" aria-hidden="true">
+                        <span class="push-flow-arrow">→</span>
+                    </div>
+
+                    <div class="push-panel-table-wrap">
+                        <table class="push-panel-table">
+                            <thead>
+                                @if (Model.TargetSubs.Count > 0)
+                                {
+                                    <tr>
+                                        <th class="col-check">
+                                            <input type="checkbox" data-check-all="account-subs" aria-label="Select all target databases" />
+                                        </th>
+                                        <th>Database</th>
+                                        <th>Code</th>
+                                    </tr>
+                                }
+                            </thead>
+                            <tbody>
+                                @if (Model.TargetSubs.Count == 0)
+                                {
+                                    <tr>
+                                        <td colspan="3" class="empty">No linked subs for this master. Add links under Databases.</td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach (var s in Model.TargetSubs)
+                                    {
+                                        var selected = Model.SelectedSubDbIds.Contains(s.DbId);
+                                        <tr>
+                                            <td class="col-check">
+                                                <input type="checkbox" name="SelectedSubDbIds" value="@s.DbId"
+                                                       data-check-group="account-subs"
+                                                       @(selected ? "checked" : null) />
+                                            </td>
+                                            <td class="push-target-name">@s.DisplayName</td>
+                                            <td class="muted">@s.DbCode</td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </form>
+
+            <form id="accountsDeleteFromSubsForm" method="post" asp-page-handler="DeleteFromSubs" hidden>
+                <input type="hidden" name="Tab" value="accounts" />
+                <input type="hidden" name="SourceDbId" value="@Model.SourceDbId" />
+            </form>
+
+            @if (Model.PendingDeletes.Count > 0)
+            {
+                <div class="accounts-pending-deletes">
+                    <h4 class="accounts-pending-title">Pending deletes</h4>
+                    <p class="muted accounts-pending-hint">Tracked on a sub (created by sync) but no longer on master. Confirm to queue delete.</p>
+                    <ul class="accounts-pending-list">
+                        @foreach (var d in Model.PendingDeletes)
+                        {
+                            <li>
+                                <form method="post" asp-page-handler="Delete" class="accounts-delete-form"
+                                      onsubmit="return confirm('Delete account @d.Code from @d.SubDisplayName (@d.SubDbCode)? This cannot be undone from here.');">
+                                    <input type="hidden" name="Tab" value="accounts" />
+                                    <input type="hidden" name="SourceDbId" value="@Model.SourceDbId" />
+                                    <input type="hidden" name="DeleteCode" value="@d.Code" />
+                                    <input type="hidden" name="DeleteMappingId" value="@d.MappingId" />
+                                    <input type="hidden" name="DeleteSubDbId" value="@d.SubDbId" />
+                                    <button type="submit" class="accounts-icon-btn accounts-status-delete"
+                                            title="Delete from @d.SubDisplayName"
+                                            aria-label="Delete @d.Code from @d.SubDisplayName">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                            <path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/>
+                                        </svg>
+                                    </button>
+                                </form>
+                                <span class="code-cell">@d.Code</span>
+                                <span class="muted">→ @d.SubDisplayName (@d.SubDbCode)</span>
+                            </li>
+                        }
+                    </ul>
+                </div>
+            }
+        }
+    </div>
+}
+
+<dialog id="accountsEditModal" class="accounts-modal">
+    <form method="post" asp-page-handler="SaveEdit" class="accounts-modal-form">
+        <input type="hidden" name="Tab" value="accounts" />
+        <input type="hidden" name="SourceDbId" value="@Model.SourceDbId" />
+        <div class="accounts-modal-head">
+            <h3>Edit account</h3>
+            <button type="button" class="accounts-modal-close" data-accounts-edit-close aria-label="Close">&times;</button>
+        </div>
+        <div class="accounts-modal-body">
+            <div class="field">
+                <label for="EditCode">Code</label>
+                <input id="EditCode" name="EditCode" class="input-readonly" readonly />
+            </div>
+            <div class="field">
+                <label for="EditDescription">Description</label>
+                <input id="EditDescription" name="EditDescription" maxlength="200" required />
+            </div>
+            <div class="field">
+                <label for="EditDescription2">Description 2</label>
+                <input id="EditDescription2" name="EditDescription2" maxlength="200" />
+            </div>
+            <div class="field-row">
+                <div class="field">
+                    <label for="EditAccType">Acc type</label>
+                    <input id="EditAccType" name="EditAccType" maxlength="20" />
+                </div>
+                <div class="field">
+                    <label for="EditSpecialAccType">Special acc type</label>
+                    <input id="EditSpecialAccType" name="EditSpecialAccType" maxlength="20" />
+                </div>
+            </div>
+            <div class="field-row">
+                <div class="field">
+                    <label for="EditTax">Tax</label>
+                    <input id="EditTax" name="EditTax" maxlength="40" />
+                </div>
+                <div class="field">
+                    <label for="EditCashFlowType">Cash flow type</label>
+                    <input id="EditCashFlowType" name="EditCashFlowType" type="number" />
+                </div>
+            </div>
+            <div class="field">
+                <label for="EditSic">SIC</label>
+                <input id="EditSic" name="EditSic" maxlength="40" />
+            </div>
+            <p class="muted accounts-modal-hint">Saves on master via SQL Acc API, then queues updates to linked subs.</p>
+        </div>
+        <div class="accounts-modal-actions">
+            <button type="button" class="btn btn-ghost" data-accounts-edit-close>Cancel</button>
+            <button type="submit" class="btn">Save &amp; push update</button>
+        </div>
+    </form>
+</dialog>
+
+<script>
+(() => {
+  const search = document.getElementById('accountsCodeSearch');
+  const emptyRow = document.getElementById('accountsSearchEmpty');
+  if (search) {
+    const rows = () => Array.from(document.querySelectorAll('#accountsChartTable tbody tr[data-account-code]'));
+    const apply = () => {
+      const q = (search.value || '').trim().toLowerCase();
+      let visible = 0;
+      rows().forEach(tr => {
+        const code = (tr.getAttribute('data-account-code') || '').toLowerCase();
+        const show = !q || code.includes(q);
+        tr.hidden = !show;
+        if (show) visible++;
+      });
+      if (emptyRow) emptyRow.hidden = visible > 0 || rows().length === 0;
+    };
+    search.addEventListener('input', apply);
+    search.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        return;
+      }
+      if (e.key === 'Escape') {
+        search.value = '';
+        apply();
+      }
+    });
+  }
+
+  const modal = document.getElementById('accountsEditModal');
+  if (!modal) return;
+
+  const set = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.value = value ?? '';
+  };
+
+  document.querySelectorAll('[data-accounts-edit]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      set('EditCode', btn.getAttribute('data-code'));
+      set('EditDescription', btn.getAttribute('data-description'));
+      set('EditDescription2', btn.getAttribute('data-description2'));
+      set('EditAccType', btn.getAttribute('data-acctype'));
+      set('EditSpecialAccType', btn.getAttribute('data-specialacctype'));
+      set('EditTax', btn.getAttribute('data-tax'));
+      set('EditCashFlowType', btn.getAttribute('data-cashflowtype') || '0');
+      set('EditSic', btn.getAttribute('data-sic'));
+      if (typeof modal.showModal === 'function') modal.showModal();
+      else modal.setAttribute('open', '');
+    });
+  });
+
+  document.querySelectorAll('[data-accounts-edit-close]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (typeof modal.close === 'function') modal.close();
+      else modal.removeAttribute('open');
+    });
+  });
+
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      if (typeof modal.close === 'function') modal.close();
+      else modal.removeAttribute('open');
+    }
+  });
+})();
+</script>

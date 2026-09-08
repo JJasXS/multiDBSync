@@ -7,6 +7,8 @@ public static class SyncDisplayNames
     {
         ["MASTER"] = "Master data",
         ["MASTER_DRYRUN"] = "Master data",
+        ["MASTER_UPDATE"] = "Account update",
+        ["MASTER_DELETE"] = "Account delete",
         ["TXN"] = "Document sync",
         ["TXN_DRYRUN"] = "Document sync",
     };
@@ -56,6 +58,10 @@ public static class SyncDisplayNames
             "DRY_RUN_MASTER" => "Push dry run queued",
             "MASTER_SYNC_DONE" => "Push completed",
             "MASTER_DRYRUN_DONE" => "Push dry run completed",
+            "ENQUEUE_MASTER_UPDATE" => "Account update queued",
+            "MASTER_UPDATE_DONE" => "Account update completed",
+            "ENQUEUE_MASTER_DELETE" => "Account delete queued",
+            "MASTER_DELETE_DONE" => "Account delete completed",
             "TXN_ENQUEUE" => "Transfer queued",
             "TXN_DRYRUN" => "Transfer dry run queued",
             "TXN_RETRY" => "Transfer retry queued",

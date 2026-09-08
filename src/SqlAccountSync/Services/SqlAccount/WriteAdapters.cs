@@ -5,6 +5,7 @@ using Amazon.SecretsManager;
 using Amazon.SecretsManager.Model;
 using SqlAccountSync.Helpers;
 using SqlAccountSync.Models;
+using SqlAccountSync.Services.Accounts;
 using SqlAccountSync.Services.Documents;
 using SqlAccountSync.Services.Items;
 using SqlAccountSync.Services.Partners;
@@ -47,6 +48,7 @@ public sealed class SqlAccountApiWriteAdapter : ISqlAccountWriteAdapter
             EntityCodes.Item => "/stockitem",
             EntityCodes.Customer => "/customer",
             EntityCodes.Supplier => "/supplier",
+            EntityCodes.Account => "/account",
             _ => ""
         };
         if (path.Length == 0)
@@ -72,6 +74,16 @@ public sealed class SqlAccountApiWriteAdapter : ISqlAccountWriteAdapter
             var dict = StockItemMapper.ToApiPayload(item, record.Code, txnStamp);
             payload = StockItemMapper.SerializePayload(dict);
         }
+        else if (string.Equals(targetEntityCode, EntityCodes.Account, StringComparison.OrdinalIgnoreCase))
+        {
+            var row = GlAccountMapper.FromMasterRecord(record);
+            var destParent = 0;
+            if (record.Fields.TryGetValue(GlAccountMapper.FieldDestParent, out var dp)
+                && int.TryParse(dp, out var parsedParent))
+                destParent = parsedParent;
+            var dict = GlAccountMapper.ToApiPayload(row, destParent);
+            payload = GlAccountMapper.SerializePayload(dict);
+        }
         else
         {
             payload = JsonSerializer.Serialize(new Dictionary<string, object?>
@@ -82,6 +94,38 @@ public sealed class SqlAccountApiWriteAdapter : ISqlAccountWriteAdapter
             });
         }
         return PostAsync(db, path, payload, cancellationToken);
+    }
+
+    public Task<WriteResult> UpdateMasterAsync(
+        RegisteredDatabase db, string targetEntityCode, MasterRecord record, string txnStamp,
+        int destDocKey, int destParentDocKey, CancellationToken cancellationToken = default)
+    {
+        if (!string.Equals(targetEntityCode, EntityCodes.Account, StringComparison.OrdinalIgnoreCase))
+            return Task.FromResult(new WriteResult { Success = false, Message = "Update/delete is only supported for accounts." });
+
+        var code = (record.Code ?? "").Trim();
+        if (code.Length == 0)
+            return Task.FromResult(new WriteResult { Success = false, Message = "Account code is required for update." });
+
+        var row = GlAccountMapper.FromMasterRecord(record);
+        var dict = GlAccountMapper.ToUpdatePayload(row, destParentDocKey, destDocKey);
+        var payload = GlAccountMapper.SerializePayload(dict);
+        var path = "/account/" + Uri.EscapeDataString(code);
+        return SendAsync(db, HttpMethod.Put, path, payload, "Updated.", treatNotFoundAsSuccess: false, cancellationToken);
+    }
+
+    public Task<WriteResult> DeleteMasterAsync(
+        RegisteredDatabase db, string targetEntityCode, string code, CancellationToken cancellationToken = default)
+    {
+        if (!string.Equals(targetEntityCode, EntityCodes.Account, StringComparison.OrdinalIgnoreCase))
+            return Task.FromResult(new WriteResult { Success = false, Message = "Update/delete is only supported for accounts." });
+
+        var key = (code ?? "").Trim();
+        if (key.Length == 0)
+            return Task.FromResult(new WriteResult { Success = false, Message = "Account code is required for delete." });
+
+        var path = "/account/" + Uri.EscapeDataString(key);
+        return SendAsync(db, HttpMethod.Delete, path, null, "Deleted.", treatNotFoundAsSuccess: true, cancellationToken);
     }
 
     public Task<WriteResult> CreateDocumentAsync(RegisteredDatabase db, string apiPath, DocumentHeader document, string txnStamp, CancellationToken cancellationToken = default)
@@ -129,7 +173,12 @@ public sealed class SqlAccountApiWriteAdapter : ISqlAccountWriteAdapter
         return PostAsync(db, path, payload, cancellationToken);
     }
 
-    private async Task<WriteResult> PostAsync(RegisteredDatabase db, string path, string json, CancellationToken cancellationToken)
+    private Task<WriteResult> PostAsync(RegisteredDatabase db, string path, string json, CancellationToken cancellationToken) =>
+        SendAsync(db, HttpMethod.Post, path, json, "Created.", treatNotFoundAsSuccess: false, cancellationToken);
+
+    private async Task<WriteResult> SendAsync(
+        RegisteredDatabase db, HttpMethod method, string path, string? json,
+        string successMessage, bool treatNotFoundAsSuccess, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(db.ApiBaseUrl) || string.IsNullOrWhiteSpace(db.ApiCredRef))
             return new WriteResult { Success = false, Message = "SQL Accounting API is not configured for this database." };
@@ -140,23 +189,31 @@ public sealed class SqlAccountApiWriteAdapter : ISqlAccountWriteAdapter
 
         var relative = path.StartsWith('/') ? path : "/" + path;
         var uri = new Uri(db.ApiBaseUrl.TrimEnd('/') + relative);
-        var bodyBytes = Encoding.UTF8.GetBytes(json);
-        var signed = AwsV4Signer.SignedHeaders("POST", uri, bodyBytes, "application/json",
+        var bodyBytes = json is null ? Array.Empty<byte>() : Encoding.UTF8.GetBytes(json);
+        var contentType = json is null ? null : "application/json";
+        var signed = AwsV4Signer.SignedHeaders(method.Method, uri, bodyBytes, contentType,
             creds.AccessKey, creds.SecretKey, "ap-southeast-1", "execute-api");
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, uri);
+        using var request = new HttpRequestMessage(method, uri);
         foreach (var (k, v) in signed)
             request.Headers.TryAddWithoutValidation(k, v);
-        request.Content = new ByteArrayContent(bodyBytes);
-        request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+        if (json is not null)
+        {
+            request.Content = new ByteArrayContent(bodyBytes);
+            request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+        }
 
         using var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
         var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
         {
-            TryDumpFailedPost(relative, json, (int)response.StatusCode, body);
+            if (treatNotFoundAsSuccess && response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                return new WriteResult { Success = true, Message = "Already absent." };
+
+            TryDumpFailedPost(relative, json ?? "", (int)response.StatusCode, body);
             var detail = SummarizeApiError(body);
-            _logger.LogWarning("SQL API {Path} returned {Status}: {Body}", relative, (int)response.StatusCode, detail);
+            _logger.LogWarning("SQL API {Method} {Path} returned {Status}: {Body}",
+                method.Method, relative, (int)response.StatusCode, detail);
             return new WriteResult
             {
                 Success = false,
@@ -167,7 +224,7 @@ public sealed class SqlAccountApiWriteAdapter : ISqlAccountWriteAdapter
         }
 
         var (docKey, docNo) = ParseCreated(body);
-        return new WriteResult { Success = true, DocKey = docKey, DocNo = docNo, Message = "Created." };
+        return new WriteResult { Success = true, DocKey = docKey, DocNo = docNo, Message = successMessage };
     }
 
     private static string EnhanceApiErrorMessage(string detail, string path)
@@ -390,6 +447,21 @@ public sealed class DryRunWriteAdapter : ISqlAccountWriteAdapter
         var label = flip ? $"{sourceEntityCode}→{targetEntityCode}" : targetEntityCode;
         Actions.Add($"WOULD create {label} {record.Code} on {db.DisplayName}");
         return Task.FromResult(new WriteResult { Success = true, Message = "Dry run: no data was modified.", DocNo = record.Code });
+    }
+
+    public Task<WriteResult> UpdateMasterAsync(
+        RegisteredDatabase db, string targetEntityCode, MasterRecord record, string txnStamp,
+        int destDocKey, int destParentDocKey, CancellationToken cancellationToken = default)
+    {
+        Actions.Add($"WOULD PUT {targetEntityCode} {record.Code} on {db.DisplayName} (dockey={destDocKey})");
+        return Task.FromResult(new WriteResult { Success = true, Message = "Dry run: no data was modified.", DocNo = record.Code });
+    }
+
+    public Task<WriteResult> DeleteMasterAsync(
+        RegisteredDatabase db, string targetEntityCode, string code, CancellationToken cancellationToken = default)
+    {
+        Actions.Add($"WOULD DELETE {targetEntityCode} {code} on {db.DisplayName}");
+        return Task.FromResult(new WriteResult { Success = true, Message = "Dry run: no data was modified." });
     }
 
     public Task<WriteResult> CreateDocumentAsync(RegisteredDatabase db, string apiPath, DocumentHeader document, string txnStamp, CancellationToken cancellationToken = default)

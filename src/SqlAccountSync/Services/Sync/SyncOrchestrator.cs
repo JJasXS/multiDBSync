@@ -7,6 +7,7 @@ using SqlAccountSync.Helpers;
 
 using SqlAccountSync.Models;
 
+using SqlAccountSync.Services.Accounts;
 using SqlAccountSync.Services.Audit;
 
 using SqlAccountSync.Services.Databases;
@@ -47,6 +48,14 @@ public interface ISyncOrchestrator
 
         string user,
 
+        CancellationToken cancellationToken = default);
+
+    Task<(int JobId, string Message)> EnqueueMasterUpdateAsync(
+        int sourceDbId, int destDbId, string entityCode, string masterCode, string user,
+        CancellationToken cancellationToken = default);
+
+    Task<(int JobId, string Message)> EnqueueMasterDeleteAsync(
+        int sourceDbId, int destDbId, string entityCode, string masterCode, int mappingId, string user,
         CancellationToken cancellationToken = default);
 
     Task<DryRunResult> DryRunMasterAsync(int sourceDbId, int destDbId, string entityCode, string masterCode, CancellationToken cancellationToken = default);
@@ -436,14 +445,20 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
         var failed = 0;
 
         var codes = masterCodes
-
             .Select(c => (c ?? "").Trim())
-
             .Where(c => c.Length > 0)
-
             .Distinct(StringComparer.OrdinalIgnoreCase)
-
             .ToList();
+
+        if (string.Equals(entityCode, EntityCodes.Account, StringComparison.OrdinalIgnoreCase) && sourceDbId > 0)
+        {
+            var sourceDb = await _registry.GetAsync(sourceDbId, cancellationToken).ConfigureAwait(false);
+            if (sourceDb is not null)
+            {
+                var chart = await _read.GetGlChartAsync(sourceDb, cancellationToken).ConfigureAwait(false);
+                codes = GlAccountMapper.OrderCodesParentsFirst(codes, chart);
+            }
+        }
 
         var dests = destDbIds.Where(id => id > 0 && id != sourceDbId).Distinct().ToList();
 
@@ -541,6 +556,116 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
 
         return (queued, failed, messages);
 
+    }
+
+    public async Task<(int JobId, string Message)> EnqueueMasterUpdateAsync(
+        int sourceDbId, int destDbId, string entityCode, string masterCode, string user,
+        CancellationToken cancellationToken = default)
+    {
+        if (sourceDbId == destDbId)
+            return (0, "Source and destination must be different databases.");
+        if (!string.Equals(entityCode, EntityCodes.Account, StringComparison.OrdinalIgnoreCase))
+            return (0, "Update is only supported for accounts.");
+
+        var source = await _registry.GetAsync(sourceDbId, cancellationToken).ConfigureAwait(false);
+        var dest = await _registry.GetAsync(destDbId, cancellationToken).ConfigureAwait(false);
+        var dbCheck = _validation.ValidateDatabase(source, "Source");
+        dbCheck.Errors.AddRange(_validation.ValidateDatabase(dest, "Destination").Errors);
+        if (dbCheck.Errors.Count > 0)
+            return (0, string.Join(" ", dbCheck.Errors));
+
+        var record = await LoadSourceRecordAsync(source!, entityCode, masterCode, cancellationToken).ConfigureAwait(false);
+        if (record is null)
+            return (0, $"Source {entityCode} {masterCode} was not found.");
+
+        var destEntity = EntityCodes.Account;
+        var payloadObj = new MasterSyncPayload
+        {
+            Record = record,
+            SourceEntity = entityCode,
+            DestEntity = destEntity
+        };
+        var payload = JsonSerializer.Serialize(payloadObj);
+        var idem = IdempotencyKey.ForMasterData(
+            source!.DbCode, dest!.DbCode, entityCode, destEntity, masterCode,
+            IdempotencyKey.ContentHash(payload + "|UPD"));
+
+        var jobId = await _queue.EnqueueAsync(new SyncJob
+        {
+            JobKind = "MASTER_UPDATE",
+            SourceDbId = sourceDbId,
+            DestDbId = destDbId,
+            EntityCode = entityCode,
+            PayloadJson = payload,
+            IdemKey = idem,
+            CreatedBy = user
+        }, cancellationToken).ConfigureAwait(false);
+
+        await _audit.WriteAsync(new AuditEntry
+        {
+            UserEmail = user,
+            Action = "ENQUEUE_MASTER_UPDATE",
+            DbId = sourceDbId,
+            Entity = entityCode,
+            RecordId = masterCode,
+            Result = "QUEUED",
+            RequestId = jobId.ToString(CultureInfo.InvariantCulture)
+        }, cancellationToken).ConfigureAwait(false);
+
+        return (jobId, $"Queued update {masterCode} to {dest.DisplayName} (job #{jobId}).");
+    }
+
+    public async Task<(int JobId, string Message)> EnqueueMasterDeleteAsync(
+        int sourceDbId, int destDbId, string entityCode, string masterCode, int mappingId, string user,
+        CancellationToken cancellationToken = default)
+    {
+        if (sourceDbId == destDbId)
+            return (0, "Source and destination must be different databases.");
+        if (!string.Equals(entityCode, EntityCodes.Account, StringComparison.OrdinalIgnoreCase))
+            return (0, "Delete is only supported for accounts.");
+        if (mappingId <= 0)
+            return (0, "Mapping id is required for account delete.");
+
+        var source = await _registry.GetAsync(sourceDbId, cancellationToken).ConfigureAwait(false);
+        var dest = await _registry.GetAsync(destDbId, cancellationToken).ConfigureAwait(false);
+        var dbCheck = _validation.ValidateDatabase(source, "Source");
+        dbCheck.Errors.AddRange(_validation.ValidateDatabase(dest, "Destination").Errors);
+        if (dbCheck.Errors.Count > 0)
+            return (0, string.Join(" ", dbCheck.Errors));
+
+        var code = (masterCode ?? "").Trim();
+        if (code.Length == 0)
+            return (0, "Account code is required for delete.");
+
+        var payloadObj = new MasterDeletePayload { Code = code, MappingId = mappingId };
+        var payload = JsonSerializer.Serialize(payloadObj);
+        var idem = IdempotencyKey.ForMasterData(
+            source!.DbCode, dest!.DbCode, entityCode, EntityCodes.Account, code,
+            IdempotencyKey.ContentHash(payload + "|DEL"));
+
+        var jobId = await _queue.EnqueueAsync(new SyncJob
+        {
+            JobKind = "MASTER_DELETE",
+            SourceDbId = sourceDbId,
+            DestDbId = destDbId,
+            EntityCode = entityCode,
+            PayloadJson = payload,
+            IdemKey = idem,
+            CreatedBy = user
+        }, cancellationToken).ConfigureAwait(false);
+
+        await _audit.WriteAsync(new AuditEntry
+        {
+            UserEmail = user,
+            Action = "ENQUEUE_MASTER_DELETE",
+            DbId = sourceDbId,
+            Entity = entityCode,
+            RecordId = code,
+            Result = "QUEUED",
+            RequestId = jobId.ToString(CultureInfo.InvariantCulture)
+        }, cancellationToken).ConfigureAwait(false);
+
+        return (jobId, $"Queued delete {code} on {dest.DisplayName} (job #{jobId}).");
     }
 
 
@@ -713,6 +838,14 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
 
                 await ProcessMaster(job, cancellationToken).ConfigureAwait(false);
 
+            else if (job.JobKind is "MASTER_UPDATE")
+
+                await ProcessMasterUpdate(job, cancellationToken).ConfigureAwait(false);
+
+            else if (job.JobKind is "MASTER_DELETE")
+
+                await ProcessMasterDelete(job, cancellationToken).ConfigureAwait(false);
+
             else if (job.JobKind is "TXN" or "TXN_DRYRUN")
 
                 await ProcessTxnPlaceholder(job, cancellationToken).ConfigureAwait(false);
@@ -839,136 +972,92 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
 
         }
 
-        else if (string.Equals(destEntity, EntityCodes.Item, StringComparison.OrdinalIgnoreCase)
-
+        else if ((string.Equals(destEntity, EntityCodes.Item, StringComparison.OrdinalIgnoreCase)
+                  || string.Equals(destEntity, EntityCodes.Account, StringComparison.OrdinalIgnoreCase)
+                  || PartnerSyncRules.IsPartyEntity(destEntity))
                  && await _read.MasterExistsByCodeAsync(dest!, destEntity, record.Code, cancellationToken).ConfigureAwait(false))
-
         {
-
             var enriched = await LoadSourceRecordAsync(src!, sourceEntity, record.Code, cancellationToken).ConfigureAwait(false) ?? record;
-
             if (!job.DryRun)
-
             {
-
                 await _mapping.ConfirmPairAsync(new EntityMapping
-
                 {
-
                     MasterDbId = job.SourceDbId,
-
                     SubDbId = job.DestDbId,
-
                     EntityCode = sourceEntity,
-
                     SrcEntityCode = sourceEntity,
-
                     DstEntityCode = destEntity,
-
                     MasterCode = enriched.Code,
-
                     SubCode = enriched.Code,
-
                     MasterDesc = enriched.Description,
-
                     SubDesc = enriched.Description
-
                 }, job.CreatedBy,
-
                     writeReverse: false,
-
                     originJobId: job.JobId,
-
                     cancellationToken).ConfigureAwait(false);
-
+            }
+            write = new WriteResult
+            {
+                Success = true,
+                DocNo = enriched.Code,
+                Message = $"Destination already has this {destEntity.ToLowerInvariant()} code. Mapping linked; no duplicate created."
+            };
+        }
+        else
+        {
+            var enriched = await LoadSourceRecordAsync(src!, sourceEntity, record.Code, cancellationToken).ConfigureAwait(false) ?? record;
+            string? prereqDiagnosis = null;
+            if (string.Equals(destEntity, EntityCodes.Item, StringComparison.OrdinalIgnoreCase) && !job.DryRun)
+            {
+                var prereq = await _itemPrereqs.EnsureAsync(dest!, src, enriched, cancellationToken).ConfigureAwait(false);
+                if (!prereq.Ok)
+                {
+                    await _queue.CompleteAsync(job.JobId, JobStatuses.Failed, prereq.Message, cancellationToken).ConfigureAwait(false);
+                    return;
+                }
+                prereqDiagnosis = prereq.LastApiDiagnosis;
             }
 
-            write = new WriteResult
-
+            if (string.Equals(destEntity, EntityCodes.Account, StringComparison.OrdinalIgnoreCase) && !job.DryRun)
             {
-
-                Success = true,
-
-                DocNo = enriched.Code,
-
-                Message = "Destination already has this item code. Mapping linked; no duplicate created."
-
-            };
-
-        }
-
-        else
-
-        {
-
-            var enriched = await LoadSourceRecordAsync(src!, sourceEntity, record.Code, cancellationToken).ConfigureAwait(false) ?? record;
-
-            string? prereqDiagnosis = null;
-
-            if (string.Equals(destEntity, EntityCodes.Item, StringComparison.OrdinalIgnoreCase) && !job.DryRun)
-
-            {
-
-                var prereq = await _itemPrereqs.EnsureAsync(dest!, src, enriched, cancellationToken).ConfigureAwait(false);
-
-                if (!prereq.Ok)
-
+                var ready = await EnsureAccountParentOnDestAsync(
+                    src!, dest!, enriched, writer, stamp, job, cancellationToken).ConfigureAwait(false);
+                if (!ready.Ok)
                 {
-
-                    await _queue.CompleteAsync(job.JobId, JobStatuses.Failed, prereq.Message, cancellationToken).ConfigureAwait(false);
-
+                    await _queue.CompleteAsync(job.JobId, JobStatuses.Failed, ready.Message, cancellationToken).ConfigureAwait(false);
                     return;
-
                 }
-
-                prereqDiagnosis = prereq.LastApiDiagnosis;
-
+                enriched = ready.Record;
+            }
+            else if (string.Equals(destEntity, EntityCodes.Account, StringComparison.OrdinalIgnoreCase) && job.DryRun)
+            {
+                enriched.Fields[GlAccountMapper.FieldDestParent] = "0";
             }
 
             write = await writer.CreateMasterAsync(dest!, destEntity, enriched, stamp, src, sourceEntity, cancellationToken).ConfigureAwait(false);
-
             if (!write.Success && !string.IsNullOrWhiteSpace(prereqDiagnosis))
-
                 write = new WriteResult { Success = false, Message = write.Message + " " + prereqDiagnosis };
 
             if (write.Success && !job.DryRun)
-
             {
-
                 var subCode = string.IsNullOrWhiteSpace(write.DocNo) ? enriched.Code : write.DocNo;
-
                 await _mapping.ConfirmPairAsync(new EntityMapping
-
                 {
-
                     MasterDbId = job.SourceDbId,
-
                     SubDbId = job.DestDbId,
-
                     EntityCode = sourceEntity,
-
                     SrcEntityCode = sourceEntity,
-
                     DstEntityCode = destEntity,
-
                     MasterCode = enriched.Code,
-
                     SubCode = subCode,
-
+                    SubKey = write.DocKey ?? "",
                     MasterDesc = enriched.Description,
-
                     SubDesc = enriched.Description
-
                 }, job.CreatedBy,
-
                     writeReverse: PartnerSyncRules.IsReciprocalPartySync(src, dest, sourceEntity),
-
                     originJobId: job.JobId,
-
                     cancellationToken).ConfigureAwait(false);
-
             }
-
         }
 
 
@@ -1013,6 +1102,88 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
 
 
 
+    private async Task<(bool Ok, string Message, MasterRecord Record)> EnsureAccountParentOnDestAsync(
+        RegisteredDatabase source,
+        RegisteredDatabase dest,
+        MasterRecord record,
+        ISqlAccountWriteAdapter writer,
+        string stamp,
+        SyncJob job,
+        CancellationToken cancellationToken,
+        int depth = 0)
+    {
+        if (depth > 20)
+            return (false, $"Account parent chain too deep for '{record.Code}'.", record);
+
+        var parentCode = GlAccountMapper.ParentCodeOf(record);
+        if (parentCode.Length == 0)
+        {
+            record.Fields[GlAccountMapper.FieldDestParent] = "0";
+            return (true, "", record);
+        }
+
+        var destChart = await _read.GetGlChartAsync(dest, cancellationToken).ConfigureAwait(false);
+        var destParent = GlAccountMapper.ResolveDestParentDocKey(parentCode, destChart);
+        if (destParent > 0)
+        {
+            record.Fields[GlAccountMapper.FieldDestParent] = destParent.ToString(CultureInfo.InvariantCulture);
+            return (true, "", record);
+        }
+
+        if (await _read.MasterExistsByCodeAsync(dest, EntityCodes.Account, parentCode, cancellationToken).ConfigureAwait(false))
+        {
+            destChart = await _read.GetGlChartAsync(dest, cancellationToken).ConfigureAwait(false);
+            destParent = GlAccountMapper.ResolveDestParentDocKey(parentCode, destChart);
+            record.Fields[GlAccountMapper.FieldDestParent] = destParent.ToString(CultureInfo.InvariantCulture);
+            if (destParent <= 0)
+                return (false, $"Parent account '{parentCode}' exists on destination but dockey could not be resolved.", record);
+            return (true, "", record);
+        }
+
+        var parentRecord = await LoadSourceRecordAsync(source, EntityCodes.Account, parentCode, cancellationToken)
+            .ConfigureAwait(false);
+        if (parentRecord is null)
+            return (false, $"Parent account '{parentCode}' for '{record.Code}' was not found on source.", record);
+
+        var parentReady = await EnsureAccountParentOnDestAsync(
+            source, dest, parentRecord, writer, stamp, job, cancellationToken, depth + 1).ConfigureAwait(false);
+        if (!parentReady.Ok)
+            return parentReady;
+
+        var parentWrite = await writer.CreateMasterAsync(
+            dest, EntityCodes.Account, parentReady.Record, stamp, source, EntityCodes.Account, cancellationToken)
+            .ConfigureAwait(false);
+        if (!parentWrite.Success)
+            return (false, $"Could not create parent '{parentCode}': {parentWrite.Message}", record);
+
+        if (!job.DryRun)
+        {
+            await _mapping.ConfirmPairAsync(new EntityMapping
+            {
+                MasterDbId = job.SourceDbId,
+                SubDbId = job.DestDbId,
+                EntityCode = EntityCodes.Account,
+                SrcEntityCode = EntityCodes.Account,
+                DstEntityCode = EntityCodes.Account,
+                MasterCode = parentReady.Record.Code,
+                SubCode = parentReady.Record.Code,
+                MasterDesc = parentReady.Record.Description,
+                SubDesc = parentReady.Record.Description
+            }, job.CreatedBy,
+                writeReverse: false,
+                originJobId: job.JobId,
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        destChart = await _read.GetGlChartAsync(dest, cancellationToken).ConfigureAwait(false);
+        destParent = GlAccountMapper.ResolveDestParentDocKey(parentCode, destChart);
+        if (destParent <= 0)
+            return (false, $"Parent '{parentCode}' was created but dockey is not visible yet on destination.", record);
+
+        record.Fields[GlAccountMapper.FieldDestParent] = destParent.ToString(CultureInfo.InvariantCulture);
+        return (true, "", record);
+    }
+
     private async Task<MasterRecord?> LoadSourceRecordAsync(
 
         RegisteredDatabase source, string entityCode, string code, CancellationToken cancellationToken)
@@ -1020,15 +1191,20 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
     {
 
         if (string.Equals(entityCode, EntityCodes.Item, StringComparison.OrdinalIgnoreCase))
-
             return await _read.GetItemDetailAsync(source, code, cancellationToken).ConfigureAwait(false)
-
                    ?? await _read.FindAsync(source, entityCode, code, cancellationToken).ConfigureAwait(false);
 
+        if (string.Equals(entityCode, EntityCodes.Account, StringComparison.OrdinalIgnoreCase))
+        {
+            var chart = await _read.GetGlChartAsync(source, cancellationToken).ConfigureAwait(false);
+            var byKey = chart.ToDictionary(a => a.DocKey);
+            var row = chart.FirstOrDefault(a =>
+                string.Equals((a.Code ?? "").Trim(), (code ?? "").Trim(), StringComparison.OrdinalIgnoreCase));
+            return row is null ? null : GlAccountMapper.ToMasterRecord(row, byKey);
+        }
+
         if (PartnerSyncRules.IsPartyEntity(entityCode))
-
             return await _read.GetPartyDetailAsync(source, entityCode, code, cancellationToken).ConfigureAwait(false)
-
                    ?? await _read.FindAsync(source, entityCode, code, cancellationToken).ConfigureAwait(false);
 
         return await _read.FindAsync(source, entityCode, code, cancellationToken).ConfigureAwait(false);
@@ -1074,6 +1250,118 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
     private Task ProcessTxnPlaceholder(SyncJob job, CancellationToken cancellationToken) =>
 
         _queue.CompleteAsync(job.JobId, JobStatuses.Failed, "Transaction jobs are processed by the transaction engine.", cancellationToken);
+
+    private async Task ProcessMasterUpdate(SyncJob job, CancellationToken cancellationToken)
+    {
+        var payload = ParsePayload(job.PayloadJson);
+        var record = payload.Record;
+        var dest = await _registry.GetAsync(job.DestDbId, cancellationToken).ConfigureAwait(false);
+        var v = _validation.ValidateDatabase(dest, "Destination");
+        if (!v.Ok)
+        {
+            await _queue.CompleteAsync(job.JobId, JobStatuses.Failed, string.Join(" ", v.Errors), cancellationToken)
+                .ConfigureAwait(false);
+            return;
+        }
+
+        var destChart = await _read.GetGlChartAsync(dest!, cancellationToken).ConfigureAwait(false);
+        var destRow = destChart.FirstOrDefault(a =>
+            string.Equals((a.Code ?? "").Trim(), (record.Code ?? "").Trim(), StringComparison.OrdinalIgnoreCase));
+        if (destRow is null)
+        {
+            await _queue.CompleteAsync(job.JobId, JobStatuses.Failed,
+                $"Account {record.Code} is missing on destination; create pass will handle it.",
+                cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        var parentCode = GlAccountMapper.ParentCodeOf(record);
+        var destParent = GlAccountMapper.ResolveDestParentDocKey(parentCode, destChart);
+        var stamp = $"JOB-{job.JobId}";
+        var write = await _write.UpdateMasterAsync(
+            dest!, EntityCodes.Account, record, stamp, destRow.DocKey, destParent, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!write.Success)
+        {
+            await _queue.CompleteAsync(job.JobId, JobStatuses.Retrying, write.Message, cancellationToken)
+                .ConfigureAwait(false);
+            return;
+        }
+
+        var mapping = await _mapping.FindBySourceAsync(
+            job.SourceDbId, job.DestDbId, EntityCodes.Account, record.Code, cancellationToken)
+            .ConfigureAwait(false);
+        if (mapping is not null)
+            await _mapping.TouchLastSyncAtAsync(mapping.MappingId, cancellationToken).ConfigureAwait(false);
+
+        await _registry.MarkSyncOkAsync(job.DestDbId, cancellationToken).ConfigureAwait(false);
+        await _queue.CompleteAsync(job.JobId, JobStatuses.Completed, write.Message, cancellationToken)
+            .ConfigureAwait(false);
+        await _audit.WriteAsync(new AuditEntry
+        {
+            UserEmail = job.CreatedBy,
+            Action = "MASTER_UPDATE_DONE",
+            DbId = job.DestDbId,
+            Entity = EntityCodes.Account,
+            RecordId = record.Code,
+            Result = "SUCCESS"
+        }, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task ProcessMasterDelete(SyncJob job, CancellationToken cancellationToken)
+    {
+        MasterDeletePayload? del;
+        try
+        {
+            del = JsonSerializer.Deserialize<MasterDeletePayload>(job.PayloadJson);
+        }
+        catch
+        {
+            del = null;
+        }
+
+        var code = (del?.Code ?? "").Trim();
+        var mappingId = del?.MappingId ?? 0;
+        if (code.Length == 0 || mappingId <= 0)
+        {
+            await _queue.CompleteAsync(job.JobId, JobStatuses.Failed, "Delete payload is invalid.", cancellationToken)
+                .ConfigureAwait(false);
+            return;
+        }
+
+        var dest = await _registry.GetAsync(job.DestDbId, cancellationToken).ConfigureAwait(false);
+        var v = _validation.ValidateDatabase(dest, "Destination");
+        if (!v.Ok)
+        {
+            await _queue.CompleteAsync(job.JobId, JobStatuses.Failed, string.Join(" ", v.Errors), cancellationToken)
+                .ConfigureAwait(false);
+            return;
+        }
+
+        var write = await _write.DeleteMasterAsync(dest!, EntityCodes.Account, code, cancellationToken)
+            .ConfigureAwait(false);
+        if (!write.Success)
+        {
+            await _queue.CompleteAsync(job.JobId, JobStatuses.Failed, write.Message, cancellationToken)
+                .ConfigureAwait(false);
+            return;
+        }
+
+        await _mapping.DisableAsync(mappingId, job.CreatedBy, cancellationToken).ConfigureAwait(false);
+        await _registry.MarkSyncOkAsync(job.DestDbId, cancellationToken).ConfigureAwait(false);
+        await _queue.CompleteAsync(job.JobId, JobStatuses.Completed, write.Message, cancellationToken)
+            .ConfigureAwait(false);
+        await _audit.WriteAsync(new AuditEntry
+        {
+            UserEmail = job.CreatedBy,
+            Action = "MASTER_DELETE_DONE",
+            DbId = job.DestDbId,
+            Entity = EntityCodes.Account,
+            RecordId = code,
+            Result = "SUCCESS"
+        }, cancellationToken).ConfigureAwait(false);
+    }
 
 
 

@@ -2,6 +2,11 @@ SQL Accounting API samples (from Postman / chat).
 Used by SqlAccountSync to match GET vs POST shapes.
 
 01-master-data
+  account
+    GET-account-list.json                   GET /account/*          (SQL Acc API — often incomplete)
+    POST-account-create-template.json       POST /account           (create GL account)
+    NOTE: SqlAccountSync GET /api/accounts reads full chart from Firebird GL_ACC by default;
+          pass ?source=api to proxy SQL Acc instead.
   customer
     GET-customer-list.json                  GET /customer?offset=&limit=
     POST-customer-create-template.json      POST /customer           (works on sub API)
@@ -11,6 +16,9 @@ Used by SqlAccountSync to match GET vs POST shapes.
   stockitem
     GET-stockitem-list.json                 GET /stockitem/*         (ITEM push)
     POST-stockitem-create-template.json     POST /stockitem          (ITEM create — tenant API may 500)
+  terms
+    GET-terms-list.json                     GET /terms/*             (credit term shape)
+    NOTE: Create Partners dropdown loads TERMS from Firebird (active rows); code is creditterm.
 
 02-documents  (Sub1 Customer Invoice -> Sub2 Purchase Invoice)
   customerinvoice

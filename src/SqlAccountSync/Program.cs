@@ -9,6 +9,7 @@ using SqlAccountSync.Helpers;
 using SqlAccountSync.Options;
 using SqlAccountSync.Services.Audit;
 using SqlAccountSync.Services.Auth;
+using SqlAccountSync.Services.Accounts;
 using SqlAccountSync.Services.Connections;
 using SqlAccountSync.Services.Databases;
 using SqlAccountSync.Services.Mapping;
@@ -116,7 +117,9 @@ builder.Services.AddScoped<IValidationService, ValidationService>();
 builder.Services.AddScoped<IJobQueue, JobQueue>();
 builder.Services.AddScoped<ISyncOrchestrator, SyncOrchestrator>();
 builder.Services.AddScoped<ITransactionEngine, TransactionEngine>();
+builder.Services.AddScoped<IAccountAutoPushService, AccountAutoPushService>();
 builder.Services.AddHostedService<SyncWorker>();
+builder.Services.AddHostedService<AccountAutoPushWorker>();
 
 var sessionHours = builder.Configuration.GetValue("Sync:SessionHours", 8);
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
@@ -140,6 +143,7 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy(PolicyNames.Viewer, p => p.RequireRole(AppRoles.Admin, AppRoles.Manager, AppRoles.Operator, AppRoles.Viewer));
 });
 
+builder.Services.AddControllers();
 var razorPages = builder.Services.AddRazorPages(options =>
 {
     options.Conventions.AuthorizeFolder("/");
@@ -177,6 +181,7 @@ app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
+app.MapControllers();
 app.MapRazorPages();
 
 try

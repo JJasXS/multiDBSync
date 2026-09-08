@@ -172,7 +172,10 @@ public class ItemDestCodeLinkTests
         public Task<List<MasterRecord>> GetWarehousesAsync(RegisteredDatabase db, CancellationToken cancellationToken = default) => Task.FromResult(new List<MasterRecord>());
         public Task<List<MasterRecord>> GetTaxCodesAsync(RegisteredDatabase db, CancellationToken cancellationToken = default) => Task.FromResult(new List<MasterRecord>());
         public Task<List<MasterRecord>> GetAccountsAsync(RegisteredDatabase db, CancellationToken cancellationToken = default) => Task.FromResult(new List<MasterRecord>());
+        public Task<List<SqlAccountSync.Services.Accounts.GlAccountRow>> GetGlChartAsync(RegisteredDatabase db, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new List<SqlAccountSync.Services.Accounts.GlAccountRow>());
         public Task<List<MasterRecord>> GetUomsAsync(RegisteredDatabase db, CancellationToken cancellationToken = default) => Task.FromResult(new List<MasterRecord>());
+        public Task<List<MasterRecord>> GetTermsAsync(RegisteredDatabase db, CancellationToken cancellationToken = default) => Task.FromResult(new List<MasterRecord>());
         public Task<MasterRecord?> GetPartyDetailAsync(RegisteredDatabase db, string entityCode, string code, CancellationToken cancellationToken = default) => Task.FromResult<MasterRecord?>(null);
         public Task<bool> PartyExistsByStampAsync(RegisteredDatabase db, string entityCode, string txnStamp, CancellationToken cancellationToken = default) => Task.FromResult(false);
         public Task<DocumentHeader?> GetDocumentAsync(RegisteredDatabase db, string docType, string docKeyOrNo, CancellationToken cancellationToken = default) => Task.FromResult<DocumentHeader?>(null);
@@ -190,6 +193,15 @@ public class ItemDestCodeLinkTests
             CreateMasterCallCount++;
             return Task.FromResult(new WriteResult { Success = true, DocNo = record.Code, Message = "Created." });
         }
+
+        public Task<WriteResult> UpdateMasterAsync(
+            RegisteredDatabase db, string targetEntityCode, MasterRecord record, string txnStamp,
+            int destDocKey, int destParentDocKey, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new WriteResult { Success = true, DocNo = record.Code, Message = "Updated." });
+
+        public Task<WriteResult> DeleteMasterAsync(
+            RegisteredDatabase db, string targetEntityCode, string code, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new WriteResult { Success = true, Message = "Deleted." });
 
         public Task<WriteResult> CreateDocumentAsync(RegisteredDatabase db, string apiPath, DocumentHeader document, string txnStamp, CancellationToken cancellationToken = default) =>
             Task.FromResult(new WriteResult { Success = true });

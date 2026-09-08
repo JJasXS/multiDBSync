@@ -100,13 +100,15 @@
                                 @foreach (var r in Model.Records)
                                 {
                                     var selected = Model.SelectedCodes.Contains(r.Code, StringComparer.OrdinalIgnoreCase);
+                                    var indent = r.Fields.TryGetValue("indent", out var ind) ? ind : "";
+                                    var desc = string.IsNullOrEmpty(indent) ? r.Description : indent + r.Description;
                                     <tr>
                                         <td class="col-check">
                                             <input type="checkbox" name="SelectedCodes" value="@r.Code" data-check-group="master-codes"
                                                    @(selected ? "checked" : null) />
                                         </td>
-                                        <td>@r.Code</td>
-                                        <td><span class="cell-truncate" title="@r.Description">@r.Description</span></td>
+                                        <td class="code-cell">@r.Code</td>
+                                        <td><span class="cell-truncate" title="@r.Description">@desc</span></td>
                                     </tr>
                                 }
                             }
@@ -182,6 +184,7 @@ else
                 <select asp-for="JobEntityCode">
                     <option value="CUSTOMER">CUSTOMER</option>
                     <option value="SUPPLIER">SUPPLIER</option>
+                    <option value="ACCOUNT">ACCOUNT</option>
                 </select>
             </div>
             <div><label>Code</label><input asp-for="MasterCode" /></div>

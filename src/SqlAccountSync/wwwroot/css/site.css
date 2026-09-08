@@ -221,7 +221,7 @@ code {
 .field-pair { display: grid; grid-template-columns: 1fr 110px; gap: 10px; }
 .field-pair.equal { grid-template-columns: 1fr 1fr; }
 
-/* Create Partners */
+/* Create Suppliers' Customers */
 .partner-create > .card:first-child > .card-head {
   justify-content: center;
 }
@@ -268,26 +268,30 @@ code {
 }
 .partner-create .address-stack {
   display: grid;
-  gap: 0;
-  border: 1px solid var(--ice-border);
-  border-radius: var(--ice-radius);
-  overflow: hidden;
-  background: var(--ice-surface-input);
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
 }
 .partner-create .address-stack input {
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
-  border-bottom: 1px solid var(--ice-border-soft);
+  width: 100%;
+  min-width: 0;
 }
-.partner-create .address-stack input:last-child { border-bottom: 0; }
-.partner-create .address-stack input:hover { border-color: transparent; border-bottom-color: var(--ice-border-soft); }
-.partner-create .address-stack input:last-child:hover { border-bottom-color: transparent; }
-.partner-create .address-stack input:focus {
-  position: relative;
-  z-index: 1;
-  box-shadow: inset 0 0 0 1px var(--ice-accent);
-  border-bottom-color: transparent;
+.partner-create .check-row {
+  display: grid;
+  gap: 4px;
+}
+.partner-create .check-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.partner-create .check-label input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+}
+.partner-create .field-hint.warn {
+  color: #b45309;
 }
 .partner-create .count-pill {
   font-size: 12px;
@@ -491,6 +495,206 @@ code {
   font-weight: 400;
   text-transform: none;
   letter-spacing: normal;
+}
+
+.accounts-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.accounts-card-head-copy {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.accounts-card-head-copy h3 {
+  margin-bottom: 0.35rem;
+}
+.accounts-search-field {
+  flex: 0 1 260px;
+  min-width: 180px;
+  margin-top: 0.15rem;
+}
+.accounts-search-field input[type="search"] {
+  width: 100%;
+}
+.accounts-status-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: var(--ice-text-muted);
+}
+.accounts-status-icon svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+.accounts-status-edit {
+  color: #3b6ea5;
+}
+.accounts-status-delete {
+  color: #b42318;
+}
+.accounts-icon-btn {
+  appearance: none;
+  background: transparent;
+  border: none;
+  padding: 2px;
+  margin: 0;
+  cursor: pointer;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+}
+.accounts-icon-btn:hover {
+  background: var(--ice-accent-soft);
+}
+.accounts-icon-btn.accounts-status-delete:hover {
+  background: var(--ice-danger-soft);
+}
+.accounts-icon-btn svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+.accounts-row-drift td {
+  background: rgba(59, 110, 165, 0.06);
+}
+.accounts-delete-form {
+  display: inline-flex;
+  margin: 0;
+}
+.push-panel-table .col-status {
+  width: 2.5rem;
+  text-align: center;
+  padding-left: 0.35rem;
+  padding-right: 0.35rem;
+}
+.push-panel-table .col-actions {
+  width: 4.5rem;
+  text-align: right;
+  white-space: nowrap;
+  padding-right: 0.5rem;
+}
+.accounts-row-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.15rem;
+}
+.accounts-pending-deletes {
+  margin-top: 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--ice-border-soft);
+  border-radius: var(--ice-radius);
+  background: var(--ice-surface-muted);
+}
+.accounts-pending-title {
+  margin: 0 0 0.25rem;
+  font-size: 14px;
+  font-weight: 600;
+}
+.accounts-pending-hint {
+  margin: 0 0 0.65rem;
+  font-size: 12px;
+}
+.accounts-pending-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.accounts-pending-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 13px;
+}
+.accounts-modal {
+  border: 1px solid var(--ice-border);
+  border-radius: var(--ice-radius);
+  padding: 0;
+  max-width: 520px;
+  width: calc(100% - 2rem);
+  background: var(--ice-surface);
+  color: var(--ice-text);
+  box-shadow: 0 16px 40px var(--ice-shadow);
+}
+.accounts-modal::backdrop {
+  background: var(--ice-overlay);
+}
+.accounts-modal-form {
+  display: flex;
+  flex-direction: column;
+}
+.accounts-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid var(--ice-border-soft);
+}
+.accounts-modal-head h3 {
+  margin: 0;
+}
+.accounts-modal-close {
+  appearance: none;
+  border: none;
+  background: transparent;
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--ice-text-muted);
+  padding: 0.15rem 0.4rem;
+}
+.accounts-modal-body {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.accounts-modal-body .field label {
+  display: block;
+  font-size: 12px;
+  color: var(--ice-text-muted);
+  margin-bottom: 0.25rem;
+}
+.accounts-modal-body .field input {
+  width: 100%;
+}
+.accounts-modal-body .field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+.accounts-modal-hint {
+  margin: 0;
+  font-size: 12px;
+}
+.accounts-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.85rem 1rem;
+  border-top: 1px solid var(--ice-border-soft);
+}
+.btn-ghost {
+  background: transparent;
+  border: 1px solid var(--ice-border);
+  color: var(--ice-text);
+}
+.btn-ghost:hover {
+  background: var(--ice-surface-muted);
 }
 .push-target-name { font-weight: 600; }
 .push-target-note {
@@ -1519,6 +1723,7 @@ input:focus, select:focus, textarea:focus {
   .txn-layout { grid-template-columns: 1fr; }
   .form-grid { grid-template-columns: 1fr; }
   .field-pair { grid-template-columns: 1fr; }
+  .partner-create .address-stack { grid-template-columns: 1fr; }
   .route-fields {
     grid-template-columns: 1fr;
     gap: 12px;

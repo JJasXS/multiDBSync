@@ -1,0 +1,57 @@
+@page "/accounts"
+@model SqlAccountSync.Pages.Accounts.IndexModel
+@{
+    ViewData["Title"] = "Master data";
+    var isPartners = Model.IsPartnersTab;
+}
+@section TopbarActions {
+    @if (Model.CanOperate && !isPartners)
+    {
+        <button class="btn" type="submit" form="accountsPushForm"
+                onclick="return confirm('Push selected accounts from master to the selected sub databases?');">
+            Push
+        </button>
+    }
+    @if (Model.CanOperate && isPartners)
+    {
+        <button class="btn" type="submit" form="createPartnerForm"
+                onclick="return confirm('Create this @Model.EntityTitle.ToLowerInvariant() on the selected database via SQL Accounting API?');">
+            Create @Model.EntityTitle.ToLowerInvariant()
+        </button>
+    }
+}
+
+@if (Model.FlashToast is not null)
+{
+    <partial name="_FlashToast" model="Model.FlashToast" />
+}
+
+<div class="card sync-page-card accounts-sync">
+    <div class="card-head manual-sync-head manual-sync-head--compact">
+        <div class="manual-sync-head-end">
+            <nav class="entity-tabs entity-tabs--head" role="tablist" aria-label="Master data">
+                <a class="@(!isPartners ? "active" : "")"
+                   asp-page="/Accounts/Index" asp-route-tab="accounts" asp-route-SourceDbId="@Model.SourceDbId"
+                   role="tab" aria-selected="@(!isPartners)">
+                    <span class="entity-tab-label">Accounts</span>
+                    <span class="entity-tab-desc">Chart of accounts</span>
+                </a>
+                <a class="@(isPartners ? "active" : "")"
+                   asp-page="/Accounts/Index" asp-route-tab="partners" asp-route-entityCode="@Model.EntityCode" asp-route-dbId="@Model.DbId"
+                   role="tab" aria-selected="@isPartners">
+                    <span class="entity-tab-label">Partners</span>
+                    <span class="entity-tab-desc">Create customer / supplier</span>
+                </a>
+            </nav>
+        </div>
+    </div>
+
+    @if (isPartners)
+    {
+        <partial name="_CreateBody" model="Model" />
+    }
+    else
+    {
+        <partial name="_AccountsBody" model="Model" />
+    }
+</div>

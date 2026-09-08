@@ -30,6 +30,20 @@ public sealed class SyncOptions
     public int SessionHours { get; set; } = 8;
     public int OtpMinutes { get; set; } = 10;
     public int WorkerPollSeconds { get; set; } = 5;
+    /// <summary>
+    /// How often to auto-push missing ACCOUNT codes from MASTER/BOTH to linked subs.
+    /// Set 0 to disable. Default 60 (one minute).
+    /// </summary>
+    public int AccountAutoPushSeconds { get; set; } = 60;
+    /// <summary>When true, auto-push also PUTs accounts whose syncable fields differ on the sub.</summary>
+    public bool AccountAutoUpdateEnabled { get; set; } = true;
+    /// <summary>
+    /// When true, auto-push DELETEs accounts on the sub that we previously created
+    /// (SYNC_MAPPING with SubKey set) and that no longer exist on master.
+    /// </summary>
+    public bool AccountAutoDeleteEnabled { get; set; } = true;
+    /// <summary>Max delete jobs enqueued per master→sub pair per cycle.</summary>
+    public int AccountAutoDeleteMaxPerCycle { get; set; } = 25;
     public int MaxAttempts { get; set; } = 5;
     public bool AllowProductionConnections { get; set; }
     public bool AllowCrossEnvironment { get; set; }

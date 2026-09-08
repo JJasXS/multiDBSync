@@ -1,0 +1,16 @@
+{
+  "data": [
+    {
+      "dockey": 3,
+      "parent": 1,
+      "code": "100-000",
+      "description": "EQUITY",
+      "description2": null,
+      "acctype": "CP",
+      "specialacctype": "  ",
+      "tax": null,
+      "cashflowtype": 0,
+      "sic": null
+    }
+  ]
+}

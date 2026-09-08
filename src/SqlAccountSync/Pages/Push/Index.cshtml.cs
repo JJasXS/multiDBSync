@@ -2,6 +2,7 @@ using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using SqlAccountSync.Helpers;
 using SqlAccountSync.Models;
+using SqlAccountSync.Services.Accounts;
 using SqlAccountSync.Services.Audit;
 using SqlAccountSync.Services.Databases;
 using SqlAccountSync.Services.Queue;
@@ -187,25 +188,7 @@ public class IndexModel : SyncPageModel
             return [];
 
         var links = await _registry.ListLinksAsync();
-        if (source.DbRole is "MASTER" or "BOTH")
-        {
-            var linkedSubIds = links
-                .Where(l => l.MasterDbId == sourceDbId && l.IsActive)
-                .Select(l => l.SubDbId)
-                .ToHashSet();
-            if (linkedSubIds.Count > 0)
-            {
-                return databases
-                    .Where(d => linkedSubIds.Contains(d.DbId))
-                    .OrderBy(d => d.DisplayName)
-                    .ToList();
-            }
-        }
-
-        return databases
-            .Where(d => d.DbId != sourceDbId && d.DbRole is "SUB" or "BOTH" or "MASTER")
-            .OrderBy(d => d.DisplayName)
-            .ToList();
+        return SyncTargetResolver.ResolveLinkedSubs(source, databases, links);
     }
 
     private Dictionary<int, string> BuildTargetHints(RegisteredDatabase? source, List<RegisteredDatabase> targets)
@@ -229,12 +212,23 @@ public class IndexModel : SyncPageModel
     private static string NormalizeEntity(string entity) =>
         PushableEntityCodes.Normalize(entity, EntityCodes.Customer);
 
-    private Task<List<MasterRecord>> LoadRecordsAsync(RegisteredDatabase db, string entity) =>
-        entity.ToUpperInvariant() switch
+    private async Task<List<MasterRecord>> LoadRecordsAsync(RegisteredDatabase db, string entity)
+    {
+        switch (entity.ToUpperInvariant())
         {
-            "ITEM" => _read.GetItemsAsync(db),
-            "CUSTOMER" => _read.GetCustomersAsync(db),
-            "SUPPLIER" => _read.GetSuppliersAsync(db),
-            _ => Task.FromResult(new List<MasterRecord>())
-        };
+            case "ITEM":
+                return await _read.GetItemsAsync(db);
+            case "CUSTOMER":
+                return await _read.GetCustomersAsync(db);
+            case "SUPPLIER":
+                return await _read.GetSuppliersAsync(db);
+            case "ACCOUNT":
+            {
+                var chart = await _read.GetGlChartAsync(db);
+                return GlAccountMapper.ToMasterRecords(chart);
+            }
+            default:
+                return [];
+        }
+    }
 }
