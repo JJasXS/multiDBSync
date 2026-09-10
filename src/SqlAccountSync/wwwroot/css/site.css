@@ -818,6 +818,15 @@ code {
 .accounts-modal::backdrop {
   background: var(--ice-overlay);
 }
+.app-confirm {
+  max-width: 420px;
+}
+.app-confirm-message {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ice-text);
+}
 .txn-qty-modal {
   max-width: 720px;
 }
@@ -1202,27 +1211,6 @@ code {
 }
 .route-field { min-width: 0; }
 .route-field label { display: block; margin-bottom: 6px; }
-.txn-type-select--confirmed {
-  color: var(--ice-success);
-  border-color: #8dceb0;
-  background: var(--ice-success-soft);
-  font-weight: 600;
-}
-.txn-type-select--confirmed:hover,
-.txn-type-select--confirmed:focus {
-  border-color: var(--ice-success);
-}
-/* Closed select may be green; options must not inherit that. */
-.txn-type-select--confirmed option,
-#txnType option {
-  color: var(--ice-text);
-  font-weight: 400;
-  background-color: var(--ice-surface);
-}
-option.txn-type-option--confirmed {
-  color: var(--ice-success);
-  font-weight: 600;
-}
 .route-arrow {
   color: var(--ice-heading);
   font-weight: 600;

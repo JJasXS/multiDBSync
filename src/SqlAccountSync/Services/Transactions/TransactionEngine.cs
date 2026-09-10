@@ -109,8 +109,17 @@ public sealed class TransactionEngine : ITransactionEngine
 
         var idem = IdempotencyKey.ForTransaction(srcDb!.DbCode, dstDb!.DbCode, txnTypeCode, type.Src, source.DocKey, source.DocNo);
         var existing = await _db.QuerySingleAsync("SELECT FIRST 1 * FROM SYNC_TXN WHERE IDEMKEY=@IDEMKEY", MapTxn, new { IDEMKEY = idem }, cancellationToken).ConfigureAwait(false);
+        var reopenedStale = false;
         if (existing is not null && existing.Status == JobStatuses.Completed)
-            return (existing.TxnPk, existing.TxnId, "This document was already synchronized. No duplicate will be created.");
+        {
+            if (await DestinationReallyExistsAsync(existing, cancellationToken).ConfigureAwait(false))
+                return (existing.TxnPk, existing.TxnId, "This document was already synchronized. No duplicate will be created.");
+
+            // Stale COMPLETED row (dest doc missing) — reopen so a real transfer can run.
+            await ClearDestinationAsync(existing.TxnPk, cancellationToken).ConfigureAwait(false);
+            existing = await _db.QuerySingleAsync("SELECT FIRST 1 * FROM SYNC_TXN WHERE TXNPK=@TXNPK", MapTxn, new { TXNPK = existing.TxnPk }, cancellationToken).ConfigureAwait(false);
+            reopenedStale = true;
+        }
 
         int txnPk;
         string txnId;
@@ -151,9 +160,16 @@ VALUES (@TXNPK, @TXNID, @TXNTYPECODE, @SOURCEDBID, @DESTDBID, @SRCDOCTYPE, @SRCD
             txnId = existing.TxnId;
         }
 
-        await AddEvent(txnPk, "Created", "SUCCESS", $"Queued from {source.DocType} {source.DocNo}", cancellationToken).ConfigureAwait(false);
+        await AddEvent(txnPk, "Created", "SUCCESS",
+            reopenedStale
+                ? $"Re-queued; previous COMPLETED dest was missing for {source.DocType} {source.DocNo}"
+                : $"Queued from {source.DocType} {source.DocNo}",
+            cancellationToken).ConfigureAwait(false);
         // IDEMKEY is VARCHAR(64); hash so "|EXEC"/ "|DRY" suffixes never truncate.
-        var jobIdem = IdempotencyKey.Hash(idem + (dryRun ? "|DRY" : "|EXEC"));
+        // Stale reopen must not reuse the old job IDEMKEY or Enqueue returns the prior COMPLETED job and never runs.
+        var jobIdem = reopenedStale
+            ? IdempotencyKey.Hash(idem + (dryRun ? "|DRY|" : "|EXEC|") + "REOPEN|" + Guid.NewGuid().ToString("N")[..8])
+            : IdempotencyKey.Hash(idem + (dryRun ? "|DRY" : "|EXEC"));
         await _queue.EnqueueAsync(new SyncJob
         {
             JobKind = dryRun ? "TXN_DRYRUN" : "TXN",
@@ -183,7 +199,11 @@ VALUES (@TXNPK, @TXNID, @TXNTYPECODE, @SOURCEDBID, @DESTDBID, @SRCDOCTYPE, @SRCD
             Result = "QUEUED",
             RequestId = txnPk.ToString(CultureInfo.InvariantCulture)
         }, cancellationToken).ConfigureAwait(false);
-        return (txnPk, txnId, dryRun ? "Dry-run queued. The destination will not be modified." : "Transaction queued for execution.");
+        return (txnPk, txnId, dryRun
+            ? "Dry-run queued. The destination will not be modified."
+            : reopenedStale
+                ? "Previous sync record was stale (destination missing). Transaction re-queued."
+                : "Transaction queued for execution.");
     }
 
     public async Task<DryRunResult> DryRunAsync(
@@ -340,7 +360,7 @@ VALUES (@TXNPK, @TXNID, @TXNTYPECODE, @SOURCEDBID, @DESTDBID, @SRCDOCTYPE, @SRCD
             if (!job.DryRun)
             {
                 await _db.ExecuteAsync(@"
-UPDATE SYNC_TXN SET STATUS='COMPLETED', DSTDOCKEY=@DSTDOCKEY, DSTDOCNO=@DSTDOCNO, COMPLETEDAT=CURRENT_TIMESTAMP, UPDATEDAT=CURRENT_TIMESTAMP
+UPDATE SYNC_TXN SET STATUS='COMPLETED', DSTDOCKEY=@DSTDOCKEY, DSTDOCNO=@DSTDOCNO, ERRORMESSAGE=NULL, COMPLETEDAT=CURRENT_TIMESTAMP, UPDATEDAT=CURRENT_TIMESTAMP
 WHERE TXNPK=@TXNPK",
                     new { DSTDOCKEY = write.DocKey, DSTDOCNO = write.DocNo, TXNPK = txn.TxnPk }, cancellationToken).ConfigureAwait(false);
                 await _registry.MarkSyncOkAsync(txn.DestDbId, cancellationToken).ConfigureAwait(false);
@@ -376,8 +396,6 @@ WHERE TXNPK=@TXNPK",
         var txn = await GetAsync(txnPk, cancellationToken).ConfigureAwait(false);
         if (txn is null)
             return;
-        if (txn.Status is JobStatuses.Completed)
-            return;
 
         var reconciled = await ReconcileAsync(txn, cancellationToken).ConfigureAwait(false);
         if (reconciled.DestinationExists)
@@ -386,6 +404,9 @@ WHERE TXNPK=@TXNPK",
             await _audit.WriteAsync(new AuditEntry { UserEmail = user, Action = "TXN_RETRY_REPAIRED", RecordId = txn.TxnId, Result = "SUCCESS" }, cancellationToken);
             return;
         }
+
+        if (txn.Status is JobStatuses.Completed)
+            await ClearDestinationAsync(txnPk, cancellationToken).ConfigureAwait(false);
 
         var types = await ListTypesAsync(cancellationToken).ConfigureAwait(false);
         var type = types.FirstOrDefault(t => t.Code == txn.TxnTypeCode);
@@ -445,12 +466,18 @@ ORDER BY T.TXNPK DESC", MapTxn, cancellationToken: cancellationToken);
 
     private async Task<ReconcileResult> ReconcileAsync(SyncTransaction txn, CancellationToken cancellationToken)
     {
-        if (!string.IsNullOrWhiteSpace(txn.DstDocKey))
-            return new ReconcileResult { DestinationExists = true, DocKey = txn.DstDocKey, DocNo = txn.DstDocNo, Source = "SYNC_TXN" };
-
         var dstDb = await _registry.GetAsync(txn.DestDbId, cancellationToken).ConfigureAwait(false);
         if (dstDb is null)
             return new ReconcileResult();
+
+        // Never trust SYNC_TXN dest keys alone — a failed/stale COMPLETED row can point at a missing doc.
+        if (!string.IsNullOrWhiteSpace(txn.DstDocNo) || !string.IsNullOrWhiteSpace(txn.DstDocKey))
+        {
+            var key = string.IsNullOrWhiteSpace(txn.DstDocNo) ? txn.DstDocKey : txn.DstDocNo;
+            var found = await _read.GetDocumentAsync(dstDb, txn.DstDocType, key!, cancellationToken).ConfigureAwait(false);
+            if (found is not null)
+                return new ReconcileResult { DestinationExists = true, DocKey = found.DocKey, DocNo = found.DocNo, Source = "FIREBIRD" };
+        }
 
         var stamped = await _read.FindByTxnStampAsync(dstDb, txn.TxnId, cancellationToken).ConfigureAwait(false);
         if (stamped.DestinationExists)
@@ -459,10 +486,39 @@ ORDER BY T.TXNPK DESC", MapTxn, cancellationToken: cancellationToken);
         return await _read.FindTransferAsync(dstDb, txn.SrcDocType, txn.SrcDocKey, cancellationToken).ConfigureAwait(false);
     }
 
+    private async Task ClearDestinationAsync(int txnPk, CancellationToken cancellationToken)
+    {
+        await _db.ExecuteAsync(@"
+UPDATE SYNC_TXN SET STATUS='PENDING', DSTDOCKEY=NULL, DSTDOCNO=NULL, ERRORMESSAGE=NULL,
+ COMPLETEDAT=NULL, UPDATEDAT=CURRENT_TIMESTAMP
+WHERE TXNPK=@TXNPK",
+            new { TXNPK = txnPk }, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<bool> DestinationReallyExistsAsync(SyncTransaction txn, CancellationToken cancellationToken)
+    {
+        // For "already synchronized" short-circuit, only trust a real dest doc / txn stamp —
+        // not ST_XTRANS FindTransfer (can false-positive across document types).
+        var dstDb = await _registry.GetAsync(txn.DestDbId, cancellationToken).ConfigureAwait(false);
+        if (dstDb is null)
+            return false;
+
+        if (!string.IsNullOrWhiteSpace(txn.DstDocNo) || !string.IsNullOrWhiteSpace(txn.DstDocKey))
+        {
+            var key = string.IsNullOrWhiteSpace(txn.DstDocNo) ? txn.DstDocKey : txn.DstDocNo;
+            var found = await _read.GetDocumentAsync(dstDb, txn.DstDocType, key!, cancellationToken).ConfigureAwait(false);
+            if (found is not null)
+                return true;
+        }
+
+        var stamped = await _read.FindByTxnStampAsync(dstDb, txn.TxnId, cancellationToken).ConfigureAwait(false);
+        return stamped.DestinationExists;
+    }
+
     private async Task RepairCompleted(SyncTransaction txn, ReconcileResult found, CancellationToken cancellationToken)
     {
         await _db.ExecuteAsync(@"
-UPDATE SYNC_TXN SET STATUS='COMPLETED', DSTDOCKEY=@DSTDOCKEY, DSTDOCNO=@DSTDOCNO, COMPLETEDAT=CURRENT_TIMESTAMP, UPDATEDAT=CURRENT_TIMESTAMP
+UPDATE SYNC_TXN SET STATUS='COMPLETED', DSTDOCKEY=@DSTDOCKEY, DSTDOCNO=@DSTDOCNO, ERRORMESSAGE=NULL, COMPLETEDAT=CURRENT_TIMESTAMP, UPDATEDAT=CURRENT_TIMESTAMP
 WHERE TXNPK=@TXNPK",
             new { DSTDOCKEY = found.DocKey, DSTDOCNO = found.DocNo, TXNPK = txn.TxnPk }, cancellationToken).ConfigureAwait(false);
         await AddEvent(txn.TxnPk, "Reconciled", "SUCCESS", $"Destination already existed ({found.Source}). No duplicate created.", cancellationToken).ConfigureAwait(false);
@@ -490,9 +546,7 @@ WHERE TXNPK=@TXNPK",
             Currency = source.Currency,
             CurrencyRate = source.CurrencyRate,
             PartyName = source.PartyName,
-            Description = string.IsNullOrWhiteSpace(source.Description)
-                ? (requiresParty ? "Purchase" : "Stock transfer")
-                : source.Description,
+            Description = source.Description,
             Terms = source.Terms,
             Area = source.Area,
             Agent = source.Agent,
@@ -559,6 +613,7 @@ WHERE TXNPK=@TXNPK",
     private static string? DestPartyEntityFor(string dstDocType) => dstDocType.ToUpperInvariant() switch
     {
         "PI" or "GR" or "PR" => EntityCodes.Supplier,
+        "CN" or "DN" => EntityCodes.Customer,
         _ => null
     };
 

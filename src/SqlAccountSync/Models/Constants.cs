@@ -67,6 +67,7 @@ public static class TxnTypeCodes
     public const string DeliveryToGr = "DO_TO_GR";
     public const string StockTransfer = "ST_TO_ST";
     public const string SalesReturnToPr = "SR_TO_PR";
+    public const string CreditToPurchaseReturn = "CN_TO_PR";
     public const string CreditToDebit = "CN_TO_DN";
     public const string DebitToCredit = "DN_TO_CN";
 
@@ -74,5 +75,8 @@ public static class TxnTypeCodes
     public static bool IsImplemented(string? code) =>
         string.Equals(code, SalesToPurchase, StringComparison.OrdinalIgnoreCase)
         || string.Equals(code, DeliveryToGr, StringComparison.OrdinalIgnoreCase)
-        || string.Equals(code, StockTransfer, StringComparison.OrdinalIgnoreCase);
+        || string.Equals(code, StockTransfer, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(code, CreditToPurchaseReturn, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(code, CreditToDebit, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(code, DebitToCredit, StringComparison.OrdinalIgnoreCase);
 }

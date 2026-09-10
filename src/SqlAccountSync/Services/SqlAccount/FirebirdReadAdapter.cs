@@ -1506,7 +1506,7 @@ ORDER BY 1";
             "PI" or "PURCHASEINVOICE" => ("PH_IV", "PH_IVDTL", "PI"),
             "ST" or "STOCKTRANSFER" => ("ST_XF", "ST_XFDTL", "ST"),
             "SR" or "SALESRETURN" => ("SL_SR", "SL_SRDTL", "SR"),
-            "PR" or "PURCHASERETURN" => ("PH_PR", "PH_PRDTL", "PR"),
+            "PR" or "PURCHASERETURN" => ("PH_SC", "PH_SCDTL", "PR"),
             "CN" or "CREDITNOTE" => ("SL_CN", "SL_CNDTL", "CN"),
             _ => (null, null, docType)
         };
@@ -1515,24 +1515,59 @@ ORDER BY 1";
         FbConnection conn, FbTransaction tx, string docType, CancellationToken ct)
     {
         var resolved = ResolveDocTables(docType);
-        if (!IsStockTransferType(docType))
-            return resolved;
+        if (IsStockTransferType(docType))
+        {
+            var header = await FirstExistingConn(conn, tx, ["ST_XF", "ST_TRFR"], ct).ConfigureAwait(false);
+            if (header is null)
+                return (null, null, "ST");
+            var detail = header == "ST_XF" ? "ST_XFDTL" : "ST_TRFRDTL";
+            if (!await TableExistsConn(conn, tx, detail, ct).ConfigureAwait(false))
+                detail = header == "ST_XF" ? "ST_XF_DTL" : "ST_TRFR_DTL";
+            if (!await TableExistsConn(conn, tx, detail, ct).ConfigureAwait(false))
+                detail = null;
+            return (header, detail, "ST");
+        }
 
-        var header = await FirstExistingConn(conn, tx, ["ST_XF", "ST_TRFR"], ct).ConfigureAwait(false);
-        if (header is null)
-            return (null, null, "ST");
+        if (IsPurchaseReturnType(docType))
+        {
+            var header = await FirstExistingConn(conn, tx, ["PH_SC", "PH_PR"], ct).ConfigureAwait(false);
+            if (header is null)
+                return (null, null, "PR");
+            var detail = header == "PH_SC" ? "PH_SCDTL" : "PH_PRDTL";
+            if (!await TableExistsConn(conn, tx, detail, ct).ConfigureAwait(false))
+                detail = null;
+            return (header, detail, "PR");
+        }
 
-        var detail = header == "ST_XF" ? "ST_XFDTL" : "ST_TRFRDTL";
-        if (!await TableExistsConn(conn, tx, detail, ct).ConfigureAwait(false))
-            detail = header == "ST_XF" ? "ST_XF_DTL" : "ST_TRFR_DTL";
-        if (!await TableExistsConn(conn, tx, detail, ct).ConfigureAwait(false))
-            detail = null;
-        return (header, detail, "ST");
+        if (IsPurchaseInvoiceType(docType))
+        {
+            var header = await FirstExistingConn(conn, tx, ["PH_IV", "PH_PI"], ct).ConfigureAwait(false);
+            if (header is null)
+                return (null, null, "PI");
+            var detail = header == "PH_IV" ? "PH_IVDTL" : "PH_PIDTL";
+            if (!await TableExistsConn(conn, tx, detail, ct).ConfigureAwait(false))
+                detail = null;
+            return (header, detail, "PI");
+        }
+
+        return resolved;
     }
 
     private static bool IsStockTransferType(string docType)
     {
         var t = docType.Trim().ToUpperInvariant();
         return t is "ST" or "STOCKTRANSFER";
+    }
+
+    private static bool IsPurchaseReturnType(string docType)
+    {
+        var t = docType.Trim().ToUpperInvariant();
+        return t is "PR" or "PURCHASERETURN";
+    }
+
+    private static bool IsPurchaseInvoiceType(string docType)
+    {
+        var t = docType.Trim().ToUpperInvariant();
+        return t is "PI" or "PURCHASEINVOICE";
     }
 }

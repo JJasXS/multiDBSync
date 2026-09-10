@@ -10,14 +10,18 @@
     @if (Model.CanOperate && !isPartners)
     {
         <button class="btn" type="submit" form="accountsPushForm"
-                onclick="return confirm('Push selected accounts from master to the selected sub databases?');">
+                data-confirm="Push selected accounts from master to the selected sub databases?"
+                data-confirm-title="Confirm push"
+                data-confirm-ok="Push">
             Push
         </button>
     }
     @if (Model.CanOperate && isPartners)
     {
         <button class="btn" type="submit" form="createPartnerForm"
-                onclick="return confirm('Create this @Model.EntityTitle.ToLowerInvariant() on the selected database via SQL Accounting API?');">
+                data-confirm="Create this @Model.EntityTitle.ToLowerInvariant() on the selected database via SQL Accounting API?"
+                data-confirm-title="Confirm create"
+                data-confirm-ok="Create">
             Create @Model.EntityTitle.ToLowerInvariant()
         </button>
     }

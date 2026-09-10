@@ -19,6 +19,7 @@ public static class SyncDisplayNames
         ["DO_TO_GR"] = "Delivery → Goods received",
         ["ST_TO_ST"] = "Stock transfer",
         ["SR_TO_PR"] = "Sales return → Purchase return",
+        ["CN_TO_PR"] = "Credit note → Purchase return",
         ["CN_TO_DN"] = "Credit note → Debit note",
         ["DN_TO_CN"] = "Debit note → Credit note",
     };

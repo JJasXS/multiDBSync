@@ -15,7 +15,9 @@
         else
         {
             <button class="btn" type="submit" form="txnTransferForm" asp-page-handler="Execute"
-                    onclick="return confirm('Create destination documents for the selected rows and databases?');">Transfer</button>
+                    data-confirm="Create destination documents for the selected rows and databases?"
+                    data-confirm-title="Confirm transfer"
+                    data-confirm-ok="Transfer">Transfer</button>
         }
     }
 }
@@ -42,13 +44,10 @@
                     <span class="route-arrow push-route-arrow" aria-hidden="true">→</span>
                     <div class="route-field">
                         <label for="txnType">Type</label>
-                        <select id="txnType" name="TxnType" class="@(TxnTypeCodes.IsImplemented(Model.TxnType) ? "txn-type-select--confirmed" : null)"
-                                onchange="this.form.submit()">
+                        <select id="txnType" name="TxnType" onchange="this.form.submit()">
                             @foreach (var t in Model.Types)
                             {
-                                var confirmed = TxnTypeCodes.IsImplemented(t.Code);
                                 <option value="@t.Code"
-                                        class="@(confirmed ? "txn-type-option--confirmed" : null)"
                                         selected="@(t.Code == Model.TxnType)">@SyncDisplayNames.TxnType(t.Code, t.Name)</option>
                             }
                         </select>

@@ -35,3 +35,9 @@ Used by SqlAccountSync to match GET vs POST shapes.
     POST-goodsreceived-create-template.json POST /goodsreceived      (DO->GR create)
   stocktransfer
     POST-stocktransfer-create-template.json POST /stocktransfer      (ST->ST create; fromlocation/tolocation)
+  salesdebitnote
+    POST-salesdebitnote-create-template.json POST /salesdebitnote    (CN->DN create)
+  salescreditnote
+    POST-salescreditnote-create-template.json POST /salescreditnote  (DN->CN create)
+  purchasereturned
+    POST-purchasereturned-create-template.json POST /purchasereturned (CN->PR create)

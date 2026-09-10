@@ -11,13 +11,17 @@
     @if (!isJobs && Model.CanOperate)
     {
         <button class="btn" type="submit" form="pushForm"
-                onclick="return confirm('Push selected records to the selected target databases?');">Push</button>
+                data-confirm="Push selected records to the selected target databases?"
+                data-confirm-title="Confirm push"
+                data-confirm-ok="Push">Push</button>
     }
     @if (isJobs && Model.CanOperate)
     {
         <button class="btn secondary" type="submit" form="manualSyncForm" asp-page-handler="DryRun">Dry run</button>
         <button class="btn" type="submit" form="manualSyncForm" asp-page-handler="Enqueue"
-                onclick="return confirm('Queue a live synchronization? Destination data may be created.');">Sync now</button>
+                data-confirm="Queue a live synchronization? Destination data may be created."
+                data-confirm-title="Confirm sync"
+                data-confirm-ok="Sync now">Sync now</button>
     }
 }
 

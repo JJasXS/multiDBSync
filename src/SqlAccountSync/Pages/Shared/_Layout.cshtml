@@ -115,6 +115,21 @@
         </div>
     </div>
     <div id="toast-root" class="toast-root" aria-live="polite" aria-atomic="true"></div>
+    <dialog id="appConfirm" class="accounts-modal app-confirm" aria-labelledby="appConfirmTitle">
+        <form method="dialog" class="accounts-modal-form">
+            <div class="accounts-modal-head">
+                <h3 id="appConfirmTitle" data-confirm-title>Please confirm</h3>
+                <button type="button" class="accounts-modal-close" data-confirm-close aria-label="Close">&times;</button>
+            </div>
+            <div class="accounts-modal-body">
+                <p class="app-confirm-message" data-confirm-message></p>
+            </div>
+            <div class="accounts-modal-actions">
+                <button type="button" class="btn btn-ghost" data-confirm-cancel>Cancel</button>
+                <button type="button" class="btn" data-confirm-ok>Confirm</button>
+            </div>
+        </form>
+    </dialog>
 }
 else
 {

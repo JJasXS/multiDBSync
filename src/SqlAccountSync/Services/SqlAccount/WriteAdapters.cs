@@ -137,6 +137,21 @@ public sealed class SqlAccountApiWriteAdapter : ISqlAccountWriteAdapter
             var dict = StockTransferMapper.ToApiPayload(document, txnStamp);
             payload = StockTransferMapper.SerializePayload(dict);
         }
+        else if (path.Contains("salesdebitnote", StringComparison.OrdinalIgnoreCase))
+        {
+            var dict = SalesNoteMapper.ToDebitNotePayload(document, txnStamp);
+            payload = SalesNoteMapper.SerializePayload(dict);
+        }
+        else if (path.Contains("salescreditnote", StringComparison.OrdinalIgnoreCase))
+        {
+            var dict = SalesNoteMapper.ToCreditNotePayload(document, txnStamp);
+            payload = SalesNoteMapper.SerializePayload(dict);
+        }
+        else if (path.Contains("purchasereturned", StringComparison.OrdinalIgnoreCase))
+        {
+            var dict = PurchaseReturnMapper.ToApiPayload(document, txnStamp);
+            payload = PurchaseReturnMapper.SerializePayload(dict);
+        }
         else if (path.Contains("goodsreceived", StringComparison.OrdinalIgnoreCase))
         {
             var dict = GoodsReceivedMapper.ToApiPayload(document, txnStamp);

@@ -88,12 +88,12 @@ builder.Services.AddHttpClient<SqlAccountApiWriteAdapter>(client =>
     // SQL Accounting IntraWeb BFF rejects clients without a modern browser User-Agent (HTTP 500 HTML).
     client.DefaultRequestHeaders.UserAgent.ParseAdd(
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36");
-});
+}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { UseCookies = false });
 builder.Services.AddHttpClient<ISqlAccountApiClient, SqlAccountApiClient>(client =>
 {
     client.DefaultRequestHeaders.UserAgent.ParseAdd(
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36");
-});
+}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { UseCookies = false });
 builder.Services.AddHttpClient<ITenantEmailBootstrap, TenantEmailBootstrap>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(30);

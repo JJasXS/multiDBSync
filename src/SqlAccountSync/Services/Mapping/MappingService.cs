@@ -85,6 +85,27 @@ WHERE MASTERDBID=@MASTERDBID AND SUBDBID=@SUBDBID AND STATUS='MAPPED'
                 cancellationToken).ConfigureAwait(false);
         }
 
+        // Sales notes (CN/DN) must stay customer→customer — never fall back to supplier.
+        if (string.Equals(destPartyEntity, EntityCodes.Customer, StringComparison.OrdinalIgnoreCase))
+        {
+            var customer = await FindBySourceAsync(sourceDbId, destDbId, EntityCodes.Customer, sourcePartyCode, cancellationToken)
+                .ConfigureAwait(false);
+            if (customer is not null
+                && (string.IsNullOrWhiteSpace(customer.DstEntityCode)
+                    || string.Equals(customer.DstEntityCode, EntityCodes.Customer, StringComparison.OrdinalIgnoreCase)))
+                return customer;
+
+            return await _db.QuerySingleAsync(@"
+SELECT FIRST 1 * FROM SYNC_MAPPING
+WHERE MASTERDBID=@MASTERDBID AND SUBDBID=@SUBDBID AND STATUS='MAPPED'
+  AND UPPER(MASTERCODE)=UPPER(@MASTERCODE)
+  AND (SRCENTITYCODE='CUSTOMER' OR ENTITYCODE='CUSTOMER')
+  AND (DSTENTITYCODE='CUSTOMER' OR (DSTENTITYCODE IS NULL AND ENTITYCODE='CUSTOMER'))",
+                Map,
+                new { MASTERDBID = sourceDbId, SUBDBID = destDbId, MASTERCODE = sourcePartyCode },
+                cancellationToken).ConfigureAwait(false);
+        }
+
         var direct = await FindBySourceAsync(sourceDbId, destDbId, sourcePartyEntity, sourcePartyCode, cancellationToken)
             .ConfigureAwait(false);
         if (direct is not null)

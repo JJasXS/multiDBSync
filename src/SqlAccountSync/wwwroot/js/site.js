@@ -212,3 +212,108 @@
     });
   });
 })();
+
+(() => {
+  const dialog = document.getElementById("appConfirm");
+  if (!dialog) return;
+
+  const titleEl = dialog.querySelector("[data-confirm-title]");
+  const messageEl = dialog.querySelector("[data-confirm-message]");
+  const okBtn = dialog.querySelector("[data-confirm-ok]");
+  const cancelBtn = dialog.querySelector("[data-confirm-cancel]");
+  const closeBtn = dialog.querySelector("[data-confirm-close]");
+  let settle = null;
+
+  const finish = (ok) => {
+    if (dialog.open) dialog.close();
+    const done = settle;
+    settle = null;
+    if (done) done(ok);
+  };
+
+  cancelBtn?.addEventListener("click", () => finish(false));
+  closeBtn?.addEventListener("click", () => finish(false));
+  okBtn?.addEventListener("click", () => finish(true));
+  dialog.addEventListener("cancel", (e) => {
+    e.preventDefault();
+    finish(false);
+  });
+  dialog.addEventListener("click", (e) => {
+    if (e.target === dialog) finish(false);
+  });
+
+  const ask = ({ title, message, okLabel, cancelLabel, danger }) =>
+    new Promise((resolve) => {
+      settle = resolve;
+      if (titleEl) titleEl.textContent = title || "Please confirm";
+      if (messageEl) messageEl.textContent = message || "";
+      if (okBtn) {
+        okBtn.textContent = okLabel || "Confirm";
+        okBtn.className = danger ? "btn danger" : "btn";
+      }
+      if (cancelBtn) cancelBtn.textContent = cancelLabel || "Cancel";
+      if (typeof dialog.showModal === "function") dialog.showModal();
+      else dialog.setAttribute("open", "");
+      okBtn?.focus();
+    });
+
+  window.appConfirm = ask;
+
+  document.addEventListener(
+    "click",
+    async (e) => {
+      const el = e.target.closest("[data-confirm]");
+      if (!el || el.tagName === "FORM") return;
+      if (el.dataset.confirmSkip === "1") {
+        delete el.dataset.confirmSkip;
+        return;
+      }
+
+      e.preventDefault();
+      e.stopImmediatePropagation();
+
+      const ok = await ask({
+        title: el.getAttribute("data-confirm-title") || "Please confirm",
+        message: el.getAttribute("data-confirm") || "",
+        okLabel: el.getAttribute("data-confirm-ok") || "Confirm",
+        cancelLabel: el.getAttribute("data-confirm-cancel") || "Cancel",
+        danger: el.hasAttribute("data-confirm-danger"),
+      });
+      if (!ok) return;
+
+      el.dataset.confirmSkip = "1";
+      el.click();
+    },
+    true
+  );
+
+  document.addEventListener(
+    "submit",
+    async (e) => {
+      const form = e.target;
+      if (!(form instanceof HTMLFormElement) || !form.hasAttribute("data-confirm")) return;
+      if (form.dataset.confirmSkip === "1") {
+        delete form.dataset.confirmSkip;
+        return;
+      }
+
+      e.preventDefault();
+      e.stopImmediatePropagation();
+
+      const ok = await ask({
+        title: form.getAttribute("data-confirm-title") || "Please confirm",
+        message: form.getAttribute("data-confirm") || "",
+        okLabel: form.getAttribute("data-confirm-ok") || "Confirm",
+        cancelLabel: form.getAttribute("data-confirm-cancel") || "Cancel",
+        danger: form.hasAttribute("data-confirm-danger"),
+      });
+      if (!ok) return;
+
+      form.dataset.confirmSkip = "1";
+      if (typeof form.requestSubmit === "function" && e.submitter instanceof HTMLElement)
+        form.requestSubmit(e.submitter);
+      else form.submit();
+    },
+    true
+  );
+})();

@@ -7,7 +7,7 @@ namespace SqlAccountSync.Data;
 
 public sealed class SchemaBootstrap
 {
-    public const int CurrentVersion = 2;
+    public const int CurrentVersion = 3;
 
     private readonly CentralDb _db;
     private readonly BootstrapOptions _bootstrap;
@@ -158,7 +158,7 @@ CREATE TABLE SYNC_MAPPING (
     CREATEDBY VARCHAR(120),
     UPDATEDAT TIMESTAMP NOT NULL,
     UPDATEDBY VARCHAR(120),
-    CONSTRAINT UQ_SYNC_MAP_SRC UNIQUE (MASTERDBID, SUBDBID, SRCENTITYCODE, MASTERCODE),
+    CONSTRAINT UQ_SYNC_MAP_SRC UNIQUE (MASTERDBID, SUBDBID, SRCENTITYCODE, DSTENTITYCODE, MASTERCODE),
     CONSTRAINT UQ_SYNC_MAP_DST UNIQUE (MASTERDBID, SUBDBID, DSTENTITYCODE, SUBCODE),
     CONSTRAINT FK_SYNC_MAP_M FOREIGN KEY (MASTERDBID) REFERENCES SYNC_DATABASE (DBID),
     CONSTRAINT FK_SYNC_MAP_S FOREIGN KEY (SUBDBID) REFERENCES SYNC_DATABASE (DBID)
@@ -290,6 +290,8 @@ CREATE TABLE SYNC_SETTING (
         var ver = await ScalarInt(conn, "SELECT COALESCE(MAX(VERID), 0) FROM SYNC_SCHEMA_VER", cancellationToken);
         if (ver < 2)
             await MigrateToV2Async(conn, cancellationToken);
+        if (ver < 3)
+            await MigrateToV3Async(conn, cancellationToken);
         if (ver < CurrentVersion)
         {
             await Exec(conn, "INSERT INTO SYNC_SCHEMA_VER (VERID, APPLIEDAT) VALUES (@V, CURRENT_TIMESTAMP)",
@@ -311,6 +313,17 @@ CREATE TABLE SYNC_SETTING (
             "UNIQUE (MASTERDBID, SUBDBID, SRCENTITYCODE, MASTERCODE)", ct);
         await EnsureConstraint(conn, "SYNC_MAPPING", "UQ_SYNC_MAP_DST",
             "UNIQUE (MASTERDBID, SUBDBID, DSTENTITYCODE, SUBCODE)", ct);
+    }
+
+    /// <summary>
+    /// Allow the same source customer to map to both a dest customer (CN↔DN)
+    /// and a dest supplier (SI→PI / CN→PR) on the same DB link.
+    /// </summary>
+    private static async Task MigrateToV3Async(FbConnection conn, CancellationToken ct)
+    {
+        await DropConstraintIfExists(conn, "SYNC_MAPPING", "UQ_SYNC_MAP_SRC", ct);
+        await EnsureConstraint(conn, "SYNC_MAPPING", "UQ_SYNC_MAP_SRC",
+            "UNIQUE (MASTERDBID, SUBDBID, SRCENTITYCODE, DSTENTITYCODE, MASTERCODE)", ct);
     }
 
     private static async Task EnsureColumn(FbConnection conn, string table, string column, string ddlType, CancellationToken ct)
@@ -381,9 +394,9 @@ MATCHING (ENTITYCODE)", new Dictionary<string, object?> { ["C"] = code, ["N"] = 
             ("SI_TO_PI", "Sales → Purchase", "IV", "PI", "/customerinvoice", "/purchaseinvoice"),
             ("DO_TO_GR", "Delivery → Goods received", "DO", "GR", "/deliveryorder", "/goodsreceived"),
             ("ST_TO_ST", "Stock transfer", "ST", "ST", "/stocktransfer", "/stocktransfer"),
-            ("SR_TO_PR", "Sales return → Purchase return", "SR", "PR", "/salesreturn", "/purchasereturn"),
-            ("CN_TO_DN", "Credit note → Debit note", "CN", "DN", "/creditnote", "/debitnote"),
-            ("DN_TO_CN", "Debit note → Credit note", "DN", "CN", "/debitnote", "/creditnote"),
+            ("CN_TO_PR", "Credit note → Purchase return", "CN", "PR", "/salescreditnote", "/purchasereturned"),
+            ("CN_TO_DN", "Credit note → Debit note", "CN", "DN", "/salescreditnote", "/salesdebitnote"),
+            ("DN_TO_CN", "Debit note → Credit note", "DN", "CN", "/salesdebitnote", "/salescreditnote"),
         };
         foreach (var t in types)
         {
@@ -393,6 +406,11 @@ VALUES (@C, @N, @S, @D, @SP, @DP, 1)
 MATCHING (TXNTYPECODE)",
                 new Dictionary<string, object?> { ["C"] = t.Code, ["N"] = t.Name, ["S"] = t.Src, ["D"] = t.Dst, ["SP"] = t.SrcPath, ["DP"] = t.DstPath }, ct);
         }
+
+        // Legacy stub: no Sales Return create API — hide from transfer UI.
+        await Exec(conn, @"
+UPDATE SYNC_TXNTYPE SET ISACTIVE = 0, DISPLAYNAME = 'Sales return → Purchase return (retired)'
+WHERE TXNTYPECODE = 'SR_TO_PR'", new Dictionary<string, object?>(), ct);
 
         var email = (_bootstrap.AdminEmail ?? "admin@localhost").Trim().ToLowerInvariant();
         var exists = await ScalarInt(conn, "SELECT COUNT(*) FROM SYNC_USER WHERE UPPER(EMAIL) = UPPER(@E)",

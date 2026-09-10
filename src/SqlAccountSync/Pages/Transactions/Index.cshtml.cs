@@ -35,7 +35,7 @@ public class IndexModel : SyncPageModel
     [BindProperty(SupportsGet = true)] public string TxnType { get; set; } = "SI_TO_PI";
     [BindProperty] public List<string> SelectedDocs { get; set; } = [];
     [BindProperty] public List<int> SelectedDestDbIds { get; set; } = [];
-    [BindProperty] public bool Confirmed { get; set; }
+    [BindProperty] public bool Confirmed { get; set; } = true;
     /// <summary>Keys are "{docId}|{seq}".</summary>
     [BindProperty] public Dictionary<string, decimal> QtyOverrides { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
