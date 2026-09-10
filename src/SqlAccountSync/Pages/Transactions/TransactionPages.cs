@@ -1,14 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using SqlAccountSync.Models;
-using SqlAccountSync.Services.Auth;
 using SqlAccountSync.Services.Transactions;
 
 namespace SqlAccountSync.Pages.Transactions;
-
-public class IndexModel : SyncPageModel
-{
-    public IActionResult OnGet() => Redirect("/logs?tab=transactions");
-}
 
 public class DetailsModel : SyncPageModel
 {

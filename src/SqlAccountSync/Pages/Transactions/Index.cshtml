@@ -1,2 +1,332 @@
-@page
+@page "/transactions"
 @model SqlAccountSync.Pages.Transactions.IndexModel
+@{
+    ViewData["Title"] = "Document transfer";
+    var isStockTransfer = string.Equals(Model.TxnType, TxnTypeCodes.StockTransfer, StringComparison.OrdinalIgnoreCase);
+}
+@section TopbarActions {
+    @if (Model.CanOperate)
+    {
+        <button class="btn secondary" type="submit" form="txnTransferForm" asp-page-handler="DryRun">Dry run</button>
+        @if (isStockTransfer)
+        {
+            <button class="btn" type="submit" form="txnTransferForm" asp-page-handler="Execute" data-txn-transfer-btn>Transfer</button>
+        }
+        else
+        {
+            <button class="btn" type="submit" form="txnTransferForm" asp-page-handler="Execute"
+                    onclick="return confirm('Create destination documents for the selected rows and databases?');">Transfer</button>
+        }
+    }
+}
+
+@if (Model.FlashToast is not null)
+{
+    <partial name="_FlashToast" model="Model.FlashToast" />
+}
+
+<div class="txn-layout">
+    <div class="card txn-form-card">
+        <div class="push-workspace">
+            <form method="get" class="push-source-form">
+                <div class="route-fields push-route-fields">
+                    <div class="route-field">
+                        <label for="txnSourceDb">Source</label>
+                        <select id="txnSourceDb" name="SourceDbId" onchange="this.form.submit()">
+                            @foreach (var d in Model.Databases)
+                            {
+                                <option value="@d.DbId" selected="@(d.DbId == Model.SourceDbId)">@d.DisplayName</option>
+                            }
+                        </select>
+                    </div>
+                    <span class="route-arrow push-route-arrow" aria-hidden="true">→</span>
+                    <div class="route-field">
+                        <label for="txnType">Type</label>
+                        <select id="txnType" name="TxnType" class="@(TxnTypeCodes.IsImplemented(Model.TxnType) ? "txn-type-select--confirmed" : null)"
+                                onchange="this.form.submit()">
+                            @foreach (var t in Model.Types)
+                            {
+                                var confirmed = TxnTypeCodes.IsImplemented(t.Code);
+                                <option value="@t.Code"
+                                        class="@(confirmed ? "txn-type-option--confirmed" : null)"
+                                        selected="@(t.Code == Model.TxnType)">@SyncDisplayNames.TxnType(t.Code, t.Name)</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+            </form>
+
+            <form id="txnTransferForm" method="post" class="txn-transfer-form"
+                  data-txn-type="@Model.TxnType"
+                  data-source-db-id="@Model.SourceDbId"
+                  data-lines-url="@Url.Page("/Transactions/Index", "Lines")">
+                <input type="hidden" asp-for="SourceDbId" />
+                <input type="hidden" asp-for="TxnType" />
+                <div id="txnQtyOverrideFields"></div>
+
+                <div class="push-layout">
+                    <div class="push-panel-table-wrap">
+                        <div class="push-panel-head">
+                            <h3>Documents</h3>
+                        </div>
+                        <table class="push-panel-table">
+                            <thead>
+                                <tr>
+                                    <th class="col-check">
+                                        <input type="checkbox" data-check-all="txn-docs" aria-label="Select all documents"
+                                               @(Model.Documents.Count == 0 ? "disabled" : null) />
+                                    </th>
+                                    <th>Document</th>
+                                    <th>Date</th>
+                                    <th>Party</th>
+                                    <th>Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (Model.Documents.Count == 0)
+                                {
+                                    <tr>
+                                        <td colspan="5" class="empty">No documents. Pick source and type.</td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach (var doc in Model.Documents)
+                                    {
+                                        var docId = string.IsNullOrWhiteSpace(doc.DocNo) ? doc.DocKey : doc.DocNo;
+                                        var selected = Model.SelectedDocs.Contains(docId, StringComparer.OrdinalIgnoreCase);
+                                        <tr>
+                                            <td class="col-check">
+                                                <input type="checkbox" name="SelectedDocs" value="@docId" data-check-group="txn-docs"
+                                                       @(selected ? "checked" : null) />
+                                            </td>
+                                            <td>@doc.DocNo</td>
+                                            <td>@(doc.DocDate?.ToString("yyyy-MM-dd") ?? "")</td>
+                                            <td><span class="cell-truncate" title="@doc.PartyName">@doc.PartyCode</span></td>
+                                            <td>@doc.Amount.ToString("N2")</td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="push-flow-bridge" aria-hidden="true">
+                        <span class="push-flow-arrow">→</span>
+                    </div>
+
+                    <div class="push-panel-table-wrap">
+                        <table class="push-panel-table">
+                            <thead>
+                                @if (Model.TargetDatabases.Count > 0)
+                                {
+                                    <tr>
+                                        <th class="col-check">
+                                            <input type="checkbox" data-check-all="txn-dests" aria-label="Select all target databases" />
+                                        </th>
+                                        <th>Database</th>
+                                        <th>Code</th>
+                                    </tr>
+                                }
+                            </thead>
+                            <tbody>
+                                @if (Model.TargetDatabases.Count == 0)
+                                {
+                                    <tr>
+                                        <td colspan="3" class="empty">No target databases.</td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach (var d in Model.TargetDatabases)
+                                    {
+                                        var selected = Model.SelectedDestDbIds.Contains(d.DbId);
+                                        <tr>
+                                            <td class="col-check">
+                                                <input type="checkbox" name="SelectedDestDbIds" value="@d.DbId" data-check-group="txn-dests"
+                                                       @(selected ? "checked" : null) />
+                                            </td>
+                                            <td class="push-target-name">@d.DisplayName</td>
+                                            <td class="muted">@d.DbCode</td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="txn-form-actions">
+                    <label class="check"><input asp-for="Confirmed" /> <span>I confirm this will create destination accounting documents</span></label>
+                </div>
+            </form>
+            <partial name="_DryRunToast" model="Model.DryRun" />
+        </div>
+    </div>
+</div>
+
+<dialog id="txnQtyModal" class="accounts-modal txn-qty-modal">
+    <form method="dialog" class="accounts-modal-form">
+        <div class="accounts-modal-head">
+            <h3>Transfer quantities</h3>
+            <button type="button" class="accounts-modal-close" data-txn-qty-close aria-label="Close">&times;</button>
+        </div>
+        <div class="accounts-modal-body">
+            <p class="muted accounts-modal-hint">Adjust how much to transfer. Destination stock will deduct from-location and add to-location for these quantities.</p>
+            <div id="txnQtyModalBody" class="txn-qty-body"></div>
+        </div>
+        <div class="accounts-modal-actions">
+            <button type="button" class="btn btn-ghost" data-txn-qty-close>Cancel</button>
+            <button type="button" class="btn" id="txnQtyConfirm">Confirm transfer</button>
+        </div>
+    </form>
+</dialog>
+
+<script>
+(() => {
+  const form = document.getElementById('txnTransferForm');
+  const modal = document.getElementById('txnQtyModal');
+  const body = document.getElementById('txnQtyModalBody');
+  const overrideHost = document.getElementById('txnQtyOverrideFields');
+  const confirmBtn = document.getElementById('txnQtyConfirm');
+  if (!form || !modal || !body || !overrideHost || !confirmBtn) return;
+
+  const txnType = (form.getAttribute('data-txn-type') || '').toUpperCase();
+  if (txnType !== 'ST_TO_ST') return;
+
+  let pendingSubmitter = null;
+
+  const selectedDocs = () =>
+    Array.from(form.querySelectorAll('input[name="SelectedDocs"]:checked')).map((el) => el.value);
+
+  const selectedDests = () =>
+    Array.from(form.querySelectorAll('input[name="SelectedDestDbIds"]:checked')).map((el) => el.value);
+
+  const closeModal = () => {
+    pendingSubmitter = null;
+    if (modal.open) modal.close();
+  };
+
+  modal.querySelectorAll('[data-txn-qty-close]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      closeModal();
+    });
+  });
+
+  const renderLines = (docs) => {
+    body.innerHTML = '';
+    docs.forEach((doc) => {
+      const section = document.createElement('section');
+      section.className = 'txn-qty-doc';
+      const title = document.createElement('h4');
+      title.textContent = doc.docId;
+      section.appendChild(title);
+
+      const table = document.createElement('table');
+      table.className = 'txn-qty-table';
+      table.innerHTML = '<thead><tr><th>Item</th><th>From → To</th><th>Available</th><th>Transfer qty</th></tr></thead>';
+      const tbody = document.createElement('tbody');
+      (doc.lines || []).forEach((line) => {
+        const tr = document.createElement('tr');
+        const loc = [line.fromLocation || '—', line.toLocation || '—'].join(' → ');
+        tr.innerHTML =
+          '<td><span class="cell-truncate" title="' + (line.description || '') + '">' + (line.itemCode || '') + '</span></td>' +
+          '<td class="muted">' + loc + '</td>' +
+          '<td>' + line.qty + (line.uom ? ' ' + line.uom : '') + '</td>' +
+          '<td></td>';
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.min = '0.01';
+        input.step = 'any';
+        input.max = String(line.qty);
+        input.value = String(line.qty);
+        input.required = true;
+        input.setAttribute('data-doc-id', doc.docId);
+        input.setAttribute('data-seq', String(line.seq));
+        input.setAttribute('data-max', String(line.qty));
+        tr.lastElementChild.appendChild(input);
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      section.appendChild(table);
+      body.appendChild(section);
+    });
+  };
+
+  const openQtyModal = async (submitter) => {
+    const docs = selectedDocs();
+    const dests = selectedDests();
+    if (docs.length === 0 || dests.length === 0) {
+      alert('Select at least one document and one target database.');
+      return;
+    }
+    if (!form.querySelector('input[name="Confirmed"]')?.checked) {
+      alert('Confirmation is required before creating accounting documents.');
+      return;
+    }
+
+    const sourceDbId = form.getAttribute('data-source-db-id') || '';
+    const baseUrl = form.getAttribute('data-lines-url') || '';
+    const loaded = [];
+    for (const docId of docs) {
+      const url = new URL(baseUrl, window.location.origin);
+      url.searchParams.set('handler', 'Lines');
+      url.searchParams.set('SourceDbId', sourceDbId);
+      url.searchParams.set('TxnType', txnType);
+      url.searchParams.set('docId', docId);
+      const res = await fetch(url.toString(), { headers: { 'Accept': 'application/json' } });
+      const data = await res.json();
+      if (!data || !data.ok) {
+        alert((data && data.message) || ('Could not load lines for ' + docId));
+        return;
+      }
+      loaded.push(data);
+    }
+
+    pendingSubmitter = submitter;
+    renderLines(loaded);
+    modal.showModal();
+  };
+
+  form.addEventListener('submit', (e) => {
+    const submitter = e.submitter;
+    if (!submitter || !submitter.hasAttribute('data-txn-transfer-btn')) return;
+    if (overrideHost.dataset.ready === '1') {
+      overrideHost.dataset.ready = '';
+      return;
+    }
+    e.preventDefault();
+    openQtyModal(submitter).catch((err) => alert(err && err.message ? err.message : String(err)));
+  });
+
+  confirmBtn.addEventListener('click', () => {
+    const inputs = Array.from(body.querySelectorAll('input[data-seq]'));
+    for (const input of inputs) {
+      const qty = Number(input.value);
+      const max = Number(input.getAttribute('data-max') || '0');
+      if (!(qty > 0) || qty > max) {
+        alert('Each transfer quantity must be greater than zero and not exceed the available quantity.');
+        input.focus();
+        return;
+      }
+    }
+
+    overrideHost.innerHTML = '';
+    inputs.forEach((input) => {
+      const hidden = document.createElement('input');
+      hidden.type = 'hidden';
+      hidden.name = 'QtyOverrides[' + input.getAttribute('data-doc-id') + '|' + input.getAttribute('data-seq') + ']';
+      hidden.value = input.value;
+      overrideHost.appendChild(hidden);
+    });
+
+    overrideHost.dataset.ready = '1';
+    modal.close();
+    if (typeof form.requestSubmit === 'function')
+      form.requestSubmit(pendingSubmitter || undefined);
+    else
+      form.submit();
+  });
+})();
+</script>

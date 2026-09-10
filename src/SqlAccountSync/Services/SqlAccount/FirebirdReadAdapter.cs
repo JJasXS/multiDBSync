@@ -928,6 +928,9 @@ FROM {table} ORDER BY CODE";
 
         return await WithReadTx(db, async (conn, tx) =>
         {
+            (header, detail, typeCode) = await ResolveDocTablesAsync(conn, tx, docType, cancellationToken).ConfigureAwait(false);
+            if (header is null)
+                return null;
             if (!await TableExistsConn(conn, tx, header, cancellationToken).ConfigureAwait(false))
                 return null;
 
@@ -1081,6 +1084,9 @@ WHERE CAST(DOCKEY AS VARCHAR(40)) = @K OR UPPER(TRIM(DOCNO)) = UPPER(@K)";
         take = Math.Clamp(take, 1, 500);
         return WithReadTx(db, async (conn, tx) =>
         {
+            (header, _, typeCode) = await ResolveDocTablesAsync(conn, tx, docType, cancellationToken).ConfigureAwait(false);
+            if (header is null)
+                return new List<DocumentListItem>();
             if (!await TableExistsConn(conn, tx, header, cancellationToken).ConfigureAwait(false))
                 return new List<DocumentListItem>();
 
@@ -1175,6 +1181,8 @@ WHERE CAST(DOCKEY AS VARCHAR(40)) = @K OR UPPER(TRIM(DOCNO)) = UPPER(@K)";
         AddNum("AMOUNT", "AMOUNT");
         Add("TAX", "TAX", "TAXCODE");
         Add("LOCATION", "LOCATION", "WAREHOUSE");
+        Add("FROMLOCATION", "FROMLOCATION");
+        Add("TOLOCATION", "TOLOCATION");
         Add("BATCH", "BATCH");
         Add("PROJECT", "PROJECT");
         Add("ACCOUNT", "ACCOUNT");
@@ -1238,6 +1246,8 @@ ORDER BY COALESCE(SEQ,0)";
                 Amount = N("AMOUNT"),
                 TaxCode = S("TAX"),
                 Warehouse = S("LOCATION"),
+                FromLocation = S("FROMLOCATION"),
+                ToLocation = S("TOLOCATION"),
                 Batch = S("BATCH"),
                 Project = S("PROJECT"),
                 Account = S("ACCOUNT"),
@@ -1494,10 +1504,35 @@ ORDER BY 1";
             "GR" or "GOODSRECEIVED" => ("PH_GR", "PH_GRDTL", "GR"),
             "DN" => ("SL_DN", "SL_DNDTL", "DN"),
             "PI" or "PURCHASEINVOICE" => ("PH_IV", "PH_IVDTL", "PI"),
-            "ST" or "STOCKTRANSFER" => ("ST_TRFR", "ST_TRFRDTL", "ST"),
+            "ST" or "STOCKTRANSFER" => ("ST_XF", "ST_XFDTL", "ST"),
             "SR" or "SALESRETURN" => ("SL_SR", "SL_SRDTL", "SR"),
             "PR" or "PURCHASERETURN" => ("PH_PR", "PH_PRDTL", "PR"),
             "CN" or "CREDITNOTE" => ("SL_CN", "SL_CNDTL", "CN"),
             _ => (null, null, docType)
         };
+
+    private static async Task<(string? Header, string? Detail, string Type)> ResolveDocTablesAsync(
+        FbConnection conn, FbTransaction tx, string docType, CancellationToken ct)
+    {
+        var resolved = ResolveDocTables(docType);
+        if (!IsStockTransferType(docType))
+            return resolved;
+
+        var header = await FirstExistingConn(conn, tx, ["ST_XF", "ST_TRFR"], ct).ConfigureAwait(false);
+        if (header is null)
+            return (null, null, "ST");
+
+        var detail = header == "ST_XF" ? "ST_XFDTL" : "ST_TRFRDTL";
+        if (!await TableExistsConn(conn, tx, detail, ct).ConfigureAwait(false))
+            detail = header == "ST_XF" ? "ST_XF_DTL" : "ST_TRFR_DTL";
+        if (!await TableExistsConn(conn, tx, detail, ct).ConfigureAwait(false))
+            detail = null;
+        return (header, detail, "ST");
+    }
+
+    private static bool IsStockTransferType(string docType)
+    {
+        var t = docType.Trim().ToUpperInvariant();
+        return t is "ST" or "STOCKTRANSFER";
+    }
 }

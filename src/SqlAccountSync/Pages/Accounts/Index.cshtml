@@ -3,6 +3,8 @@
 @{
     ViewData["Title"] = "Master data";
     var isPartners = Model.IsPartnersTab;
+    var sectionLabel = isPartners ? "Partners" : "Accounts";
+    var sectionHint = isPartners ? "Create customer / supplier" : "Chart of accounts";
 }
 @section TopbarActions {
     @if (Model.CanOperate && !isPartners)
@@ -27,22 +29,48 @@
 }
 
 <div class="card sync-page-card accounts-sync">
-    <div class="card-head manual-sync-head manual-sync-head--compact">
-        <div class="manual-sync-head-end">
-            <nav class="entity-tabs entity-tabs--head" role="tablist" aria-label="Master data">
-                <a class="@(!isPartners ? "active" : "")"
+    <div class="card-head master-section-head @(isPartners ? null : "master-section-head--with-search")">
+        <div class="master-section-current">
+            <span class="master-section-label">@sectionLabel</span>
+            <span class="master-section-hint">@sectionHint</span>
+        </div>
+        @if (!isPartners)
+        {
+            <div class="master-section-search accounts-search-field">
+                <label class="sr-only" for="accountsCodeSearch">Search code</label>
+                <input id="accountsCodeSearch" type="search" placeholder="Filter by code…"
+                       autocomplete="off" spellcheck="false" />
+            </div>
+        }
+        <div class="master-section-menu" data-master-menu>
+            <button type="button"
+                    class="master-section-dots"
+                    aria-label="Switch Master data section"
+                    aria-haspopup="menu"
+                    aria-expanded="false"
+                    data-master-menu-toggle>
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                    <circle cx="12" cy="5" r="1.7" fill="currentColor"/>
+                    <circle cx="12" cy="12" r="1.7" fill="currentColor"/>
+                    <circle cx="12" cy="19" r="1.7" fill="currentColor"/>
+                </svg>
+            </button>
+            <div class="master-section-panel" role="menu" hidden data-master-menu-panel>
+                <a class="master-section-option @(!isPartners ? "is-active" : "")"
+                   role="menuitem"
                    asp-page="/Accounts/Index" asp-route-tab="accounts" asp-route-SourceDbId="@Model.SourceDbId"
-                   role="tab" aria-selected="@(!isPartners)">
-                    <span class="entity-tab-label">Accounts</span>
-                    <span class="entity-tab-desc">Chart of accounts</span>
+                   aria-current="@(!isPartners ? "page" : null)">
+                    <span class="master-section-option-title">Accounts</span>
+                    <span class="master-section-option-desc">Chart of accounts</span>
                 </a>
-                <a class="@(isPartners ? "active" : "")"
+                <a class="master-section-option @(isPartners ? "is-active" : "")"
+                   role="menuitem"
                    asp-page="/Accounts/Index" asp-route-tab="partners" asp-route-entityCode="@Model.EntityCode" asp-route-dbId="@Model.DbId"
-                   role="tab" aria-selected="@isPartners">
-                    <span class="entity-tab-label">Partners</span>
-                    <span class="entity-tab-desc">Create customer / supplier</span>
+                   aria-current="@(isPartners ? "page" : null)">
+                    <span class="master-section-option-title">Partners</span>
+                    <span class="master-section-option-desc">Create customer / supplier</span>
                 </a>
-            </nav>
+            </div>
         </div>
     </div>
 

@@ -15,8 +15,11 @@ namespace SqlAccountSync.Services.Transactions;
 public interface ITransactionEngine
 {
     Task<(int TxnPk, string TxnId, string Message)> EnqueueAsync(
-        int sourceDbId, int destDbId, string txnTypeCode, string srcDocNoOrKey, bool dryRun, string user, bool confirmed, CancellationToken cancellationToken = default);
-    Task<DryRunResult> DryRunAsync(int sourceDbId, int destDbId, string txnTypeCode, string srcDocNoOrKey, CancellationToken cancellationToken = default);
+        int sourceDbId, int destDbId, string txnTypeCode, string srcDocNoOrKey, bool dryRun, string user, bool confirmed,
+        IReadOnlyDictionary<int, decimal>? qtyBySeq = null, CancellationToken cancellationToken = default);
+    Task<DryRunResult> DryRunAsync(
+        int sourceDbId, int destDbId, string txnTypeCode, string srcDocNoOrKey,
+        IReadOnlyDictionary<int, decimal>? qtyBySeq = null, CancellationToken cancellationToken = default);
     Task ProcessJobAsync(SyncJob job, CancellationToken cancellationToken = default);
     Task RetryAsync(int txnPk, string user, CancellationToken cancellationToken = default);
     Task<SyncTransaction?> GetAsync(int txnPk, CancellationToken cancellationToken = default);
@@ -74,7 +77,8 @@ public sealed class TransactionEngine : ITransactionEngine
     }
 
     public async Task<(int TxnPk, string TxnId, string Message)> EnqueueAsync(
-        int sourceDbId, int destDbId, string txnTypeCode, string srcDocNoOrKey, bool dryRun, string user, bool confirmed, CancellationToken cancellationToken = default)
+        int sourceDbId, int destDbId, string txnTypeCode, string srcDocNoOrKey, bool dryRun, string user, bool confirmed,
+        IReadOnlyDictionary<int, decimal>? qtyBySeq = null, CancellationToken cancellationToken = default)
     {
         if (!dryRun && !confirmed)
             return (0, "", "Confirmation is required before creating accounting documents.");
@@ -98,6 +102,10 @@ public sealed class TransactionEngine : ITransactionEngine
         {
             return (0, "", FirebirdErrorMapper.Describe(ex));
         }
+
+        var qtyError = TryApplyQtyOverrides(source, qtyBySeq);
+        if (qtyError is not null)
+            return (0, "", qtyError);
 
         var idem = IdempotencyKey.ForTransaction(srcDb!.DbCode, dstDb!.DbCode, txnTypeCode, type.Src, source.DocKey, source.DocNo);
         var existing = await _db.QuerySingleAsync("SELECT FIRST 1 * FROM SYNC_TXN WHERE IDEMKEY=@IDEMKEY", MapTxn, new { IDEMKEY = idem }, cancellationToken).ConfigureAwait(false);
@@ -152,7 +160,14 @@ VALUES (@TXNPK, @TXNID, @TXNTYPECODE, @SOURCEDBID, @DESTDBID, @SRCDOCTYPE, @SRCD
             TxnId = txnPk,
             SourceDbId = sourceDbId,
             DestDbId = destDbId,
-            PayloadJson = JsonSerializer.Serialize(new TxnPayload { TxnPk = txnPk, TxnType = txnTypeCode, DstApiPath = type.DstPath, SrcDoc = srcDocNoOrKey }),
+            PayloadJson = JsonSerializer.Serialize(new TxnPayload
+            {
+                TxnPk = txnPk,
+                TxnType = txnTypeCode,
+                DstApiPath = type.DstPath,
+                SrcDoc = srcDocNoOrKey,
+                QtyBySeq = qtyBySeq is null ? null : new Dictionary<int, decimal>(qtyBySeq)
+            }),
             DryRun = dryRun,
             IdemKey = jobIdem,
             CreatedBy = user
@@ -171,7 +186,9 @@ VALUES (@TXNPK, @TXNID, @TXNTYPECODE, @SOURCEDBID, @DESTDBID, @SRCDOCTYPE, @SRCD
         return (txnPk, txnId, dryRun ? "Dry-run queued. The destination will not be modified." : "Transaction queued for execution.");
     }
 
-    public async Task<DryRunResult> DryRunAsync(int sourceDbId, int destDbId, string txnTypeCode, string srcDocNoOrKey, CancellationToken cancellationToken = default)
+    public async Task<DryRunResult> DryRunAsync(
+        int sourceDbId, int destDbId, string txnTypeCode, string srcDocNoOrKey,
+        IReadOnlyDictionary<int, decimal>? qtyBySeq = null, CancellationToken cancellationToken = default)
     {
         var result = new DryRunResult();
         var srcDb = await _registry.GetAsync(sourceDbId, cancellationToken).ConfigureAwait(false);
@@ -213,19 +230,33 @@ VALUES (@TXNPK, @TXNID, @TXNTYPECODE, @SOURCEDBID, @DESTDBID, @SRCDOCTYPE, @SRCD
             result.Summary = "Dry run failed. No data was modified.";
             return result;
         }
+
+        var qtyError = TryApplyQtyOverrides(source, qtyBySeq);
+        if (qtyError is not null)
+        {
+            result.Checks.Add(new DryRunCheck { Name = "Quantity overrides", Ok = false, Detail = qtyError });
+            result.Summary = "Dry run failed. No data was modified.";
+            return result;
+        }
+
         result.Checks.Add(new DryRunCheck { Name = "Source document", Ok = true, Detail = $"{source.DocType} {source.DocNo}" });
+        var requiresParty = !IsStockTransfer(type.Dst);
         var destParty = DestPartyEntityFor(type.Dst);
-        var mapped = await TranslateAsync(source, sourceDbId, destDbId, destParty, cancellationToken).ConfigureAwait(false);
-        var v = await _validation.ValidateMappedDocumentAsync(source, sourceDbId, destDbId, destParty, cancellationToken).ConfigureAwait(false);
+        var mapped = await TranslateAsync(source, sourceDbId, destDbId, destParty, requiresParty, cancellationToken).ConfigureAwait(false);
+        var v = await _validation.ValidateMappedDocumentAsync(
+            source, sourceDbId, destDbId, destParty, requiresParty, cancellationToken).ConfigureAwait(false);
         Add(result, "Mappings and fields", v);
         foreach (var line in source.Lines)
         {
             var map = await _mapping.FindAsync(sourceDbId, destDbId, EntityCodes.Item, line.ItemCode, cancellationToken).ConfigureAwait(false);
+            var locDetail = string.IsNullOrWhiteSpace(line.FromLocation) && string.IsNullOrWhiteSpace(line.ToLocation)
+                ? $"→ {(map?.SubCode ?? "unmapped")} qty {line.Qty}"
+                : $"→ {(map?.SubCode ?? "unmapped")} qty {line.Qty} ({line.FromLocation} → {line.ToLocation})";
             result.Checks.Add(new DryRunCheck
             {
                 Name = $"Item {line.ItemCode}",
                 Ok = map is not null,
-                Detail = map is null ? "Unmapped" : $"→ {map.SubCode} qty {line.Qty}"
+                Detail = map is null ? "Unmapped" : locDetail
             });
         }
         result.WouldSucceed = result.Checks.All(c => c.Ok);
@@ -274,8 +305,17 @@ VALUES (@TXNPK, @TXNID, @TXNTYPECODE, @SOURCEDBID, @DESTDBID, @SRCDOCTYPE, @SRCD
                 return;
             }
 
+            var qtyError = TryApplyQtyOverrides(source, payload.QtyBySeq);
+            if (qtyError is not null)
+            {
+                await Fail(txn, job, JobStatuses.Failed, qtyError, cancellationToken);
+                return;
+            }
+
+            var requiresParty = !IsStockTransfer(txn.DstDocType);
             var destParty = DestPartyEntityFor(txn.DstDocType);
-            var v = await _validation.ValidateMappedDocumentAsync(source, txn.SourceDbId, txn.DestDbId, destParty, cancellationToken).ConfigureAwait(false);
+            var v = await _validation.ValidateMappedDocumentAsync(
+                source, txn.SourceDbId, txn.DestDbId, destParty, requiresParty, cancellationToken).ConfigureAwait(false);
             await AddEvent(txn.TxnPk, "Validation", v.Ok ? "SUCCESS" : "FAIL", v.Ok ? "Passed" : string.Join(" ", v.Errors), cancellationToken).ConfigureAwait(false);
             if (!v.Ok)
             {
@@ -286,7 +326,7 @@ VALUES (@TXNPK, @TXNID, @TXNTYPECODE, @SOURCEDBID, @DESTDBID, @SRCDOCTYPE, @SRCD
                 return;
             }
 
-            var translated = await TranslateAsync(source, txn.SourceDbId, txn.DestDbId, destParty, cancellationToken).ConfigureAwait(false);
+            var translated = await TranslateAsync(source, txn.SourceDbId, txn.DestDbId, destParty, requiresParty, cancellationToken).ConfigureAwait(false);
             await AddEvent(txn.TxnPk, "Mapping", "SUCCESS", "All required mappings found.", cancellationToken).ConfigureAwait(false);
 
             ISqlAccountWriteAdapter writer = job.DryRun ? new DryRunWriteAdapter() : _write;
@@ -436,7 +476,8 @@ WHERE TXNPK=@TXNPK",
         await _queue.CompleteAsync(job.JobId, status, message, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<DocumentHeader> TranslateAsync(DocumentHeader source, int masterDbId, int subDbId, string? destPartyEntity, CancellationToken cancellationToken)
+    private async Task<DocumentHeader> TranslateAsync(
+        DocumentHeader source, int masterDbId, int subDbId, string? destPartyEntity, bool requiresParty, CancellationToken cancellationToken)
     {
         var dest = new DocumentHeader
         {
@@ -449,7 +490,9 @@ WHERE TXNPK=@TXNPK",
             Currency = source.Currency,
             CurrencyRate = source.CurrencyRate,
             PartyName = source.PartyName,
-            Description = string.IsNullOrWhiteSpace(source.Description) ? "Purchase" : source.Description,
+            Description = string.IsNullOrWhiteSpace(source.Description)
+                ? (requiresParty ? "Purchase" : "Stock transfer")
+                : source.Description,
             Terms = source.Terms,
             Area = source.Area,
             Agent = source.Agent,
@@ -457,10 +500,19 @@ WHERE TXNPK=@TXNPK",
             Note = source.Note,
             Fields = new Dictionary<string, string>(source.Fields, StringComparer.OrdinalIgnoreCase)
         };
-        var party = await _mapping.FindPartyMapAsync(masterDbId, subDbId, EntityCodes.Customer, source.PartyCode, destPartyEntity, cancellationToken).ConfigureAwait(false);
-        dest.PartyCode = party?.SubCode ?? source.PartyCode;
-        if (!string.IsNullOrWhiteSpace(party?.SubDesc))
-            dest.PartyName = party.SubDesc;
+
+        if (requiresParty)
+        {
+            var party = await _mapping.FindPartyMapAsync(masterDbId, subDbId, EntityCodes.Customer, source.PartyCode, destPartyEntity, cancellationToken).ConfigureAwait(false);
+            dest.PartyCode = party?.SubCode ?? source.PartyCode;
+            if (!string.IsNullOrWhiteSpace(party?.SubDesc))
+                dest.PartyName = party.SubDesc;
+        }
+        else
+        {
+            dest.PartyCode = source.PartyCode;
+        }
+
         foreach (var line in source.Lines)
         {
             var item = await _mapping.FindAsync(masterDbId, subDbId, EntityCodes.Item, line.ItemCode, cancellationToken).ConfigureAwait(false);
@@ -469,6 +521,12 @@ WHERE TXNPK=@TXNPK",
                 : null;
             var wh = NeedsMap(line.Warehouse)
                 ? await _mapping.FindAsync(masterDbId, subDbId, EntityCodes.Warehouse, line.Warehouse, cancellationToken).ConfigureAwait(false)
+                : null;
+            var fromLoc = NeedsMap(line.FromLocation)
+                ? await _mapping.FindAsync(masterDbId, subDbId, EntityCodes.Warehouse, line.FromLocation, cancellationToken).ConfigureAwait(false)
+                : null;
+            var toLoc = NeedsMap(line.ToLocation)
+                ? await _mapping.FindAsync(masterDbId, subDbId, EntityCodes.Warehouse, line.ToLocation, cancellationToken).ConfigureAwait(false)
                 : null;
             dest.Lines.Add(new DocumentLine
             {
@@ -483,6 +541,8 @@ WHERE TXNPK=@TXNPK",
                 Amount = line.Amount,
                 TaxCode = tax?.SubCode ?? (NeedsMap(line.TaxCode) ? line.TaxCode : ""),
                 Warehouse = wh?.SubCode ?? (NeedsMap(line.Warehouse) ? line.Warehouse : "----"),
+                FromLocation = fromLoc?.SubCode ?? (NeedsMap(line.FromLocation) ? line.FromLocation : line.FromLocation),
+                ToLocation = toLoc?.SubCode ?? (NeedsMap(line.ToLocation) ? line.ToLocation : line.ToLocation),
                 Batch = line.Batch,
                 Project = line.Project,
                 Account = line.Account,
@@ -501,6 +561,31 @@ WHERE TXNPK=@TXNPK",
         "PI" or "GR" or "PR" => EntityCodes.Supplier,
         _ => null
     };
+
+    private static bool IsStockTransfer(string? docType) =>
+        string.Equals((docType ?? "").Trim(), "ST", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Applies per-seq quantity overrides. Returns an error message, or null on success.</summary>
+    private static string? TryApplyQtyOverrides(DocumentHeader source, IReadOnlyDictionary<int, decimal>? qtyBySeq)
+    {
+        if (qtyBySeq is null || qtyBySeq.Count == 0)
+            return null;
+
+        foreach (var line in source.Lines)
+        {
+            if (!qtyBySeq.TryGetValue(line.Seq, out var qty))
+                continue;
+            if (qty <= 0)
+                return $"Line {line.Seq}: quantity must be greater than zero.";
+            if (qty > line.Qty)
+                return $"Line {line.Seq}: quantity {qty} exceeds source quantity {line.Qty}.";
+            line.Qty = qty;
+            line.Amount = line.Qty * line.UnitPrice;
+        }
+
+        source.Amount = source.Lines.Sum(l => l.Amount);
+        return null;
+    }
 
     private static bool NeedsMap(string? code)
     {
@@ -557,5 +642,6 @@ VALUES (@EVENTID, @TXNPK, CURRENT_TIMESTAMP, @STEPNAME, @RESULT, @DETAIL)",
         public string TxnType { get; set; } = "";
         public string DstApiPath { get; set; } = "";
         public string SrcDoc { get; set; } = "";
+        public Dictionary<int, decimal>? QtyBySeq { get; set; }
     }
 }

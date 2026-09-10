@@ -33,3 +33,5 @@ Used by SqlAccountSync to match GET vs POST shapes.
   goodsreceived
     GET-goodsreceived-detail.json           GET /goodsreceived/*     (dest GR)
     POST-goodsreceived-create-template.json POST /goodsreceived      (DO->GR create)
+  stocktransfer
+    POST-stocktransfer-create-template.json POST /stocktransfer      (ST->ST create; fromlocation/tolocation)

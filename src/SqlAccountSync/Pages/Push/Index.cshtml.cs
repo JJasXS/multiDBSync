@@ -2,7 +2,6 @@ using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using SqlAccountSync.Helpers;
 using SqlAccountSync.Models;
-using SqlAccountSync.Services.Accounts;
 using SqlAccountSync.Services.Audit;
 using SqlAccountSync.Services.Databases;
 using SqlAccountSync.Services.Queue;
@@ -118,6 +117,7 @@ public class IndexModel : SyncPageModel
     {
         if (!CanOperate) return Forbid();
         Tab = "jobs";
+        JobEntityCode = NormalizeEntity(JobEntityCode);
         DryRun = await _sync.DryRunMasterAsync(MasterDbId, SubDbId, JobEntityCode, MasterCode);
         await LoadJobsAsync(null);
         return Page();
@@ -127,6 +127,7 @@ public class IndexModel : SyncPageModel
     {
         if (!CanOperate) return Forbid();
         Tab = "jobs";
+        JobEntityCode = NormalizeEntity(JobEntityCode);
         var (id, msg) = await _sync.EnqueueMasterAsync(MasterDbId, SubDbId, JobEntityCode, MasterCode, dryRun: false, CurrentEmail);
         await _audit.WriteAsync(new AuditEntry
         {
@@ -210,7 +211,7 @@ public class IndexModel : SyncPageModel
         string.Equals(tab, "jobs", StringComparison.OrdinalIgnoreCase) ? "jobs" : "push";
 
     private static string NormalizeEntity(string entity) =>
-        PushableEntityCodes.Normalize(entity, EntityCodes.Customer);
+        PushableEntityCodes.NormalizePush(entity, EntityCodes.Customer);
 
     private async Task<List<MasterRecord>> LoadRecordsAsync(RegisteredDatabase db, string entity)
     {
@@ -222,11 +223,6 @@ public class IndexModel : SyncPageModel
                 return await _read.GetCustomersAsync(db);
             case "SUPPLIER":
                 return await _read.GetSuppliersAsync(db);
-            case "ACCOUNT":
-            {
-                var chart = await _read.GetGlChartAsync(db);
-                return GlAccountMapper.ToMasterRecords(chart);
-            }
             default:
                 return [];
         }

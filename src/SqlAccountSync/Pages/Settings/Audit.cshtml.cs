@@ -1,15 +1,10 @@
-using SqlAccountSync.Models;
-using SqlAccountSync.Services.Audit;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace SqlAccountSync.Pages.Settings;
 
-public class AuditModel : SyncPageModel
+/// <summary>Legacy Settings route; audit logs now live on /logs.</summary>
+public class AuditModel : PageModel
 {
-    private readonly IAuditService _audit;
-
-    public AuditModel(IAuditService audit) => _audit = audit;
-
-    public List<AuditListItem> Audits { get; set; } = [];
-
-    public async Task OnGetAsync() => Audits = await _audit.ListDetailedAsync();
+    public IActionResult OnGet() => Redirect("/logs#audit-logs");
 }

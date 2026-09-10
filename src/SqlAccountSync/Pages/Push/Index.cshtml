@@ -2,8 +2,10 @@
 @model SqlAccountSync.Pages.Push.IndexModel
 @{
     ViewData["Title"] = "Synchronization";
-    var entities = PushableEntityCodes.All;
+    var entities = PushableEntityCodes.Push;
     var isJobs = Model.IsJobsTab;
+    var sectionLabel = isJobs ? "Manual push" : "Auto push";
+    var sectionHint = isJobs ? "One row at a time" : "Multiple rows";
 }
 @section TopbarActions {
     @if (!isJobs && Model.CanOperate)
@@ -25,18 +27,48 @@
 }
 
 <div class="card sync-page-card">
-    <div class="card-head manual-sync-head manual-sync-head--compact">
-        <div class="manual-sync-head-end">
-            <nav class="entity-tabs entity-tabs--head" role="tablist" aria-label="Synchronization">
-                <a class="@(!isJobs ? "active" : "")" asp-page="/Push/Index" asp-route-tab="push" role="tab" aria-selected="@(!isJobs)">
-                    <span class="entity-tab-label">Push</span>
-                    <span class="entity-tab-desc">Multiple rows</span>
+    <div class="card-head master-section-head @(!isJobs ? "master-section-head--with-search" : null)">
+        <div class="master-section-current">
+            <span class="master-section-label">@sectionLabel</span>
+            <span class="master-section-hint">@sectionHint</span>
+        </div>
+        @if (!isJobs)
+        {
+            <div class="master-section-search accounts-search-field">
+                <label class="sr-only" for="pushCodeSearch">Search code</label>
+                <input id="pushCodeSearch" type="search" placeholder="Filter by code…"
+                       autocomplete="off" spellcheck="false" />
+            </div>
+        }
+        <div class="master-section-menu" data-master-menu>
+            <button type="button"
+                    class="master-section-dots"
+                    aria-label="Switch synchronization mode"
+                    aria-haspopup="menu"
+                    aria-expanded="false"
+                    data-master-menu-toggle>
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                    <circle cx="12" cy="5" r="1.7" fill="currentColor"/>
+                    <circle cx="12" cy="12" r="1.7" fill="currentColor"/>
+                    <circle cx="12" cy="19" r="1.7" fill="currentColor"/>
+                </svg>
+            </button>
+            <div class="master-section-panel" role="menu" hidden data-master-menu-panel>
+                <a class="master-section-option @(!isJobs ? "is-active" : "")"
+                   role="menuitem"
+                   asp-page="/Push/Index" asp-route-tab="push"
+                   aria-current="@(!isJobs ? "page" : null)">
+                    <span class="master-section-option-title">Auto push</span>
+                    <span class="master-section-option-desc">Multiple rows</span>
                 </a>
-                <a class="@(isJobs ? "active" : "")" asp-page="/Push/Index" asp-route-tab="jobs" role="tab" aria-selected="@isJobs">
-                    <span class="entity-tab-label">Jobs</span>
-                    <span class="entity-tab-desc">One row</span>
+                <a class="master-section-option @(isJobs ? "is-active" : "")"
+                   role="menuitem"
+                   asp-page="/Push/Index" asp-route-tab="jobs"
+                   aria-current="@(isJobs ? "page" : null)">
+                    <span class="master-section-option-title">Manual push</span>
+                    <span class="master-section-option-desc">One row at a time</span>
                 </a>
-            </nav>
+            </div>
         </div>
     </div>
 
@@ -74,8 +106,8 @@
             <input type="hidden" asp-for="EntityCode" />
 
             <div class="push-layout">
-                <div class="push-panel-table-wrap">
-                    <table class="push-panel-table">
+                <div class="push-panel-table-wrap" id="pushCodesPanel">
+                    <table class="push-panel-table" id="pushCodesTable">
                         <thead>
                             @if (Model.Records.Count > 0)
                             {
@@ -102,7 +134,7 @@
                                     var selected = Model.SelectedCodes.Contains(r.Code, StringComparer.OrdinalIgnoreCase);
                                     var indent = r.Fields.TryGetValue("indent", out var ind) ? ind : "";
                                     var desc = string.IsNullOrEmpty(indent) ? r.Description : indent + r.Description;
-                                    <tr>
+                                    <tr data-push-code="@r.Code">
                                         <td class="col-check">
                                             <input type="checkbox" name="SelectedCodes" value="@r.Code" data-check-group="master-codes"
                                                    @(selected ? "checked" : null) />
@@ -111,6 +143,9 @@
                                         <td><span class="cell-truncate" title="@r.Description">@desc</span></td>
                                     </tr>
                                 }
+                                <tr id="pushCodeSearchEmpty" class="accounts-search-empty" hidden>
+                                    <td colspan="3" class="empty">No records match that code.</td>
+                                </tr>
                             }
                         </tbody>
                     </table>
@@ -165,6 +200,39 @@
             </div>
         </form>
     </div>
+
+<script>
+(() => {
+  const search = document.getElementById('pushCodeSearch');
+  const emptyRow = document.getElementById('pushCodeSearchEmpty');
+  if (!search) return;
+
+  const rows = () => Array.from(document.querySelectorAll('#pushCodesTable tbody tr[data-push-code]'));
+  const apply = () => {
+    const q = (search.value || '').trim().toLowerCase();
+    let visible = 0;
+    rows().forEach(tr => {
+      const code = (tr.getAttribute('data-push-code') || '').toLowerCase();
+      const show = !q || code.includes(q);
+      tr.hidden = !show;
+      if (show) visible++;
+    });
+    if (emptyRow) emptyRow.hidden = visible > 0 || rows().length === 0;
+  };
+
+  search.addEventListener('input', apply);
+  search.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      return;
+    }
+    if (e.key === 'Escape') {
+      search.value = '';
+      apply();
+    }
+  });
+})();
+</script>
 }
 else
 {
@@ -184,7 +252,6 @@ else
                 <select asp-for="JobEntityCode">
                     <option value="CUSTOMER">CUSTOMER</option>
                     <option value="SUPPLIER">SUPPLIER</option>
-                    <option value="ACCOUNT">ACCOUNT</option>
                 </select>
             </div>
             <div><label>Code</label><input asp-for="MasterCode" /></div>

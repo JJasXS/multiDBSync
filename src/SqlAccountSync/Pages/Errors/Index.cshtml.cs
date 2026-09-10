@@ -1,8 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace SqlAccountSync.Pages.Errors;
 
-public class IndexModel : SyncPageModel
+public class IndexModel : PageModel
 {
-    public IActionResult OnGet() => RedirectToPage("/Settings/Errors");
+    public IActionResult OnGet() => Redirect("/logs#error-logs");
 }

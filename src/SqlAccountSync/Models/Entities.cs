@@ -250,6 +250,8 @@ public sealed class DocumentLine
     public decimal Amount { get; set; }
     public string TaxCode { get; set; } = "";
     public string Warehouse { get; set; } = "";
+    public string FromLocation { get; set; } = "";
+    public string ToLocation { get; set; } = "";
     public string Batch { get; set; } = "";
     public string Project { get; set; } = "";
     public string Account { get; set; } = "";

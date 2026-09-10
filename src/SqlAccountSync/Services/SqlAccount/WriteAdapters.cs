@@ -132,7 +132,12 @@ public sealed class SqlAccountApiWriteAdapter : ISqlAccountWriteAdapter
     {
         var path = string.IsNullOrWhiteSpace(apiPath) ? "/purchaseinvoice" : apiPath;
         string payload;
-        if (path.Contains("goodsreceived", StringComparison.OrdinalIgnoreCase))
+        if (path.Contains("stocktransfer", StringComparison.OrdinalIgnoreCase))
+        {
+            var dict = StockTransferMapper.ToApiPayload(document, txnStamp);
+            payload = StockTransferMapper.SerializePayload(dict);
+        }
+        else if (path.Contains("goodsreceived", StringComparison.OrdinalIgnoreCase))
         {
             var dict = GoodsReceivedMapper.ToApiPayload(document, txnStamp);
             payload = GoodsReceivedMapper.SerializePayload(dict);

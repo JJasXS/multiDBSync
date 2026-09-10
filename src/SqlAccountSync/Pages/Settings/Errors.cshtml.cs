@@ -1,23 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
-using SqlAccountSync.Models;
-using SqlAccountSync.Services.Audit;
+using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace SqlAccountSync.Pages.Settings;
 
-public class ErrorsModel : SyncPageModel
+/// <summary>Legacy Settings route; error logs now live on /logs.</summary>
+public class ErrorsModel : PageModel
 {
-    private readonly IErrorLogService _errors;
+    public IActionResult OnGet() => Redirect("/logs#error-logs");
 
-    public ErrorsModel(IErrorLogService errors) => _errors = errors;
-
-    public List<ErrorEntry> Errors { get; set; } = [];
-
-    public async Task OnGetAsync() => Errors = await _errors.ListAsync();
-
-    public async Task<IActionResult> OnPostResolveAsync(int id)
-    {
-        if (!CanManage) return Forbid();
-        await _errors.ResolveAsync(id);
-        return RedirectToPage();
-    }
+    public IActionResult OnPost() => OnGet();
 }

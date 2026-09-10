@@ -69,4 +69,10 @@ public static class TxnTypeCodes
     public const string SalesReturnToPr = "SR_TO_PR";
     public const string CreditToDebit = "CN_TO_DN";
     public const string DebitToCredit = "DN_TO_CN";
+
+    /// <summary>Transfer types with a real destination mapper (not stub).</summary>
+    public static bool IsImplemented(string? code) =>
+        string.Equals(code, SalesToPurchase, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(code, DeliveryToGr, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(code, StockTransfer, StringComparison.OrdinalIgnoreCase);
 }

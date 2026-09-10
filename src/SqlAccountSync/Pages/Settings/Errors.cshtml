@@ -1,48 +1,5 @@
 @page
 @model SqlAccountSync.Pages.Settings.ErrorsModel
 @{
-    ViewData["Title"] = "Error logs";
+    // Redirect-only; body never renders.
 }
-<div class="settings-section">
-    <div class="settings-section-nav">
-        <a class="settings-back" href="/Settings">← Back to Settings</a>
-    </div>
-
-    <div class="card">
-        <div class="card-head">
-            <h3>Error logs</h3>
-        </div>
-        <p class="muted lede">Stack traces are stored for administrators and are not shown here.</p>
-        @if (Model.Errors.Count == 0)
-        {
-            <p class="empty">No error logs yet.</p>
-        }
-        else
-        {
-            <div class="table-wrap">
-                <table>
-                    <thead><tr><th>When</th><th>Type</th><th>Message</th><th>Resolved</th><th class="col-actions"></th></tr></thead>
-                    <tbody>
-                    @foreach (var e in Model.Errors)
-                    {
-                        <tr>
-                            <td>@e.AtUtc.ToString("yyyy-MM-dd HH:mm")</td>
-                            <td>@e.ErrorType</td>
-                            <td><span class="cell-truncate" title="@e.UserMessage">@e.UserMessage</span></td>
-                            <td>@(e.Resolved ? "Yes" : "No")</td>
-                            <td class="col-actions">
-                                @if (!e.Resolved && Model.CanManage)
-                                {
-                                    <form method="post" asp-page-handler="Resolve" asp-route-id="@e.ErrorId">
-                                        <button class="btn small secondary" type="submit">Resolve</button>
-                                    </form>
-                                }
-                            </td>
-                        </tr>
-                    }
-                    </tbody>
-                </table>
-            </div>
-        }
-    </div>
-</div>

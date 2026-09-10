@@ -3,188 +3,158 @@
 @{
     ViewData["Title"] = "Logs";
 }
-@section TopbarActions {
-    @if (Model.CanOperate)
-    {
-        <button class="btn secondary" type="submit" form="logsForm" asp-page-handler="DryRun">Dry run</button>
-        <button class="btn" type="submit" form="logsForm" asp-page-handler="Execute"
-                onclick="return confirm('Create destination documents for the selected rows and databases?');">Transfer</button>
-    }
-}
 
-@if (Model.FlashToast is not null)
-{
-    <partial name="_FlashToast" model="Model.FlashToast" />
-}
-
-<div class="txn-layout">
-    <div class="card txn-form-card">
-        <div class="push-workspace">
-        <form method="get" class="push-source-form">
-            <div class="route-fields push-route-fields">
-                <div class="route-field">
-                    <label for="logsSourceDb">Source</label>
-                    <select id="logsSourceDb" name="SourceDbId" onchange="this.form.submit()">
-                        @foreach (var d in Model.Databases)
+<div class="logs-page">
+    <details class="card txn-history-dropdown" id="history-transaction-logs">
+        <summary class="txn-history-summary">
+            <span class="txn-history-title">History Transaction Logs</span>
+            <span class="count-pill" aria-label="@Model.Transactions.Count records">@Model.Transactions.Count</span>
+        </summary>
+        <div class="txn-history-body">
+            @if (Model.Transactions.Count == 0)
+            {
+                <p class="empty">No intercompany transactions yet.</p>
+            }
+            else
+            {
+                <div class="table-wrap push-jobs-table-wrap">
+                    <table>
+                        <thead><tr><th>ID</th><th>Type</th><th>Source → Destination</th><th>Status</th><th class="col-actions"></th></tr></thead>
+                        <tbody>
+                        @foreach (var t in Model.Transactions)
                         {
-                            <option value="@d.DbId" selected="@(d.DbId == Model.SourceDbId)">@d.DisplayName</option>
-                        }
-                    </select>
-                </div>
-                <span class="route-arrow push-route-arrow" aria-hidden="true">→</span>
-                <div class="route-field">
-                    <label for="logsTxnType">Type</label>
-                    <select id="logsTxnType" name="TxnType" onchange="this.form.submit()">
-                        @foreach (var t in Model.Types)
-                        {
-                            <option value="@t.Code" selected="@(t.Code == Model.TxnType)">@SyncDisplayNames.TxnType(t.Code, t.Name)</option>
-                        }
-                    </select>
-                </div>
-            </div>
-        </form>
-
-        <form id="logsForm" method="post" class="txn-transfer-form">
-            <input type="hidden" asp-for="SourceDbId" />
-            <input type="hidden" asp-for="TxnType" />
-
-            <div class="push-layout">
-                <div class="push-panel-table-wrap">
-                    <div class="push-panel-head">
-                        <h3>Documents</h3>
-                    </div>
-                    <table class="push-panel-table">
-                        <thead>
+                            var srcLabel = $"{t.SourceName} {t.SrcDocType} {t.SrcDocNo}".Trim();
+                            var dstLabel = $"{t.DestName} {t.DstDocType} {t.DstDocNo}".Trim();
+                            var routeTitle = $"{srcLabel} → {dstLabel}";
                             <tr>
-                                <th class="col-check">
-                                    <input type="checkbox" data-check-all="txn-docs" aria-label="Select all documents"
-                                           @(Model.Documents.Count == 0 ? "disabled" : null) />
-                                </th>
-                                <th>Document</th>
-                                <th>Date</th>
-                                <th>Party</th>
-                                <th>Amount</th>
+                                <td><a asp-page="/Transactions/Details" asp-route-id="@t.TxnPk">@t.TxnId</a></td>
+                                <td>@SyncDisplayNames.TxnType(t.TxnTypeCode)</td>
+                                <td>
+                                    <span class="route-cell cell-truncate" title="@routeTitle">
+                                        <span class="route-src">@srcLabel</span>
+                                        <span class="route-arrow" aria-hidden="true">→</span>
+                                        <span class="route-dst">@dstLabel</span>
+                                    </span>
+                                </td>
+                                <td><span class="badge badge-@(t.Status.ToLowerInvariant())">@t.Status</span></td>
+                                <td class="col-actions">
+                                    @if (t.Status is not "COMPLETED")
+                                    {
+                                        <form method="post" asp-page-handler="Retry" asp-route-txnPk="@t.TxnPk"><button class="btn small" type="submit">Retry</button></form>
+                                    }
+                                </td>
                             </tr>
-                        </thead>
-                        <tbody>
-                            @if (Model.Documents.Count == 0)
-                            {
-                                <tr>
-                                    <td colspan="5" class="empty">No documents. Pick source and type.</td>
-                                </tr>
-                            }
-                            else
-                            {
-                                @foreach (var doc in Model.Documents)
-                                {
-                                    var docId = string.IsNullOrWhiteSpace(doc.DocNo) ? doc.DocKey : doc.DocNo;
-                                    var selected = Model.SelectedDocs.Contains(docId, StringComparer.OrdinalIgnoreCase);
-                                    <tr>
-                                        <td class="col-check">
-                                            <input type="checkbox" name="SelectedDocs" value="@docId" data-check-group="txn-docs"
-                                                   @(selected ? "checked" : null) />
-                                        </td>
-                                        <td>@doc.DocNo</td>
-                                        <td>@(doc.DocDate?.ToString("yyyy-MM-dd") ?? "")</td>
-                                        <td><span class="cell-truncate" title="@doc.PartyName">@doc.PartyCode</span></td>
-                                        <td>@doc.Amount.ToString("N2")</td>
-                                    </tr>
-                                }
-                            }
+                        }
                         </tbody>
                     </table>
                 </div>
+            }
+        </div>
+    </details>
 
-                <div class="push-flow-bridge" aria-hidden="true">
-                    <span class="push-flow-arrow">→</span>
-                </div>
-
-                <div class="push-panel-table-wrap">
-                    <table class="push-panel-table">
-                        <thead>
-                            @if (Model.TargetDatabases.Count > 0)
-                            {
-                                <tr>
-                                    <th class="col-check">
-                                        <input type="checkbox" data-check-all="txn-dests" aria-label="Select all target databases" />
-                                    </th>
-                                    <th>Database</th>
-                                    <th>Code</th>
-                                </tr>
-                            }
-                        </thead>
+    <details class="card txn-history-dropdown" id="audit-logs">
+        <summary class="txn-history-summary">
+            <span class="txn-history-title">Audit Logs</span>
+            <span class="count-pill" aria-label="@Model.Audits.Count records">@Model.Audits.Count</span>
+        </summary>
+        <div class="txn-history-body">
+            @if (Model.Audits.Count == 0)
+            {
+                <p class="empty">No audit logs yet.</p>
+            }
+            else
+            {
+                <div class="table-wrap push-jobs-table-wrap">
+                    <table>
+                        <thead><tr><th>When</th><th>User</th><th>Action</th><th>Entity</th><th>Record</th><th>Result</th><th class="col-actions"></th></tr></thead>
                         <tbody>
-                            @if (Model.TargetDatabases.Count == 0)
-                            {
-                                <tr>
-                                    <td colspan="3" class="empty">No target databases.</td>
-                                </tr>
-                            }
-                            else
-                            {
-                                @foreach (var d in Model.TargetDatabases)
-                                {
-                                    var selected = Model.SelectedDestDbIds.Contains(d.DbId);
-                                    <tr>
-                                        <td class="col-check">
-                                            <input type="checkbox" name="SelectedDestDbIds" value="@d.DbId" data-check-group="txn-dests"
-                                                   @(selected ? "checked" : null) />
-                                        </td>
-                                        <td class="push-target-name">@d.DisplayName</td>
-                                        <td class="muted">@d.DbCode</td>
-                                    </tr>
-                                }
-                            }
+                        @foreach (var row in Model.Audits)
+                        {
+                            var a = row.Entry;
+                            var badge = SyncDisplayNames.AuditResultBadgeClass(row.DisplayResult);
+                            <tr>
+                                <td>@a.AtUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                                <td>@a.UserEmail</td>
+                                <td>@SyncDisplayNames.AuditAction(a.Action)</td>
+                                <td>@(string.IsNullOrWhiteSpace(a.Entity) ? "—" : SyncDisplayNames.TxnType(a.Entity))</td>
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(row.LinkUrl))
+                                    {
+                                        <a href="@row.LinkUrl">@a.RecordId</a>
+                                    }
+                                    else
+                                    {
+                                        @a.RecordId
+                                    }
+                                </td>
+                                <td>
+                                    <span class="badge @badge" title="@row.StatusDetail">@row.DisplayResult</span>
+                                </td>
+                                <td class="col-actions">
+                                    @if (!string.IsNullOrWhiteSpace(row.LinkUrl))
+                                    {
+                                        <a class="btn small secondary" href="@row.LinkUrl">@row.LinkLabel</a>
+                                    }
+                                </td>
+                            </tr>
+                        }
                         </tbody>
                     </table>
                 </div>
-            </div>
+            }
+        </div>
+    </details>
 
-            <div class="txn-form-actions">
-                <label class="check"><input asp-for="Confirmed" /> <span>I confirm this will create destination accounting documents</span></label>
-            </div>
-        </form>
-        <partial name="_DryRunToast" model="Model.DryRun" />
-    </div>
-
-    <div class="card txn-list-card">
-        @if (Model.Transactions.Count == 0)
-        {
-            <p class="empty">No intercompany transactions yet.</p>
-        }
-        else
-        {
-            <div class="table-wrap push-jobs-table-wrap">
-                <table>
-                    <thead><tr><th>ID</th><th>Type</th><th>Source → Destination</th><th>Status</th><th class="col-actions"></th></tr></thead>
-                    <tbody>
-                    @foreach (var t in Model.Transactions)
-                    {
-                        var srcLabel = $"{t.SourceName} {t.SrcDocType} {t.SrcDocNo}".Trim();
-                        var dstLabel = $"{t.DestName} {t.DstDocType} {t.DstDocNo}".Trim();
-                        var routeTitle = $"{srcLabel} → {dstLabel}";
-                        <tr>
-                            <td><a asp-page="/Transactions/Details" asp-route-id="@t.TxnPk">@t.TxnId</a></td>
-                            <td>@SyncDisplayNames.TxnType(t.TxnTypeCode)</td>
-                            <td>
-                                <span class="route-cell cell-truncate" title="@routeTitle">
-                                    <span class="route-src">@srcLabel</span>
-                                    <span class="route-arrow" aria-hidden="true">→</span>
-                                    <span class="route-dst">@dstLabel</span>
-                                </span>
-                            </td>
-                            <td><span class="badge badge-@(t.Status.ToLowerInvariant())">@t.Status</span></td>
-                            <td class="col-actions">
-                                @if (t.Status is not "COMPLETED")
-                                {
-                                    <form method="post" asp-page-handler="Retry" asp-route-txnPk="@t.TxnPk"><button class="btn small" type="submit">Retry</button></form>
-                                }
-                            </td>
-                        </tr>
-                    }
-                    </tbody>
-                </table>
-            </div>
-        }
-    </div>
+    <details class="card txn-history-dropdown" id="error-logs">
+        <summary class="txn-history-summary">
+            <span class="txn-history-title">Error Logs</span>
+            <span class="count-pill" aria-label="@Model.Errors.Count records">@Model.Errors.Count</span>
+        </summary>
+        <div class="txn-history-body">
+            <p class="muted txn-history-note">Stack traces are stored for administrators and are not shown here.</p>
+            @if (Model.Errors.Count == 0)
+            {
+                <p class="empty">No error logs yet.</p>
+            }
+            else
+            {
+                <div class="table-wrap push-jobs-table-wrap">
+                    <table>
+                        <thead><tr><th>When</th><th>Type</th><th>Message</th><th>Resolved</th><th class="col-actions"></th></tr></thead>
+                        <tbody>
+                        @foreach (var e in Model.Errors)
+                        {
+                            <tr>
+                                <td>@e.AtUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                                <td>@e.ErrorType</td>
+                                <td><span class="cell-truncate" title="@e.UserMessage">@e.UserMessage</span></td>
+                                <td>@(e.Resolved ? "Yes" : "No")</td>
+                                <td class="col-actions">
+                                    @if (!e.Resolved && Model.CanManage)
+                                    {
+                                        <form method="post" asp-page-handler="ResolveError" asp-route-id="@e.ErrorId">
+                                            <button class="btn small secondary" type="submit">Resolve</button>
+                                        </form>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </details>
 </div>
+
+<script>
+(() => {
+  var id = (location.hash || '').replace(/^#/, '');
+  if (!id) return;
+  var el = document.getElementById(id);
+  if (el && el.tagName === 'DETAILS') {
+    el.open = true;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+})();
+</script>

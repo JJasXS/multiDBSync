@@ -123,6 +123,8 @@
     master.addEventListener("change", () => {
       const group = master.getAttribute("data-check-all");
       document.querySelectorAll(`[data-check-group="${group}"]`).forEach((cb) => {
+        const row = cb.closest("tr");
+        if (row && row.hidden) return;
         cb.checked = master.checked;
       });
     });
@@ -181,5 +183,32 @@
     toast.querySelector(".toast-dismiss")?.addEventListener("click", dismiss);
     window.setTimeout(dismiss, duration);
     source.remove();
+  });
+})();
+
+(() => {
+  document.querySelectorAll("[data-master-menu]").forEach((root) => {
+    const btn = root.querySelector("[data-master-menu-toggle]");
+    const panel = root.querySelector("[data-master-menu-panel]");
+    if (!btn || !panel) return;
+
+    const setOpen = (open) => {
+      panel.hidden = !open;
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+      root.classList.toggle("is-open", open);
+    };
+
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      setOpen(panel.hidden);
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!root.contains(e.target)) setOpen(false);
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") setOpen(false);
+    });
   });
 })();

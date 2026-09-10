@@ -5,7 +5,7 @@
     var t = Model.Txn!;
 }
 <div class="card">
-    <p><a href="/logs?tab=transactions">← Logs</a></p>
+    <p><a asp-page="/Logs">← Logs</a></p>
     <p><strong>Source:</strong> @t.SourceName · @t.SrcDocType @t.SrcDocNo (@t.SrcDocKey)</p>
     <p><strong>Destination:</strong> @t.DestName · @t.DstDocType @t.DstDocNo (@t.DstDocKey)</p>
     <p><span class="badge badge-@(t.Status.ToLowerInvariant())">@t.Status</span></p>

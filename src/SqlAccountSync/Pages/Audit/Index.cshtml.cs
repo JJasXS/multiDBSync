@@ -1,8 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace SqlAccountSync.Pages.Audit;
 
-public class IndexModel : SyncPageModel
+public class IndexModel : PageModel
 {
-    public IActionResult OnGet() => RedirectToPage("/Settings/Audit");
+    public IActionResult OnGet() => Redirect("/logs#audit-logs");
 }
