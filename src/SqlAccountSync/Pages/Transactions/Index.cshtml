@@ -77,15 +77,22 @@
                                     </th>
                                     <th>Document</th>
                                     <th>Date</th>
-                                    <th>Party</th>
-                                    <th>Amount</th>
+                                    @if (isStockTransfer)
+                                    {
+                                        <th>Qty</th>
+                                    }
+                                    else
+                                    {
+                                        <th>Party</th>
+                                        <th>Amount</th>
+                                    }
                                 </tr>
                             </thead>
                             <tbody>
                                 @if (Model.Documents.Count == 0)
                                 {
                                     <tr>
-                                        <td colspan="5" class="empty">No documents. Pick source and type.</td>
+                                        <td colspan="@(isStockTransfer ? 4 : 5)" class="empty">No documents. Pick source and type.</td>
                                     </tr>
                                 }
                                 else
@@ -101,8 +108,15 @@
                                             </td>
                                             <td>@doc.DocNo</td>
                                             <td>@(doc.DocDate?.ToString("yyyy-MM-dd") ?? "")</td>
-                                            <td><span class="cell-truncate" title="@doc.PartyName">@doc.PartyCode</span></td>
-                                            <td>@doc.Amount.ToString("N2")</td>
+                                            @if (isStockTransfer)
+                                            {
+                                                <td>@doc.Qty.ToString("0.##")</td>
+                                            }
+                                            else
+                                            {
+                                                <td><span class="cell-truncate" title="@doc.PartyName">@doc.PartyCode</span></td>
+                                                <td>@doc.Amount.ToString("N2")</td>
+                                            }
                                         </tr>
                                     }
                                 }

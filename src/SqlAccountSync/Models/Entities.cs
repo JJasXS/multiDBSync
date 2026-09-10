@@ -271,6 +271,8 @@ public sealed class DocumentListItem
     public string PartyCode { get; set; } = "";
     public string PartyName { get; set; } = "";
     public decimal Amount { get; set; }
+    /// <summary>Sum of line quantities (useful for stock transfers where Amount is usually 0).</summary>
+    public decimal Qty { get; set; }
 }
 
 public sealed class ConnectionTestResult

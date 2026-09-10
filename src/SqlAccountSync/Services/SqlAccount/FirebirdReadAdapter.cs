@@ -1077,14 +1077,14 @@ WHERE CAST(DOCKEY AS VARCHAR(40)) = @K OR UPPER(TRIM(DOCNO)) = UPPER(@K)";
 
     public Task<List<DocumentListItem>> ListDocumentsAsync(RegisteredDatabase db, string docType, int take = 200, CancellationToken cancellationToken = default)
     {
-        var (header, _, typeCode) = ResolveDocTables(docType);
+        var (header, detail, typeCode) = ResolveDocTables(docType);
         if (header is null)
             return Task.FromResult(new List<DocumentListItem>());
 
         take = Math.Clamp(take, 1, 500);
         return WithReadTx(db, async (conn, tx) =>
         {
-            (header, _, typeCode) = await ResolveDocTablesAsync(conn, tx, docType, cancellationToken).ConfigureAwait(false);
+            (header, detail, typeCode) = await ResolveDocTablesAsync(conn, tx, docType, cancellationToken).ConfigureAwait(false);
             if (header is null)
                 return new List<DocumentListItem>();
             if (!await TableExistsConn(conn, tx, header, cancellationToken).ConfigureAwait(false))
@@ -1097,31 +1097,44 @@ WHERE CAST(DOCKEY AS VARCHAR(40)) = @K OR UPPER(TRIM(DOCNO)) = UPPER(@K)";
 
             var select = new List<string>
             {
-                "DOCKEY",
-                "TRIM(DOCNO) AS DOCNO",
-                "DOCDATE"
+                "H.DOCKEY",
+                "TRIM(H.DOCNO) AS DOCNO",
+                "H.DOCDATE"
             };
             void Add(string alias, params string[] names)
             {
                 var c = Col(names);
                 if (c is not null)
-                    select.Add($"TRIM(COALESCE(CAST({c} AS VARCHAR(500)), '')) AS {alias}");
+                    select.Add($"TRIM(COALESCE(CAST(H.{c} AS VARCHAR(500)), '')) AS {alias}");
             }
             void AddNum(string alias, params string[] names)
             {
                 var c = Col(names);
                 if (c is not null)
-                    select.Add($"COALESCE({c}, 0) AS {alias}");
+                    select.Add($"COALESCE(H.{c}, 0) AS {alias}");
             }
 
             Add("PARTYCODE", "CODE");
             Add("PARTYNAME", "COMPANYNAME", "CODE");
             AddNum("AMOUNT", "DOCAMT", "LOCALDOCAMT");
 
-            var orderBy = Col("DOCDATE") is not null ? "DOCDATE DESC, DOCNO DESC" : "DOCNO DESC";
+            var qtyExpr = "CAST(0 AS NUMERIC(18,4)) AS QTYTOTAL";
+            if (!string.IsNullOrWhiteSpace(detail)
+                && await TableExistsConn(conn, tx, detail, cancellationToken).ConfigureAwait(false))
+            {
+                var dCols = await Columns(conn, tx, detail, cancellationToken).ConfigureAwait(false);
+                var qtyCol = dCols.Contains("QTY", StringComparer.OrdinalIgnoreCase) ? "QTY"
+                    : dCols.Contains("SQTY", StringComparer.OrdinalIgnoreCase) ? "SQTY"
+                    : null;
+                if (qtyCol is not null)
+                    qtyExpr = $"(SELECT COALESCE(SUM(COALESCE(D.{qtyCol}, 0)), 0) FROM {detail} D WHERE D.DOCKEY = H.DOCKEY) AS QTYTOTAL";
+            }
+            select.Add(qtyExpr);
+
+            var orderBy = Col("DOCDATE") is not null ? "H.DOCDATE DESC, H.DOCNO DESC" : "H.DOCNO DESC";
             await using var cmd = conn.CreateCommand();
             cmd.Transaction = tx;
-            cmd.CommandText = $"SELECT FIRST {take} {string.Join(", ", select)} FROM {header} ORDER BY {orderBy}";
+            cmd.CommandText = $"SELECT FIRST {take} {string.Join(", ", select)} FROM {header} H ORDER BY {orderBy}";
             SqlGuard.EnsureSelectOnly(cmd.CommandText);
 
             var list = new List<DocumentListItem>();
@@ -1138,7 +1151,8 @@ WHERE CAST(DOCKEY AS VARCHAR(40)) = @K OR UPPER(TRIM(DOCNO)) = UPPER(@K)";
                     DocDate = D("DOCDATE"),
                     PartyCode = S("PARTYCODE"),
                     PartyName = S("PARTYNAME"),
-                    Amount = HasCol(r, "AMOUNT") ? Convert.ToDecimal(r["AMOUNT"]) : 0m
+                    Amount = HasCol(r, "AMOUNT") ? Convert.ToDecimal(r["AMOUNT"]) : 0m,
+                    Qty = HasCol(r, "QTYTOTAL") ? Convert.ToDecimal(r["QTYTOTAL"]) : 0m
                 });
             }
             return list;
