@@ -90,86 +90,135 @@ public sealed class TransactionEngine : ITransactionEngine
         if (type.Code is null)
             return (0, "", "Unknown transaction type.");
 
-        DocumentHeader source;
-        try
-        {
-            var found = await _read.GetDocumentAsync(srcDb!, type.Src, srcDocNoOrKey, cancellationToken).ConfigureAwait(false);
-            if (found is null)
-                return (0, "", $"Source document was not found in {srcDb!.DisplayName}.");
-            source = found;
-        }
-        catch (Exception ex)
-        {
-            return (0, "", FirebirdErrorMapper.Describe(ex));
-        }
+        var (source, sourceError) = await TryLoadSourceDocumentAsync(srcDb!, type.Src, srcDocNoOrKey, cancellationToken)
+            .ConfigureAwait(false);
+        if (sourceError is not null)
+            return (0, "", sourceError);
 
-        var qtyError = TryApplyQtyOverrides(source, qtyBySeq);
+        var qtyError = TryApplyQtyOverrides(source!, qtyBySeq);
         if (qtyError is not null)
             return (0, "", qtyError);
 
-        var idem = IdempotencyKey.ForTransaction(srcDb!.DbCode, dstDb!.DbCode, txnTypeCode, type.Src, source.DocKey, source.DocNo);
-        var existing = await _db.QuerySingleAsync("SELECT FIRST 1 * FROM SYNC_TXN WHERE IDEMKEY=@IDEMKEY", MapTxn, new { IDEMKEY = idem }, cancellationToken).ConfigureAwait(false);
-        var reopenedStale = false;
-        if (existing is not null && existing.Status == JobStatuses.Completed)
-        {
-            if (await DestinationReallyExistsAsync(existing, cancellationToken).ConfigureAwait(false))
-                return (existing.TxnPk, existing.TxnId, "This document was already synchronized. No duplicate will be created.");
+        var idem = IdempotencyKey.ForTransaction(srcDb!.DbCode, dstDb!.DbCode, txnTypeCode, type.Src, source!.DocKey, source.DocNo);
+        var (existing, reopenedStale, alreadyDone) = await ResolveExistingTxnAsync(idem, cancellationToken).ConfigureAwait(false);
+        if (alreadyDone is not null)
+            return alreadyDone.Value;
 
-            // Stale COMPLETED row (dest doc missing) — reopen so a real transfer can run.
-            await ClearDestinationAsync(existing.TxnPk, cancellationToken).ConfigureAwait(false);
-            existing = await _db.QuerySingleAsync("SELECT FIRST 1 * FROM SYNC_TXN WHERE TXNPK=@TXNPK", MapTxn, new { TXNPK = existing.TxnPk }, cancellationToken).ConfigureAwait(false);
-            reopenedStale = true;
+        var (txnPk, txnId, insertDup) = await EnsureTxnRowAsync(
+            existing, source, type, sourceDbId, destDbId, txnTypeCode, idem, user, cancellationToken).ConfigureAwait(false);
+        if (insertDup is not null)
+            return insertDup.Value;
+
+        await QueueTxnJobAsync(
+            txnPk, txnId, source, type, sourceDbId, destDbId, txnTypeCode, srcDocNoOrKey,
+            qtyBySeq, idem, dryRun, user, reopenedStale, cancellationToken).ConfigureAwait(false);
+
+        return (txnPk, txnId, EnqueueSuccessMessage(dryRun, reopenedStale));
+    }
+
+    private async Task<(DocumentHeader? Source, string? Error)> TryLoadSourceDocumentAsync(
+        RegisteredDatabase srcDb, string srcDocType, string srcDocNoOrKey, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var found = await _read.GetDocumentAsync(srcDb, srcDocType, srcDocNoOrKey, cancellationToken).ConfigureAwait(false);
+            if (found is null)
+                return (null, $"Source document was not found in {srcDb.DisplayName}.");
+            return (found, null);
+        }
+        catch (Exception ex)
+        {
+            return (null, FirebirdErrorMapper.Describe(ex));
+        }
+    }
+
+    private async Task<(SyncTransaction? Existing, bool ReopenedStale, (int, string, string)? AlreadyDone)> ResolveExistingTxnAsync(
+        string idem, CancellationToken cancellationToken)
+    {
+        var existing = await _db.QuerySingleAsync(
+            "SELECT FIRST 1 * FROM SYNC_TXN WHERE IDEMKEY=@IDEMKEY", MapTxn, new { IDEMKEY = idem }, cancellationToken)
+            .ConfigureAwait(false);
+        if (existing is null || existing.Status != JobStatuses.Completed)
+            return (existing, false, null);
+
+        var outcome = TxnEnqueueRules.DecideCompleted(
+            await DestinationReallyExistsAsync(existing, cancellationToken).ConfigureAwait(false));
+        if (outcome == TxnEnqueueRules.CompletedOutcome.AlreadyDone)
+        {
+            return (existing, false,
+                (existing.TxnPk, existing.TxnId, "This document was already synchronized. No duplicate will be created."));
         }
 
-        int txnPk;
-        string txnId;
-        if (existing is null)
+        // Stale COMPLETED row (dest doc missing) — reopen so a real transfer can run.
+        await ClearDestinationAsync(existing.TxnPk, cancellationToken).ConfigureAwait(false);
+        existing = await _db.QuerySingleAsync(
+            "SELECT FIRST 1 * FROM SYNC_TXN WHERE TXNPK=@TXNPK", MapTxn, new { TXNPK = existing.TxnPk }, cancellationToken)
+            .ConfigureAwait(false);
+        return (existing, true, null);
+    }
+
+    private async Task<(int TxnPk, string TxnId, (int, string, string)? InsertDup)> EnsureTxnRowAsync(
+        SyncTransaction? existing,
+        DocumentHeader source,
+        (string Code, string Name, string Src, string Dst, string DstPath) type,
+        int sourceDbId, int destDbId, string txnTypeCode, string idem, string user,
+        CancellationToken cancellationToken)
+    {
+        if (existing is not null)
+            return (existing.TxnPk, existing.TxnId, null);
+
+        var txnPk = (int)await _db.NextIdAsync("GEN_SYNC_TXN", cancellationToken).ConfigureAwait(false);
+        var seq = await _db.NextIdAsync("GEN_SYNC_TXNSEQ", cancellationToken).ConfigureAwait(false);
+        var txnId = $"TXN-{DateTime.UtcNow:yyyyMMdd}-{seq.ToString("000000", CultureInfo.InvariantCulture)}";
+        try
         {
-            txnPk = (int)await _db.NextIdAsync("GEN_SYNC_TXN", cancellationToken).ConfigureAwait(false);
-            var seq = await _db.NextIdAsync("GEN_SYNC_TXNSEQ", cancellationToken).ConfigureAwait(false);
-            txnId = $"TXN-{DateTime.UtcNow:yyyyMMdd}-{seq.ToString("000000", CultureInfo.InvariantCulture)}";
-            try
-            {
-                await _db.ExecuteAsync(@"
+            await _db.ExecuteAsync(@"
 INSERT INTO SYNC_TXN (TXNPK, TXNID, TXNTYPECODE, SOURCEDBID, DESTDBID, SRCDOCTYPE, SRCDOCKEY, SRCDOCNO, DSTDOCTYPE, IDEMKEY, STATUS, RETRYCOUNT, CREATEDAT, CREATEDBY, UPDATEDAT)
 VALUES (@TXNPK, @TXNID, @TXNTYPECODE, @SOURCEDBID, @DESTDBID, @SRCDOCTYPE, @SRCDOCKEY, @SRCDOCNO, @DSTDOCTYPE, @IDEMKEY, 'PENDING', 0, CURRENT_TIMESTAMP, @USER, CURRENT_TIMESTAMP)",
-                    new
-                    {
-                        TXNPK = txnPk,
-                        TXNID = txnId,
-                        TXNTYPECODE = txnTypeCode,
-                        SOURCEDBID = sourceDbId,
-                        DESTDBID = destDbId,
-                        SRCDOCTYPE = type.Src,
-                        SRCDOCKEY = source.DocKey,
-                        SRCDOCNO = source.DocNo,
-                        DSTDOCTYPE = type.Dst,
-                        IDEMKEY = idem,
-                        USER = user
-                    }, cancellationToken).ConfigureAwait(false);
-            }
-            catch (FirebirdSql.Data.FirebirdClient.FbException ex) when (ex.Message.Contains("unique", StringComparison.OrdinalIgnoreCase))
-            {
-                existing = await _db.QuerySingleAsync("SELECT FIRST 1 * FROM SYNC_TXN WHERE IDEMKEY=@IDEMKEY", MapTxn, new { IDEMKEY = idem }, cancellationToken).ConfigureAwait(false);
-                return (existing!.TxnPk, existing.TxnId, "An existing synchronization record was reused. No duplicate will be created.");
-            }
+                new
+                {
+                    TXNPK = txnPk,
+                    TXNID = txnId,
+                    TXNTYPECODE = txnTypeCode,
+                    SOURCEDBID = sourceDbId,
+                    DESTDBID = destDbId,
+                    SRCDOCTYPE = type.Src,
+                    SRCDOCKEY = source.DocKey,
+                    SRCDOCNO = source.DocNo,
+                    DSTDOCTYPE = type.Dst,
+                    IDEMKEY = idem,
+                    USER = user
+                }, cancellationToken).ConfigureAwait(false);
+            return (txnPk, txnId, null);
         }
-        else
+        catch (FirebirdSql.Data.FirebirdClient.FbException ex) when (ex.Message.Contains("unique", StringComparison.OrdinalIgnoreCase))
         {
-            txnPk = existing.TxnPk;
-            txnId = existing.TxnId;
+            var raced = await _db.QuerySingleAsync(
+                "SELECT FIRST 1 * FROM SYNC_TXN WHERE IDEMKEY=@IDEMKEY", MapTxn, new { IDEMKEY = idem }, cancellationToken)
+                .ConfigureAwait(false);
+            return (0, "", (raced!.TxnPk, raced.TxnId, "An existing synchronization record was reused. No duplicate will be created."));
         }
+    }
 
+    private async Task QueueTxnJobAsync(
+        int txnPk, string txnId, DocumentHeader source,
+        (string Code, string Name, string Src, string Dst, string DstPath) type,
+        int sourceDbId, int destDbId, string txnTypeCode, string srcDocNoOrKey,
+        IReadOnlyDictionary<int, decimal>? qtyBySeq, string idem, bool dryRun, string user,
+        bool reopenedStale, CancellationToken cancellationToken)
+    {
         await AddEvent(txnPk, "Created", "SUCCESS",
             reopenedStale
                 ? $"Re-queued; previous COMPLETED dest was missing for {source.DocType} {source.DocNo}"
                 : $"Queued from {source.DocType} {source.DocNo}",
             cancellationToken).ConfigureAwait(false);
+
         // IDEMKEY is VARCHAR(64); hash so "|EXEC"/ "|DRY" suffixes never truncate.
         // Stale reopen must not reuse the old job IDEMKEY or Enqueue returns the prior COMPLETED job and never runs.
         var jobIdem = reopenedStale
             ? IdempotencyKey.Hash(idem + (dryRun ? "|DRY|" : "|EXEC|") + "REOPEN|" + Guid.NewGuid().ToString("N")[..8])
             : IdempotencyKey.Hash(idem + (dryRun ? "|DRY" : "|EXEC"));
+
         await _queue.EnqueueAsync(new SyncJob
         {
             JobKind = dryRun ? "TXN_DRYRUN" : "TXN",
@@ -199,12 +248,14 @@ VALUES (@TXNPK, @TXNID, @TXNTYPECODE, @SOURCEDBID, @DESTDBID, @SRCDOCTYPE, @SRCD
             Result = "QUEUED",
             RequestId = txnPk.ToString(CultureInfo.InvariantCulture)
         }, cancellationToken).ConfigureAwait(false);
-        return (txnPk, txnId, dryRun
+    }
+
+    private static string EnqueueSuccessMessage(bool dryRun, bool reopenedStale) =>
+        dryRun
             ? "Dry-run queued. The destination will not be modified."
             : reopenedStale
                 ? "Previous sync record was stale (destination missing). Transaction re-queued."
-                : "Transaction queued for execution.");
-    }
+                : "Transaction queued for execution.";
 
     public async Task<DryRunResult> DryRunAsync(
         int sourceDbId, int destDbId, string txnTypeCode, string srcDocNoOrKey,

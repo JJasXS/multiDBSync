@@ -16,3 +16,5 @@ flowchart TD
 Pages: Databases, Relationships, Mappings, Jobs, Transactions, Users, Settings, Audit, Errors, Logs.
 
 Details: [ENTERPRISE.md](ENTERPRISE.md), [OPERATIONS.md](OPERATIONS.md), [BACKUP_AND_RECOVERY.md](BACKUP_AND_RECOVERY.md).
+
+Production / design review against the system-design checklist: [SYSTEM_DESIGN_CHECKLIST.md](SYSTEM_DESIGN_CHECKLIST.md).

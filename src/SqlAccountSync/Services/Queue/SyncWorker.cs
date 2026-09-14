@@ -31,6 +31,11 @@ public sealed class SyncWorker : BackgroundService
                 var queue = scope.ServiceProvider.GetRequiredService<IJobQueue>();
                 var sync = scope.ServiceProvider.GetRequiredService<ISyncOrchestrator>();
                 var txns = scope.ServiceProvider.GetRequiredService<ITransactionEngine>();
+
+                var reclaimed = await queue.ReclaimStaleProcessingAsync(stoppingToken).ConfigureAwait(false);
+                if (reclaimed > 0)
+                    _logger.LogWarning("Reclaimed {Count} stale PROCESSING job(s) after lease expiry.", reclaimed);
+
                 var job = await queue.ClaimAsync(workerId, stoppingToken).ConfigureAwait(false);
                 if (job is null)
                 {

@@ -127,6 +127,14 @@ public class IndexModel : SyncPageModel
             return Page();
         }
 
+        var (queued, failed, messages) = await EnqueueSelectedAsync(docs, dests);
+        FlashToast = FlashToasts.Queue(queued, failed, messages, "transaction");
+        return Page();
+    }
+
+    private async Task<(int Queued, int Failed, List<string> Messages)> EnqueueSelectedAsync(
+        List<string> docs, List<int> dests)
+    {
         var messages = new List<string>();
         var queued = 0;
         var failed = 0;
@@ -140,17 +148,16 @@ public class IndexModel : SyncPageModel
                 {
                     var (_, txnId, msg) = await _engine.EnqueueAsync(
                         SourceDbId, destId, TxnType, doc, dryRun: false, CurrentEmail, Confirmed, QtyForDoc(doc));
-                    if (!string.IsNullOrEmpty(txnId))
-                    {
-                        queued++;
-                        var destLabel = dbById.TryGetValue(destId, out var db) ? db.DisplayName : $"database {destId}";
-                        messages.Add($"{doc} to {destLabel} ({txnId})");
-                    }
-                    else
+                    if (string.IsNullOrEmpty(txnId))
                     {
                         failed++;
                         messages.Add($"{doc}: {msg}");
+                        continue;
                     }
+
+                    queued++;
+                    var destLabel = dbById.TryGetValue(destId, out var db) ? db.DisplayName : $"database {destId}";
+                    messages.Add($"{doc} to {destLabel} ({txnId})");
                 }
                 catch (Exception ex)
                 {
@@ -160,8 +167,7 @@ public class IndexModel : SyncPageModel
             }
         }
 
-        FlashToast = FlashToasts.Queue(queued, failed, messages, "transaction");
-        return Page();
+        return (queued, failed, messages);
     }
 
     private Dictionary<int, decimal>? QtyForDoc(string docId)

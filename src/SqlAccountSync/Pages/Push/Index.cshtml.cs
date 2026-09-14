@@ -153,6 +153,13 @@ public class IndexModel : SyncPageModel
         return RedirectToPage(new { tab = "jobs" });
     }
 
+    public async Task<IActionResult> OnPostUnlockAsync(int jobId)
+    {
+        if (!CanOperate) return Forbid();
+        await _jobs.UnlockProcessingAsync(jobId);
+        return RedirectToPage(new { tab = "jobs" });
+    }
+
     private async Task LoadPushAsync()
     {
         EntityCode = NormalizeEntity(EntityCode);

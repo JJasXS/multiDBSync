@@ -264,6 +264,10 @@ public class ItemDestCodeLinkTests
         public Task<List<SyncJob>> ListAsync(string? status = null, int take = 200, CancellationToken cancellationToken = default) => Task.FromResult(new List<SyncJob>());
         public Task<SyncJob?> GetAsync(int jobId, CancellationToken cancellationToken = default) => Task.FromResult<SyncJob?>(null);
         public Task CancelAsync(int jobId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<int> ReclaimStaleProcessingAsync(CancellationToken cancellationToken = default) => Task.FromResult(0);
+        public Task UnlockProcessingAsync(int jobId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<QueueHealthSnapshot> GetHealthAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(new QueueHealthSnapshot());
     }
 
     private sealed class NoopAuditService : IAuditService

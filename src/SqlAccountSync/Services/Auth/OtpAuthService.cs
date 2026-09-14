@@ -133,103 +133,14 @@ public sealed class OtpAuthService
     private async Task<(bool Sent, string? Error)> TrySendEmailAsync(
         string toAddress, string subject, string htmlBody, CancellationToken cancellationToken)
     {
-        var tenantCode = (_config["TenantBootstrap:TenantCode"]
-                          ?? _sync.TenantCode
-                          ?? Environment.GetEnvironmentVariable("TENANT_CODE")
-                          ?? "").Trim();
-
-        TenantEmailOverride? tenantEmail = null;
-        if (tenantCode.Length > 0)
-        {
-            try
-            {
-                tenantEmail = await _tenantEmail.GetEmailOverrideAsync(tenantCode, cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "[SMTP] Could not load tenant email overrides for {Tenant}.", tenantCode);
-            }
-        }
-
-        if (tenantEmail?.OtpEnabled == false)
-            return (false, "OTP email is disabled for this tenant.");
-
-        var host = (_smtp.Host ?? "").Trim();
-        if (host.Length == 0)
-            host = "smtp.gmail.com";
-        var port = _smtp.Port <= 0 ? 587 : _smtp.Port;
-        var user = (_smtp.User ?? "").Trim();
-        if (string.IsNullOrWhiteSpace(user) && !string.IsNullOrWhiteSpace(_smtp.From))
-            user = _smtp.From.Trim();
-
-        if (tenantEmail is not null)
-        {
-            if (!string.IsNullOrWhiteSpace(tenantEmail.SmtpHost))
-                host = tenantEmail.SmtpHost.Trim();
-            if (tenantEmail.SmtpPort is > 0)
-                port = tenantEmail.SmtpPort.Value;
-            if (!string.IsNullOrWhiteSpace(tenantEmail.SmtpSenderEmail))
-                user = tenantEmail.SmtpSenderEmail.Trim();
-        }
-
-        TenantSmtpCredentialsSecretPayload? bundle = null;
-        if (!string.IsNullOrWhiteSpace(tenantEmail?.SmtpCredentialsSecretRef))
-        {
-            bundle = await TenantSmtpSecretResolver
-                .ResolveSmtpCredentialsSecretAsync(_aws, tenantEmail.SmtpCredentialsSecretRef, cancellationToken)
-                .ConfigureAwait(false);
-            if (bundle is not null)
-            {
-                if (!string.IsNullOrWhiteSpace(bundle.Host))
-                    host = bundle.Host.Trim();
-                if (bundle.Port is > 0)
-                    port = bundle.Port.Value;
-                if (!string.IsNullOrWhiteSpace(bundle.User))
-                    user = bundle.User.Trim();
-            }
-        }
-
-        string pass;
-        if (!string.IsNullOrWhiteSpace(bundle?.Password))
-        {
-            pass = bundle.Password.Replace(" ", "").Trim();
-        }
-        else
-        {
-            var fallback = await _secrets.ResolveAsync(_smtp.PasswordSecretRef, cancellationToken).ConfigureAwait(false) ?? "";
-            pass = (await TenantSmtpSecretResolver.ResolveSmtpPasswordAsync(
-                    _aws,
-                    tenantEmail?.SmtpAppPasswordSecretRef,
-                    fallback,
-                    cancellationToken)
-                .ConfigureAwait(false) ?? "").Replace(" ", "").Trim();
-        }
-
-        if (string.IsNullOrWhiteSpace(host))
-            return (false, "SMTP is not configured.");
-        if (string.IsNullOrWhiteSpace(user) || string.IsNullOrWhiteSpace(pass))
-        {
-            return (false,
-                "SMTP user or password empty. Tenant must provide proaccEmail/email smtpCredentialsSecretRef or smtpAppPasswordSecretRef (same as eQuotation), and the app needs AWS credentials to read Secrets Manager.");
-        }
+        var settings = await ResolveSmtpSettingsAsync(cancellationToken).ConfigureAwait(false);
+        if (settings.Error is not null)
+            return (false, settings.Error);
 
         try
         {
-            var message = new MimeMessage();
-            message.From.Add(new MailboxAddress("SQL Account Sync", user));
-            message.To.Add(MailboxAddress.Parse(toAddress));
-            message.Subject = subject;
-            message.Body = new TextPart("html") { Text = htmlBody };
-
-            using var client = new SmtpClient();
-            var secure = port == 465
-                ? SecureSocketOptions.SslOnConnect
-                : (_smtp.EnableSsl ? SecureSocketOptions.StartTlsWhenAvailable : SecureSocketOptions.None);
-            await client.ConnectAsync(host, port, secure, cancellationToken).ConfigureAwait(false);
-            await client.AuthenticateAsync(user, pass, cancellationToken).ConfigureAwait(false);
-            await client.SendAsync(message, cancellationToken).ConfigureAwait(false);
-            await client.DisconnectAsync(true, cancellationToken).ConfigureAwait(false);
-            _logger.LogInformation("OTP email sent to {Email} via {Host}:{Port}", toAddress, host, port);
+            await SendSmtpHtmlAsync(settings.Value!, toAddress, subject, htmlBody, cancellationToken).ConfigureAwait(false);
+            _logger.LogInformation("OTP email sent to {Email} via {Host}:{Port}", toAddress, settings.Value!.Host, settings.Value.Port);
             return (true, null);
         }
         catch (Exception ex)
@@ -237,6 +148,134 @@ public sealed class OtpAuthService
             _logger.LogWarning(ex, "SMTP send failed.");
             return (false, "Could not send the sign-in email.");
         }
+    }
+
+    private sealed record SmtpSettings(string Host, int Port, string User, string Pass, bool EnableSsl);
+
+    private async Task<(SmtpSettings? Value, string? Error)> ResolveSmtpSettingsAsync(CancellationToken cancellationToken)
+    {
+        var tenantEmail = await LoadTenantEmailOverrideAsync(cancellationToken).ConfigureAwait(false);
+        if (tenantEmail?.OtpEnabled == false)
+            return (null, "OTP email is disabled for this tenant.");
+
+        var host = FirstNonEmpty(_smtp.Host, "smtp.gmail.com")!;
+        var port = _smtp.Port <= 0 ? 587 : _smtp.Port;
+        var user = FirstNonEmpty(_smtp.User, _smtp.From) ?? "";
+        ApplyTenantSmtpFields(tenantEmail, ref host, ref port, ref user);
+
+        var bundle = await LoadSmtpCredentialsBundleAsync(tenantEmail, cancellationToken).ConfigureAwait(false);
+        ApplyBundleSmtpFields(bundle, ref host, ref port, ref user);
+
+        var pass = await ResolveSmtpPasswordAsync(bundle, tenantEmail, cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(host))
+            return (null, "SMTP is not configured.");
+        if (string.IsNullOrWhiteSpace(user) || string.IsNullOrWhiteSpace(pass))
+        {
+            return (null,
+                "SMTP user or password empty. Tenant must provide proaccEmail/email smtpCredentialsSecretRef or smtpAppPasswordSecretRef (same as eQuotation), and the app needs AWS credentials to read Secrets Manager.");
+        }
+
+        return (new SmtpSettings(host, port, user, pass, _smtp.EnableSsl), null);
+    }
+
+    private async Task<TenantEmailOverride?> LoadTenantEmailOverrideAsync(CancellationToken cancellationToken)
+    {
+        var tenantCode = (_config["TenantBootstrap:TenantCode"]
+                          ?? _sync.TenantCode
+                          ?? Environment.GetEnvironmentVariable("TENANT_CODE")
+                          ?? "").Trim();
+        if (tenantCode.Length == 0)
+            return null;
+
+        try
+        {
+            return await _tenantEmail.GetEmailOverrideAsync(tenantCode, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[SMTP] Could not load tenant email overrides for {Tenant}.", tenantCode);
+            return null;
+        }
+    }
+
+    private async Task<TenantSmtpCredentialsSecretPayload?> LoadSmtpCredentialsBundleAsync(
+        TenantEmailOverride? tenantEmail, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(tenantEmail?.SmtpCredentialsSecretRef))
+            return null;
+
+        return await TenantSmtpSecretResolver
+            .ResolveSmtpCredentialsSecretAsync(_aws, tenantEmail.SmtpCredentialsSecretRef, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private static void ApplyTenantSmtpFields(
+        TenantEmailOverride? tenantEmail, ref string host, ref int port, ref string user)
+    {
+        if (tenantEmail is null)
+            return;
+        host = FirstNonEmpty(tenantEmail.SmtpHost, host)!;
+        if (tenantEmail.SmtpPort is > 0)
+            port = tenantEmail.SmtpPort.Value;
+        user = FirstNonEmpty(tenantEmail.SmtpSenderEmail, user) ?? user;
+    }
+
+    private static void ApplyBundleSmtpFields(
+        TenantSmtpCredentialsSecretPayload? bundle, ref string host, ref int port, ref string user)
+    {
+        if (bundle is null)
+            return;
+        host = FirstNonEmpty(bundle.Host, host)!;
+        if (bundle.Port is > 0)
+            port = bundle.Port.Value;
+        user = FirstNonEmpty(bundle.User, user) ?? user;
+    }
+
+    private async Task<string> ResolveSmtpPasswordAsync(
+        TenantSmtpCredentialsSecretPayload? bundle,
+        TenantEmailOverride? tenantEmail,
+        CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrWhiteSpace(bundle?.Password))
+            return bundle.Password.Replace(" ", "").Trim();
+
+        var fallback = await _secrets.ResolveAsync(_smtp.PasswordSecretRef, cancellationToken).ConfigureAwait(false) ?? "";
+        return (await TenantSmtpSecretResolver.ResolveSmtpPasswordAsync(
+                _aws,
+                tenantEmail?.SmtpAppPasswordSecretRef,
+                fallback,
+                cancellationToken)
+            .ConfigureAwait(false) ?? "").Replace(" ", "").Trim();
+    }
+
+    private static async Task SendSmtpHtmlAsync(
+        SmtpSettings settings, string toAddress, string subject, string htmlBody, CancellationToken cancellationToken)
+    {
+        var message = new MimeMessage();
+        message.From.Add(new MailboxAddress("SQL Account Sync", settings.User));
+        message.To.Add(MailboxAddress.Parse(toAddress));
+        message.Subject = subject;
+        message.Body = new TextPart("html") { Text = htmlBody };
+
+        using var client = new SmtpClient();
+        var secure = settings.Port == 465
+            ? SecureSocketOptions.SslOnConnect
+            : (settings.EnableSsl ? SecureSocketOptions.StartTlsWhenAvailable : SecureSocketOptions.None);
+        await client.ConnectAsync(settings.Host, settings.Port, secure, cancellationToken).ConfigureAwait(false);
+        await client.AuthenticateAsync(settings.User, settings.Pass, cancellationToken).ConfigureAwait(false);
+        await client.SendAsync(message, cancellationToken).ConfigureAwait(false);
+        await client.DisconnectAsync(true, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static string? FirstNonEmpty(params string?[] values)
+    {
+        foreach (var v in values)
+        {
+            var t = (v ?? "").Trim();
+            if (t.Length > 0)
+                return t;
+        }
+        return null;
     }
 }
 

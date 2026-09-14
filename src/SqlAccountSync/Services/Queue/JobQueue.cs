@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Options;
 using SqlAccountSync.Data;
+using SqlAccountSync.Helpers;
 using SqlAccountSync.Models;
 using SqlAccountSync.Options;
 
@@ -13,6 +14,19 @@ public interface IJobQueue
     Task<List<SyncJob>> ListAsync(string? status = null, int take = 200, CancellationToken cancellationToken = default);
     Task<SyncJob?> GetAsync(int jobId, CancellationToken cancellationToken = default);
     Task CancelAsync(int jobId, CancellationToken cancellationToken = default);
+    /// <summary>Reclaim PROCESSING jobs whose LOCKEDAT is older than the configured lease.</summary>
+    Task<int> ReclaimStaleProcessingAsync(CancellationToken cancellationToken = default);
+    /// <summary>Operator unlock: PROCESSING → RETRYING immediately.</summary>
+    Task UnlockProcessingAsync(int jobId, CancellationToken cancellationToken = default);
+    Task<QueueHealthSnapshot> GetHealthAsync(CancellationToken cancellationToken = default);
+}
+
+public sealed class QueueHealthSnapshot
+{
+    public int Pending { get; set; }
+    public int Processing { get; set; }
+    public int Failed { get; set; }
+    public double? OldestProcessingAgeSec { get; set; }
 }
 
 public sealed class JobQueue : IJobQueue
@@ -108,9 +122,8 @@ WHERE JOBID=@JOBID AND STATUS IN ('PENDING','RETRYING') AND NEXTRUNAT<=CURRENT_T
         if (status is JobStatuses.Failed or JobStatuses.Retrying)
         {
             var job = await GetAsync(jobId, cancellationToken).ConfigureAwait(false);
-            if (job is not null && job.Attempts >= job.MaxAttempts && status == JobStatuses.Retrying)
-                status = JobStatuses.Failed;
-            var delaySeconds = job is null ? 30 : Math.Min(3600, (int)Math.Pow(2, job.Attempts) * 15 + Random.Shared.Next(0, 10));
+            status = JobLeaseRules.ResolveCompleteStatus(status, job?.Attempts ?? 0, job?.MaxAttempts ?? 0);
+            var delaySeconds = job is null ? 30 : JobLeaseRules.BackoffSeconds(job.Attempts);
             await _db.ExecuteAsync(@"
 UPDATE SYNC_JOB SET STATUS=@STATUS, ERRORMESSAGE=@ERR, LOCKEDBY=NULL, LOCKEDAT=NULL,
 NEXTRUNAT=DATEADD(SECOND, @DELAY, CURRENT_TIMESTAMP)
@@ -139,8 +152,58 @@ WHERE JOBID=@JOBID",
         _db.QuerySingleAsync("SELECT FIRST 1 * FROM SYNC_JOB WHERE JOBID=@JOBID", Map, new { JOBID = jobId }, cancellationToken);
 
     public Task CancelAsync(int jobId, CancellationToken cancellationToken = default) =>
-        _db.ExecuteAsync("UPDATE SYNC_JOB SET STATUS='CANCELLED' WHERE JOBID=@JOBID AND STATUS IN ('PENDING','RETRYING','FAILED')",
+        _db.ExecuteAsync(@"
+UPDATE SYNC_JOB SET STATUS='CANCELLED', LOCKEDBY=NULL, LOCKEDAT=NULL
+WHERE JOBID=@JOBID AND STATUS IN ('PENDING','RETRYING','FAILED','PROCESSING')",
             new { JOBID = jobId }, cancellationToken);
+
+    public async Task<int> ReclaimStaleProcessingAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_db.IsConfigured)
+            return 0;
+
+        var lease = JobLeaseRules.ClampLeaseSeconds(_options.ProcessingLeaseSeconds);
+        return await _db.ExecuteAsync(@"
+UPDATE SYNC_JOB
+SET STATUS='RETRYING', LOCKEDBY=NULL, LOCKEDAT=NULL, NEXTRUNAT=CURRENT_TIMESTAMP,
+    ERRORMESSAGE='Reclaimed: processing lease expired'
+WHERE STATUS='PROCESSING'
+  AND LOCKEDAT IS NOT NULL
+  AND LOCKEDAT < DATEADD(SECOND, -@LEASE, CURRENT_TIMESTAMP)",
+            new { LEASE = lease }, cancellationToken).ConfigureAwait(false);
+    }
+
+    public Task UnlockProcessingAsync(int jobId, CancellationToken cancellationToken = default) =>
+        _db.ExecuteAsync(@"
+UPDATE SYNC_JOB
+SET STATUS='RETRYING', LOCKEDBY=NULL, LOCKEDAT=NULL, NEXTRUNAT=CURRENT_TIMESTAMP,
+    ERRORMESSAGE='Unlocked by operator'
+WHERE JOBID=@JOBID AND STATUS='PROCESSING'",
+            new { JOBID = jobId }, cancellationToken);
+
+    public async Task<QueueHealthSnapshot> GetHealthAsync(CancellationToken cancellationToken = default)
+    {
+        var snap = new QueueHealthSnapshot();
+        if (!_db.IsConfigured)
+            return snap;
+
+        snap.Pending = Convert.ToInt32(await _db.ScalarAsync(
+            "SELECT COUNT(*) FROM SYNC_JOB WHERE STATUS IN ('PENDING','RETRYING')", cancellationToken: cancellationToken).ConfigureAwait(false) ?? 0);
+        snap.Processing = Convert.ToInt32(await _db.ScalarAsync(
+            "SELECT COUNT(*) FROM SYNC_JOB WHERE STATUS='PROCESSING'", cancellationToken: cancellationToken).ConfigureAwait(false) ?? 0);
+        snap.Failed = Convert.ToInt32(await _db.ScalarAsync(
+            "SELECT COUNT(*) FROM SYNC_JOB WHERE STATUS IN ('FAILED','CONFLICT','WAITING_FOR_MAPPING')", cancellationToken: cancellationToken).ConfigureAwait(false) ?? 0);
+
+        var oldest = await _db.ScalarAsync(
+            "SELECT MIN(LOCKEDAT) FROM SYNC_JOB WHERE STATUS='PROCESSING' AND LOCKEDAT IS NOT NULL",
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (oldest is DateTime lockedAt)
+            snap.OldestProcessingAgeSec = Math.Max(0, (DateTime.UtcNow - lockedAt.ToUniversalTime()).TotalSeconds);
+        else if (oldest is not null && DateTime.TryParse(oldest.ToString(), out var parsed))
+            snap.OldestProcessingAgeSec = Math.Max(0, (DateTime.UtcNow - parsed.ToUniversalTime()).TotalSeconds);
+
+        return snap;
+    }
 
     private static SyncJob Map(FirebirdSql.Data.FirebirdClient.FbDataReader r) => new()
     {

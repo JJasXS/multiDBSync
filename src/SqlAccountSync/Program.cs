@@ -181,6 +181,28 @@ app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
+app.MapGet("/health", async (IJobQueue queue) =>
+{
+    var snap = await queue.GetHealthAsync();
+    var lease = builder.Configuration.GetValue("Sync:ProcessingLeaseSeconds", 900);
+    var status = "ok";
+    if (snap.OldestProcessingAgeSec is double age && age > Math.Max(lease, 60) * 2)
+        status = "degraded";
+    double? oldestAge = snap.OldestProcessingAgeSec is null
+        ? null
+        : Math.Round(snap.OldestProcessingAgeSec.Value, 1);
+    return Results.Json(new
+    {
+        status,
+        queue = new
+        {
+            pending = snap.Pending,
+            processing = snap.Processing,
+            failed = snap.Failed,
+            oldestProcessingAgeSec = oldestAge
+        }
+    });
+}).AllowAnonymous();
 app.MapControllers();
 app.MapRazorPages();
 

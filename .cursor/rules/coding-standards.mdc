@@ -1,0 +1,14 @@
+---
+description: Core coding standards — reusability, simplicity, no deep nesting
+alwaysApply: true
+---
+
+# Coding Standards
+
+- Max nesting depth: 3. Prefer early returns / guard clauses over nested `if`.
+- Max function length: ~60 lines. Extract helpers before growing further.
+- Never copy-paste a helper. Put shared logic in `Helpers/` or `Services/` (C#) and `wwwroot/js/` (shared JS modules); import or inject it.
+- One concern per function. Page handlers and UI renderers stay thin and delegate.
+- Do not nest `local functions` / nested `function` inside another method unless it is a trivial one-liner callback.
+- Prefer flat data transforms (LINQ / map-filter) over nested loops with side effects.
+- When touching a file that already violates these rules, leave it no worse — extract or flatten what you touch.

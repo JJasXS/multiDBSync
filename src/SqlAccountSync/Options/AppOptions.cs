@@ -45,6 +45,11 @@ public sealed class SyncOptions
     /// <summary>Max delete jobs enqueued per master→sub pair per cycle.</summary>
     public int AccountAutoDeleteMaxPerCycle { get; set; } = 25;
     public int MaxAttempts { get; set; } = 5;
+    /// <summary>
+    /// Seconds a job may stay PROCESSING before the worker reclaims it as RETRYING (crash recovery).
+    /// Default 900 (15 minutes). Clamped to 60–86400 at runtime.
+    /// </summary>
+    public int ProcessingLeaseSeconds { get; set; } = 900;
     public bool AllowProductionConnections { get; set; }
     public bool AllowCrossEnvironment { get; set; }
     public bool DebugOtpToConsole { get; set; }

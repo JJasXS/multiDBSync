@@ -276,7 +276,18 @@ else
                         <td>@j.Attempts / @j.MaxAttempts</td>
                         <td class="col-job-error"><span class="job-error-text">@j.ErrorMessage</span></td>
                         <td class="col-actions">
-                            @if (j.Status is "PENDING" or "RETRYING" or "FAILED")
+                            @if (j.Status is "PROCESSING")
+                            {
+                                <form method="post" asp-page-handler="Unlock" asp-route-jobId="@j.JobId" style="display:inline">
+                                    <input type="hidden" name="Tab" value="jobs" />
+                                    <button class="btn small secondary" type="submit" data-confirm="Unlock this stuck PROCESSING job so the worker can retry it?">Unlock</button>
+                                </form>
+                                <form method="post" asp-page-handler="Cancel" asp-route-jobId="@j.JobId" style="display:inline">
+                                    <input type="hidden" name="Tab" value="jobs" />
+                                    <button class="btn small secondary" type="submit" data-confirm="Cancel this PROCESSING job?">Cancel</button>
+                                </form>
+                            }
+                            else if (j.Status is "PENDING" or "RETRYING" or "FAILED")
                             {
                                 <form method="post" asp-page-handler="Cancel" asp-route-jobId="@j.JobId">
                                     <input type="hidden" name="Tab" value="jobs" />
