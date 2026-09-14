@@ -94,10 +94,12 @@ builder.Services.AddHttpClient<ISqlAccountApiClient, SqlAccountApiClient>(client
     client.DefaultRequestHeaders.UserAgent.ParseAdd(
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36");
 }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { UseCookies = false });
-builder.Services.AddHttpClient<ITenantEmailBootstrap, TenantEmailBootstrap>(client =>
+builder.Services.AddHttpClient<TenantEmailBootstrap>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(30);
 });
+builder.Services.AddTransient<ITenantEmailBootstrap>(sp => sp.GetRequiredService<TenantEmailBootstrap>());
+builder.Services.AddTransient<ITenantDatabaseBootstrap>(sp => sp.GetRequiredService<TenantEmailBootstrap>());
 builder.Services.AddSingleton<ISecretResolver, SecretResolver>();
 builder.Services.AddSingleton<ISqlApiSecretProvisioner, SqlApiSecretProvisioner>();
 builder.Services.AddSingleton<CentralDb>();
@@ -105,6 +107,7 @@ builder.Services.AddSingleton<CompanyConnectionFactory>();
 builder.Services.AddSingleton<SchemaBootstrap>();
 builder.Services.AddScoped<IDatabaseRegistry, DatabaseRegistry>();
 builder.Services.AddScoped<IUserDirectory, UserDirectory>();
+builder.Services.AddScoped<ILoginUserResolver, LoginUserResolver>();
 builder.Services.AddScoped<OtpAuthService>();
 builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddScoped<IErrorLogService, ErrorLogService>();
@@ -127,12 +130,14 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
     {
         options.LoginPath = "/Login";
         options.LogoutPath = "/Logout";
-        options.AccessDeniedPath = "/Login";
+        // Do not send forbidden users to Login — that looks like an instant logout.
+        options.AccessDeniedPath = "/AccessDenied";
         options.ExpireTimeSpan = TimeSpan.FromHours(Math.Clamp(sessionHours, 1, 24));
         options.SlidingExpiration = true;
         options.Cookie.HttpOnly = true;
         options.Cookie.Name = "SqlAccountSync.Auth";
         options.Cookie.SameSite = SameSiteMode.Lax;
+        options.Events.OnValidatePrincipal = AuthCookieEvents.ValidatePrincipalAsync;
     });
 
 builder.Services.AddAuthorization(options =>
@@ -150,8 +155,6 @@ var razorPages = builder.Services.AddRazorPages(options =>
     options.Conventions.AllowAnonymousToPage("/Login");
     options.Conventions.AllowAnonymousToPage("/Logout");
     options.Conventions.AllowAnonymousToPage("/Error");
-    options.Conventions.AuthorizeFolder("/Users", PolicyNames.Admin);
-    options.Conventions.AuthorizeFolder("/Settings", PolicyNames.Admin);
 });
 if (builder.Environment.IsDevelopment())
     razorPages.AddRazorRuntimeCompilation();

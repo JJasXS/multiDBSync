@@ -6,9 +6,9 @@ public static class SettingsCatalog
     [
         new(
             "User Management",
-            "Add, edit and manage system users.",
+            "Manage who can sign in (SYNC roles). Login emails must exist on LOGIN.FDB SY_USER.",
             "users",
             "/Settings/Users",
-            "accounts people"),
+            "accounts people login otp email"),
     ];
 }

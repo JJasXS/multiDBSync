@@ -10,11 +10,16 @@ public interface ITenantEmailBootstrap
     Task<TenantEmailOverride?> GetEmailOverrideAsync(string tenantCode, CancellationToken cancellationToken = default);
 }
 
+public interface ITenantDatabaseBootstrap
+{
+    Task<TenantDatabaseInfo?> GetDatabaseAsync(string tenantCode, CancellationToken cancellationToken = default);
+}
+
 /// <summary>
-/// Loads <c>email</c> + <c>proaccEmail</c> from the ProAcc tenant config API
+/// Loads tenant fields from the ProAcc tenant config API
 /// (same source as eQuotation <c>tenant_bootstrap</c> / ApprovalPO).
 /// </summary>
-public sealed class TenantEmailBootstrap : ITenantEmailBootstrap
+public sealed class TenantEmailBootstrap : ITenantEmailBootstrap, ITenantDatabaseBootstrap
 {
     private readonly HttpClient _http;
     private readonly IConfiguration _config;
@@ -43,12 +48,69 @@ public sealed class TenantEmailBootstrap : ITenantEmailBootstrap
         if (_cache.TryGetValue(cacheKey, out TenantEmailOverride? cached))
             return cached;
 
+        var raw = await FetchPayloadJsonAsync(code, cancellationToken).ConfigureAwait(false);
+        if (raw is null)
+            return null;
+
+        using var doc = JsonDocument.Parse(raw);
+        var email = TryParseTenantEmailFromRoot(doc.RootElement);
+        if (email is not null)
+            _cache.Set(cacheKey, email, TimeSpan.FromMinutes(10));
+        return email;
+    }
+
+    public async Task<TenantDatabaseInfo?> GetDatabaseAsync(string tenantCode, CancellationToken cancellationToken = default)
+    {
+        var code = (tenantCode ?? "").Trim();
+        if (code.Length == 0)
+            return null;
+
+        var cacheKey = "tenant-db:" + code.ToUpperInvariant();
+        if (_cache.TryGetValue(cacheKey, out TenantDatabaseInfo? cached))
+            return cached;
+
+        var raw = await FetchPayloadJsonAsync(code, cancellationToken).ConfigureAwait(false);
+        if (raw is null)
+            return null;
+
+        using var doc = JsonDocument.Parse(raw);
+        if (!TryFindSection(doc.RootElement, "database", 0, out var databaseAttr))
+            return null;
+
+        var db = UnwrapDynamoMap(databaseAttr);
+        if (!TryScalar(db, "dbPath", out var dbPath) || dbPath.Length == 0)
+            return null;
+
+        var info = new TenantDatabaseInfo { DbPath = dbPath };
+        if (TryScalar(db, "dbHost", out var host) && host.Length > 0)
+            info.DbHost = host;
+        if (TryScalar(db, "dbCharset", out var charset) && charset.Length > 0)
+            info.DbCharset = charset;
+        if (TryScalar(db, "dbPort", out var portText)
+            && int.TryParse(portText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var port)
+            && port > 0)
+            info.DbPort = port;
+        if (TryScalar(db, "dbDialect", out var dialectText)
+            && int.TryParse(dialectText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var dialect)
+            && dialect > 0)
+            info.DbDialect = dialect;
+
+        _cache.Set(cacheKey, info, TimeSpan.FromMinutes(10));
+        return info;
+    }
+
+    private async Task<string?> FetchPayloadJsonAsync(string code, CancellationToken cancellationToken)
+    {
+        var payloadKey = "tenant-payload:" + code.ToUpperInvariant();
+        if (_cache.TryGetValue(payloadKey, out string? cachedJson) && !string.IsNullOrWhiteSpace(cachedJson))
+            return cachedJson;
+
         var baseUrl = (_config["TenantBootstrap:AwsApiBaseUrl"]
                        ?? Environment.GetEnvironmentVariable("TENANT_BOOTSTRAP_API_URL")
                        ?? "").Trim();
         if (baseUrl.Length == 0)
         {
-            _logger.LogWarning("TenantBootstrap:AwsApiBaseUrl / TENANT_BOOTSTRAP_API_URL is empty; cannot load SMTP from tenant.");
+            _logger.LogWarning("TenantBootstrap:AwsApiBaseUrl / TENANT_BOOTSTRAP_API_URL is empty; cannot load tenant config.");
             return null;
         }
 
@@ -69,10 +131,9 @@ public sealed class TenantEmailBootstrap : ITenantEmailBootstrap
             try
             {
                 var root = UnwrapPayload(doc.RootElement, ref inner);
-                var email = TryParseTenantEmailFromRoot(root);
-                if (email is not null)
-                    _cache.Set(cacheKey, email, TimeSpan.FromMinutes(10));
-                return email;
+                var raw = root.GetRawText();
+                _cache.Set(payloadKey, raw, TimeSpan.FromMinutes(10));
+                return raw;
             }
             finally
             {
@@ -81,7 +142,7 @@ public sealed class TenantEmailBootstrap : ITenantEmailBootstrap
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to load tenant email overrides for {Tenant}.", code);
+            _logger.LogWarning(ex, "Failed to load tenant config for {Tenant}.", code);
             return null;
         }
     }
@@ -156,6 +217,15 @@ public sealed class TenantEmailBootstrap : ITenantEmailBootstrap
         return o;
     }
 
+    private static JsonElement UnwrapDynamoMap(JsonElement el)
+    {
+        if (el.ValueKind != JsonValueKind.Object)
+            return el;
+        if (TryProp(el, "M", out var m) && m.ValueKind == JsonValueKind.Object)
+            return m;
+        return el;
+    }
+
     private static bool TryFindSection(JsonElement root, string name, int depth, out JsonElement found)
     {
         found = default;
@@ -176,7 +246,6 @@ public sealed class TenantEmailBootstrap : ITenantEmailBootstrap
         value = "";
         if (!TryProp(map, name, out var el))
             return false;
-        // DynamoDB attribute shape { "S": "..." } / { "N": "..." }
         if (el.ValueKind == JsonValueKind.Object)
         {
             if (TryProp(el, "S", out var s) && s.ValueKind == JsonValueKind.String)

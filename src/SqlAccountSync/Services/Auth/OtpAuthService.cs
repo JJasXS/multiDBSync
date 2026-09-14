@@ -19,7 +19,7 @@ namespace SqlAccountSync.Services.Auth;
 
 public sealed class OtpAuthService
 {
-    private readonly IUserDirectory _users;
+    private readonly ILoginUserResolver _loginUsers;
     private readonly IMemoryCache _cache;
     private readonly ISecretResolver _secrets;
     private readonly ITenantEmailBootstrap _tenantEmail;
@@ -31,7 +31,7 @@ public sealed class OtpAuthService
     private readonly ILogger<OtpAuthService> _logger;
 
     public OtpAuthService(
-        IUserDirectory users,
+        ILoginUserResolver loginUsers,
         IMemoryCache cache,
         ISecretResolver secrets,
         ITenantEmailBootstrap tenantEmail,
@@ -42,7 +42,7 @@ public sealed class OtpAuthService
         ILogger<OtpAuthService> logger,
         IAmazonSecretsManager? aws = null)
     {
-        _users = users;
+        _loginUsers = loginUsers;
         _cache = cache;
         _secrets = secrets;
         _tenantEmail = tenantEmail;
@@ -56,7 +56,7 @@ public sealed class OtpAuthService
 
     public async Task<(bool Ok, string Message, string? DebugCode)> SendOtpAsync(string email, CancellationToken cancellationToken = default)
     {
-        var user = await _users.FindByEmailAsync(email, cancellationToken).ConfigureAwait(false);
+        var user = await _loginUsers.ResolveForLoginAsync(email, cancellationToken).ConfigureAwait(false);
         if (user is null)
             return (false, "No active user matches that email.", null);
 
@@ -107,7 +107,7 @@ public sealed class OtpAuthService
         if (!_cache.TryGetValue(key, out string? stored) || stored != code.Trim())
             return (false, null, "Invalid or expired code.");
         _cache.Remove(key);
-        var user = await _users.FindByEmailAsync(email, cancellationToken).ConfigureAwait(false);
+        var user = await _loginUsers.ResolveForLoginAsync(email, cancellationToken).ConfigureAwait(false);
         if (user is null)
             return (false, null, "User is no longer active.");
         return (true, user, "Signed in.");
