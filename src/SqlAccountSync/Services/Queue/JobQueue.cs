@@ -163,13 +163,14 @@ WHERE JOBID=@JOBID AND STATUS IN ('PENDING','RETRYING','FAILED','PROCESSING')",
             return 0;
 
         var lease = JobLeaseRules.ClampLeaseSeconds(_options.ProcessingLeaseSeconds);
+        // Use DATEDIFF — Firebird rejects DATEADD(SECOND, -@LEASE, ...) when LEASE is a bound param.
         return await _db.ExecuteAsync(@"
 UPDATE SYNC_JOB
 SET STATUS='RETRYING', LOCKEDBY=NULL, LOCKEDAT=NULL, NEXTRUNAT=CURRENT_TIMESTAMP,
     ERRORMESSAGE='Reclaimed: processing lease expired'
 WHERE STATUS='PROCESSING'
   AND LOCKEDAT IS NOT NULL
-  AND LOCKEDAT < DATEADD(SECOND, -@LEASE, CURRENT_TIMESTAMP)",
+  AND DATEDIFF(SECOND, LOCKEDAT, CURRENT_TIMESTAMP) > @LEASE",
             new { LEASE = lease }, cancellationToken).ConfigureAwait(false);
     }
 
