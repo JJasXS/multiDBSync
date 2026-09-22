@@ -7,8 +7,10 @@
     <RootNamespace>SqlAccountSync</RootNamespace>
     <AssemblyName>SqlAccountSync</AssemblyName>
     <UseRazorBuildServer>false</UseRazorBuildServer>
-    <!-- Dev: serve Pages/*.cshtml from disk so UI edits are not stuck behind a stale precompiled view. -->
-    <RazorCompileOnBuild>false</RazorCompileOnBuild>
+    <!-- Debug: serve Pages/*.cshtml from disk so UI edits are not stuck behind a stale precompiled view.
+         Release/publish must compile Razor or self-contained deploys return 404 for every page. -->
+    <RazorCompileOnBuild Condition="'$(Configuration)' == 'Debug'">false</RazorCompileOnBuild>
+    <RazorCompileOnBuild Condition="'$(Configuration)' != 'Debug'">true</RazorCompileOnBuild>
     <RazorCompileOnPublish>true</RazorCompileOnPublish>
   </PropertyGroup>
 
