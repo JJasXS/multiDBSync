@@ -40,6 +40,7 @@ public sealed class TransactionEngine : ITransactionEngine
     private readonly IJobQueue _queue;
     private readonly IAuditService _audit;
     private readonly IErrorLogService _errors;
+    private readonly ITransferMasterEnsure _masters;
 
     public TransactionEngine(
         CentralDb db,
@@ -50,7 +51,8 @@ public sealed class TransactionEngine : ITransactionEngine
         IValidationService validation,
         IJobQueue queue,
         IAuditService audit,
-        IErrorLogService errors)
+        IErrorLogService errors,
+        ITransferMasterEnsure masters)
     {
         _db = db;
         _registry = registry;
@@ -61,6 +63,7 @@ public sealed class TransactionEngine : ITransactionEngine
         _queue = queue;
         _audit = audit;
         _errors = errors;
+        _masters = masters;
     }
 
     public Task<List<(string Code, string Name, string Src, string Dst, string DstPath)>> ListTypesAsync(CancellationToken cancellationToken = default)
@@ -313,21 +316,25 @@ VALUES (@TXNPK, @TXNID, @TXNTYPECODE, @SOURCEDBID, @DESTDBID, @SRCDOCTYPE, @SRCD
         result.Checks.Add(new DryRunCheck { Name = "Source document", Ok = true, Detail = $"{source.DocType} {source.DocNo}" });
         var requiresParty = !IsStockTransfer(type.Dst);
         var destParty = DestPartyEntityFor(type.Dst);
+        var preview = await _masters.PreviewAsync(source, srcDb!, dstDb!, destParty, requiresParty, cancellationToken).ConfigureAwait(false);
+        foreach (var check in preview.Where(c => c.Name == "Supplier"))
+            result.Checks.Add(check);
         var mapped = await TranslateAsync(source, sourceDbId, destDbId, destParty, requiresParty, cancellationToken).ConfigureAwait(false);
         var v = await _validation.ValidateMappedDocumentAsync(
             source, sourceDbId, destDbId, destParty, requiresParty, cancellationToken).ConfigureAwait(false);
-        Add(result, "Mappings and fields", v);
+        Add(result, "Mappings and fields", TransferMasterEnsure.IgnoreAutoCreated(v, preview));
         foreach (var line in source.Lines)
         {
             var map = await _mapping.FindAsync(sourceDbId, destDbId, EntityCodes.Item, line.ItemCode, cancellationToken).ConfigureAwait(false);
+            var auto = preview.FirstOrDefault(c => c.Name == "Item " + (line.ItemCode ?? "").Trim());
             var locDetail = string.IsNullOrWhiteSpace(line.FromLocation) && string.IsNullOrWhiteSpace(line.ToLocation)
                 ? $"→ {(map?.SubCode ?? "unmapped")} qty {line.Qty}"
                 : $"→ {(map?.SubCode ?? "unmapped")} qty {line.Qty} ({line.FromLocation} → {line.ToLocation})";
             result.Checks.Add(new DryRunCheck
             {
                 Name = $"Item {line.ItemCode}",
-                Ok = map is not null,
-                Detail = map is null ? "Unmapped" : locDetail
+                Ok = map is not null || auto?.Ok == true,
+                Detail = map is not null ? locDetail : auto?.Detail ?? "Unmapped"
             });
         }
         result.WouldSucceed = result.Checks.All(c => c.Ok);
@@ -385,6 +392,19 @@ VALUES (@TXNPK, @TXNID, @TXNTYPECODE, @SOURCEDBID, @DESTDBID, @SRCDOCTYPE, @SRCD
 
             var requiresParty = !IsStockTransfer(txn.DstDocType);
             var destParty = DestPartyEntityFor(txn.DstDocType);
+            if (!job.DryRun)
+            {
+                var ensured = await _masters.EnsureAsync(
+                    source, srcDb!, dstDb!, destParty, requiresParty, job.CreatedBy, job.JobId, txn.TxnId, cancellationToken)
+                    .ConfigureAwait(false);
+                if (ensured.Error is not null)
+                {
+                    await Fail(txn, job, JobStatuses.Failed, ensured.Error, cancellationToken);
+                    return;
+                }
+                if (ensured.Detail.Length > 0)
+                    await AddEvent(txn.TxnPk, "Masters", "SUCCESS", ensured.Detail, cancellationToken).ConfigureAwait(false);
+            }
             var v = await _validation.ValidateMappedDocumentAsync(
                 source, txn.SourceDbId, txn.DestDbId, destParty, requiresParty, cancellationToken).ConfigureAwait(false);
             await AddEvent(txn.TxnPk, "Validation", v.Ok ? "SUCCESS" : "FAIL", v.Ok ? "Passed" : string.Join(" ", v.Errors), cancellationToken).ConfigureAwait(false);
