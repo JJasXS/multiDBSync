@@ -7,44 +7,53 @@
     ViewData["Title"] = Model.Db?.DisplayName ?? "Database";
     var d = Model.Db!;
     var showMappingsUi = FeatureOptions.Value.ShowMappingsUi;
+    var online = d.ConnStatus == "ONLINE";
 }
 @if (!string.IsNullOrEmpty(Model.Message))
 {
     <div class="flash @(Model.LastTest?.Success == true ? "flash-ok" : "flash-err")">@Model.Message</div>
 }
-<div class="card">
-    <p>
+<div class="card db-detail">
+    <div class="db-detail-status">
         <span class="badge badge-@(d.DbRole.ToLowerInvariant())">@d.DbRole</span>
-        <span class="badge badge-@(d.ConnStatus == "ONLINE" ? "online" : "offline")">@d.ConnStatus</span>
-    </p>
+        <span class="badge badge-@(online ? "online" : "offline")">@d.ConnStatus</span>
+    </div>
     @if (!string.IsNullOrWhiteSpace(d.CompanyName)
         && !string.Equals(d.CompanyName.Trim(), d.DisplayName.Trim(), StringComparison.OrdinalIgnoreCase))
     {
-        <p><strong>Company:</strong> @d.CompanyName</p>
+        <p class="db-detail-company">@d.CompanyName</p>
     }
-    <p class="muted">Technical connection details (administrators)</p>
-    <p>Host @d.FbHost · Port @d.FbPort · Database file configured · User @d.FbUser</p>
-    <p>Last connection: @(d.LastConnOk?.ToString("yyyy-MM-dd HH:mm") ?? "—")</p>
-    <p>Last synchronization: @(d.LastSyncOk?.ToString("yyyy-MM-dd HH:mm") ?? "—")</p>
-    <form method="post" asp-page-handler="Test" style="display:inline">
-        <button class="btn" type="submit">Test connection</button>
-    </form>
-    @if (Model.IsAdmin)
-    {
-        <a class="btn secondary" asp-page="Edit" asp-route-id="@d.DbId">Edit</a>
-        <form method="post" asp-page-handler="Disable" style="display:inline"
-              data-confirm="Disable this database? History is kept."
-              data-confirm-title="Disable database"
-              data-confirm-ok="Disable"
-              data-confirm-danger>
-            <button class="btn danger" type="submit">Disable database</button>
+    <dl class="db-detail-facts">
+        <div><dt>Host</dt><dd>@d.FbHost</dd></div>
+        <div><dt>Port</dt><dd>@d.FbPort</dd></div>
+        <div><dt>User</dt><dd>@d.FbUser</dd></div>
+        <div><dt>Last connection</dt><dd>@(d.LastConnOk?.ToString("yyyy-MM-dd HH:mm") ?? "—")</dd></div>
+        <div><dt>Last sync</dt><dd>@(d.LastSyncOk?.ToString("yyyy-MM-dd HH:mm") ?? "—")</dd></div>
+    </dl>
+    <div class="db-detail-actions">
+        <form method="post" asp-page-handler="Test">
+            <button class="btn" type="submit">Test connection</button>
         </form>
-    }
-    @if (showMappingsUi)
-    {
-        <a class="btn secondary" asp-page="/Mappings/Index" asp-route-entity="ITEM">View mappings</a>
-    }
-    <a class="btn secondary" asp-page="/Transactions/Index">Document transfer</a>
-    <a class="btn secondary" asp-page="/Logs">View logs</a>
-    <a class="btn secondary" asp-page="/Push/Index" asp-route-tab="jobs">Sync now</a>
+        @if (Model.IsAdmin)
+        {
+            <a class="btn secondary" asp-page="Edit" asp-route-id="@d.DbId">Edit</a>
+        }
+        <a class="btn secondary" asp-page="/Transactions/Index">Document transfer</a>
+        <a class="btn secondary" asp-page="/Logs">View logs</a>
+        <a class="btn secondary" asp-page="/Push/Index" asp-route-tab="jobs">Sync now</a>
+        @if (showMappingsUi)
+        {
+            <a class="btn secondary" asp-page="/Mappings/Index" asp-route-entity="ITEM">View mappings</a>
+        }
+        @if (Model.IsAdmin)
+        {
+            <form method="post" asp-page-handler="Disable"
+                  data-confirm="Disable this database? History is kept."
+                  data-confirm-title="Disable database"
+                  data-confirm-ok="Disable"
+                  data-confirm-danger>
+                <button class="btn danger" type="submit">Disable database</button>
+            </form>
+        }
+    </div>
 </div>

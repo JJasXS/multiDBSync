@@ -489,6 +489,62 @@ code {
 .db-edit-grid > .card { height: 100%; }
 .db-edit-grid .lede { min-height: 2.8em; }
 .db-edit-notes { margin-top: 16px; }
+.db-detail-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.db-detail .badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+.db-detail .badge-online { background: var(--ice-success-soft); }
+.db-detail .badge-offline { background: var(--ice-danger-soft); }
+.db-detail .badge-master,
+.db-detail .badge-sub,
+.db-detail .badge-both { background: var(--ice-warn-soft); }
+.db-detail-company {
+  margin: -8px 0 14px;
+  font-weight: 600;
+  color: var(--ice-heading);
+}
+.db-detail-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 14px 18px;
+  margin: 0;
+}
+.db-detail-facts dt {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--ice-text-muted);
+}
+.db-detail-facts dd {
+  margin: 4px 0 0;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--ice-heading);
+}
+.db-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ice-border-soft);
+}
+.db-detail-actions form { margin: 0; }
+.db-detail-actions .btn.danger { margin-left: auto; }
 .panel-grid.two.partner-create-grid {
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
   align-items: start;
