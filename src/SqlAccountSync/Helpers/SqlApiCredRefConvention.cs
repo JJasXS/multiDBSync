@@ -33,6 +33,24 @@ public static partial class SqlApiCredRefConvention
         return id.Length == 0 ? "" : "sm:" + id;
     }
 
+    public static string ForDisplay(string? apiCredRef)
+    {
+        var r = (apiCredRef ?? "").Trim();
+        return r.StartsWith("sm:", StringComparison.OrdinalIgnoreCase) ? r[3..].Trim() : r;
+    }
+
+    public static string ForStorage(string? apiCredRef)
+    {
+        var r = (apiCredRef ?? "").Trim();
+        if (r.Length == 0)
+            return "";
+        if (r.StartsWith("sm:", StringComparison.OrdinalIgnoreCase)
+            || r.StartsWith("env:", StringComparison.OrdinalIgnoreCase)
+            || r.StartsWith("dpapi:", StringComparison.OrdinalIgnoreCase))
+            return r;
+        return "sm:" + r;
+    }
+
     public static bool IsBlankOrPlaceholder(string? apiCredRef)
     {
         var r = (apiCredRef ?? "").Trim();

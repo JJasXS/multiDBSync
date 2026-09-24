@@ -91,13 +91,13 @@ public class EditModel : SyncPageModel
             var tenant = TenantCode.Length > 0 ? TenantCode : "{TENANT_CODE}";
             var code = SqlApiCredRefConvention.SanitizeDbCode(Db.DbCode);
             var dbPart = code.Length > 0 ? code : "{CODE}";
-            return $"sm:proacc/tenant/{tenant}/sqlApiCredentials/{dbPart}";
+            return $"proacc/tenant/{tenant}/sqlApiCredentials/{dbPart}";
         }
     }
     public string SqlApiCredRefHint =>
         AutoSqlApiCredRef
-            ? $"Follows the Code field: sm:proacc/tenant/{TenantCode}/sqlApiCredentials/{{CODE}} (TENANT_CODE from .env)"
-            : "Use sm:proacc/tenant/{TENANT_CODE}/sqlApiCredentials/{CODE}";
+            ? $"Secrets Manager name. Follows the Code field: proacc/tenant/{TenantCode}/sqlApiCredentials/{{CODE}}"
+            : "Secrets Manager name, for example proacc/tenant/{TENANT_CODE}/sqlApiCredentials/{CODE}";
 
     public async Task<IActionResult> OnGetAsync(int? id)
     {
@@ -119,6 +119,7 @@ public class EditModel : SyncPageModel
                 Db.FbCredRef = "masterkey";
         }
         Db.ApiBaseUrl = DefaultApiBaseUrl;
+        Db.ApiCredRef = SqlApiCredRefConvention.ForDisplay(Db.ApiCredRef);
         return Page();
     }
 
@@ -127,6 +128,7 @@ public class EditModel : SyncPageModel
         if (!IsAdmin) return Forbid();
         Db.CompanyName = (Db.DisplayName ?? "").Trim();
         Db.ApiBaseUrl = DefaultApiBaseUrl;
+        Db.ApiCredRef = SqlApiCredRefConvention.ForStorage(Db.ApiCredRef);
         var wasNew = Db.DbId == 0;
         var id = await _registry.SaveAsync(Db, CurrentEmail);
         var saved = await _registry.GetAsync(id);

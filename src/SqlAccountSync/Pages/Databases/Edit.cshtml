@@ -5,7 +5,7 @@
 }
 <form method="post">
     <input type="hidden" asp-for="Db.DbId" />
-    <div class="panel-grid">
+    <div class="panel-grid db-edit-grid">
         <div class="card">
             <div class="card-head">
                 <h3>Identity</h3>
@@ -50,7 +50,7 @@
             </div>
             <p class="muted lede">Read-only access to the company file. Store a secret reference, never a password.</p>
             <div class="form-stack">
-                <div class="field-pair">
+                <div class="field-pair equal">
                     <div>
                         <label>Host</label>
                         <input asp-for="Db.FbHost" required placeholder="localhost" />
@@ -105,12 +105,12 @@
                     </div>
                     <p class="field-hint">@Model.SqlApiCredRefHint</p>
                 </div>
-                <div>
-                    <label>Notes</label>
-                    <textarea asp-for="Db.Notes" rows="4" placeholder="Internal remarks"></textarea>
-                </div>
             </div>
         </div>
+    </div>
+    <div class="card db-edit-notes">
+        <label>Notes</label>
+        <textarea asp-for="Db.Notes" rows="3" placeholder="Internal remarks"></textarea>
     </div>
     <div class="form-bar">
         <button class="btn" type="submit">Save</button>

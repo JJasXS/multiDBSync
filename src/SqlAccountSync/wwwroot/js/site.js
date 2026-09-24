@@ -122,11 +122,12 @@
   const tenant = (codeInput.getAttribute("data-tenant-code") || "").trim();
   if (!tenant) return;
 
-  const prefix = `sm:proacc/tenant/${tenant}/sqlApiCredentials/`;
+  const prefix = `proacc/tenant/${tenant}/sqlApiCredentials/`;
   const sanitize = (v) => (v || "").trim().toUpperCase().replace(/[^A-Z0-9._@+=-]/g, "");
+  const visible = (v) => (v || "").trim().replace(/^sm:/i, "");
 
   const sync = () => {
-    const current = (credInput.value || "").trim();
+    const current = visible(credInput.value);
     const managed =
       !current ||
       current.includes("{CODE}") ||
