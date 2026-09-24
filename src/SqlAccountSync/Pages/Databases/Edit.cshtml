@@ -20,28 +20,26 @@
                            data-sync-api-cred="@(Model.AutoSqlApiCredRef ? "true" : "false")" />
                 </div>
                 <div>
-                    <label>Display name</label>
+                    <label>Name</label>
                     <input asp-for="Db.DisplayName" required placeholder="Headquarters" />
                 </div>
-                <div>
-                    <label>Company name</label>
-                    <input asp-for="Db.CompanyName" placeholder="As shown in SQL Account" />
-                </div>
-                <div>
-                    <label>Role</label>
-                    <select asp-for="Db.DbRole">
-                        <option>MASTER</option>
-                        <option>SUB</option>
-                        <option>BOTH</option>
-                    </select>
-                </div>
-                <div>
-                    <label>Environment</label>
-                    <select asp-for="Db.Environment">
-                        <option>DEVELOPMENT</option>
-                        <option>TESTING</option>
-                        <option>PRODUCTION</option>
-                    </select>
+                <div class="field-pair equal">
+                    <div>
+                        <label>Role</label>
+                        <select asp-for="Db.DbRole">
+                            <option>MASTER</option>
+                            <option>SUB</option>
+                            <option>BOTH</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Environment</label>
+                        <select asp-for="Db.Environment">
+                            <option>DEVELOPMENT</option>
+                            <option>TESTING</option>
+                            <option>PRODUCTION</option>
+                        </select>
+                    </div>
                 </div>
             </div>
         </div>
@@ -66,20 +64,12 @@
                     <label>Database path</label>
                     <input asp-for="Db.FbPath" required placeholder="C:/SQLAccount/Company.FDB" />
                 </div>
-                <div class="field-pair">
-                    <div>
-                        <label>User</label>
-                        <input asp-for="Db.FbUser" placeholder="SYSDBA" />
-                    </div>
-                    <div>
-                        <label>Charset</label>
-                        <input asp-for="Db.FbCharset" placeholder="UTF8" />
-                    </div>
-                </div>
                 <div>
-                    <label>Dialect</label>
-                    <input asp-for="Db.FbDialect" />
+                    <label>User</label>
+                    <input asp-for="Db.FbUser" placeholder="SYSDBA" />
                 </div>
+                <input type="hidden" asp-for="Db.FbCharset" />
+                <input type="hidden" asp-for="Db.FbDialect" />
                 <div>
                     <label>Master key reference</label>
                     <div class="secret-input">
@@ -102,7 +92,7 @@
             <div class="form-stack">
                 <div>
                     <label>API base URL</label>
-                    <input asp-for="Db.ApiBaseUrl" placeholder="@Model.DefaultApiBaseUrl" />
+                    <input asp-for="Db.ApiBaseUrl" value="@Model.DefaultApiBaseUrl" readonly />
                 </div>
                 <div>
                     <label>API credential reference</label>

@@ -111,8 +111,6 @@ public class EditModel : SyncPageModel
         else
         {
             Db.DbRole = DatabaseRoles.Master;
-            if (string.IsNullOrWhiteSpace(Db.ApiBaseUrl))
-                Db.ApiBaseUrl = DefaultApiBaseUrl;
             if (string.IsNullOrWhiteSpace(Db.ApiCredRef))
                 Db.ApiCredRef = SqlApiCredRefPlaceholder;
             if (string.IsNullOrWhiteSpace(Db.FbHost))
@@ -120,12 +118,15 @@ public class EditModel : SyncPageModel
             if (string.IsNullOrWhiteSpace(Db.FbCredRef))
                 Db.FbCredRef = "masterkey";
         }
+        Db.ApiBaseUrl = DefaultApiBaseUrl;
         return Page();
     }
 
     public async Task<IActionResult> OnPostAsync()
     {
         if (!IsAdmin) return Forbid();
+        Db.CompanyName = (Db.DisplayName ?? "").Trim();
+        Db.ApiBaseUrl = DefaultApiBaseUrl;
         var wasNew = Db.DbId == 0;
         var id = await _registry.SaveAsync(Db, CurrentEmail);
         var saved = await _registry.GetAsync(id);
