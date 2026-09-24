@@ -502,7 +502,8 @@ code {
   gap: 12px;
   margin-bottom: 16px;
 }
-.db-detail .badge {
+.db-detail .badge,
+.txn-detail .badge {
   display: inline-flex;
   align-items: center;
   padding: 3px 10px;
@@ -1617,6 +1618,7 @@ th.col-actions {
 .badge-disabled,
 .badge-error,
 .badge-failed,
+.badge-fail,
 .badge-conflict,
 .badge-cancelled {
   color: var(--ice-danger);
@@ -1969,6 +1971,64 @@ input:focus, select:focus, textarea:focus {
 .timeline { border-left: 2px solid var(--ice-border); margin-left: 8px; padding-left: 16px; }
 .timeline .ev { margin: 0 0 14px; }
 .timeline .t { font-size: 12px; color: var(--ice-text-muted); }
+.txn-detail-back {
+  display: inline-block;
+  margin-bottom: 14px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.txn-detail .badge-type { background: var(--ice-accent-soft); color: var(--ice-heading); }
+.txn-detail .badge-failed,
+.txn-detail .badge-fail { background: var(--ice-danger-soft); }
+.txn-detail .badge-success,
+.txn-detail .badge-completed { background: var(--ice-success-soft); }
+.txn-detail .badge-pending,
+.txn-detail .badge-retrying,
+.txn-detail .badge-processing { background: var(--ice-warn-soft); }
+.txn-detail-error {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: var(--ice-radius);
+  background: var(--ice-danger-soft);
+}
+.txn-detail-error p { margin: 0; font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
+.txn-detail-error .muted { margin-top: 6px; }
+.txn-timeline { list-style: none; margin: 0; padding: 0; }
+.txn-ev {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 14px;
+  position: relative;
+  padding: 0 0 16px 18px;
+}
+.txn-ev::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ice-text-muted);
+}
+.txn-ev::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 14px;
+  bottom: 0;
+  width: 2px;
+  background: var(--ice-border);
+}
+.txn-ev:last-child { padding-bottom: 0; }
+.txn-ev:last-child::after { display: none; }
+.txn-ev-success::before { background: var(--ice-success); }
+.txn-ev-fail::before,
+.txn-ev-failed::before { background: var(--ice-danger); }
+.txn-ev-meta { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.txn-ev-meta time { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ice-text-muted); }
+.txn-ev-body strong { font-size: 13px; }
+.txn-ev-body p { margin: 4px 0 0; font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; color: var(--ice-text); }
 
 /* Settings dashboard */
 .sr-only {

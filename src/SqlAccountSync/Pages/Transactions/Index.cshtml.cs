@@ -41,6 +41,22 @@ public class IndexModel : SyncPageModel
 
     public async Task OnGetAsync() => await LoadAsync();
 
+    public async Task<IActionResult> OnGetPreviewAsync(string doc, int destDbId)
+    {
+        if (!CanOperate) return Forbid();
+        await LoadAsync();
+        var key = (doc ?? "").Trim();
+        if (key.Length == 0 || destDbId <= 0 || SourceDbId <= 0)
+            return new JsonResult(new { ok = false, lines = Array.Empty<string>() });
+
+        var result = await _engine.DryRunAsync(SourceDbId, destDbId, TxnType, key);
+        var lines = result.Checks
+            .Where(c => c.Name == "Supplier" || c.Name.StartsWith("Item ", StringComparison.Ordinal))
+            .Select(c => c.Detail)
+            .ToList();
+        return new JsonResult(new { ok = true, lines });
+    }
+
     public async Task<IActionResult> OnGetLinesAsync(string docId)
     {
         if (!CanOperate) return Forbid();

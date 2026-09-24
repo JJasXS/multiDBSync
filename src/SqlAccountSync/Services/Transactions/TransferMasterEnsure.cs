@@ -1,3 +1,4 @@
+using SqlAccountSync.Helpers;
 using SqlAccountSync.Models;
 using SqlAccountSync.Services.Items;
 using SqlAccountSync.Services.Mapping;
@@ -109,24 +110,27 @@ public sealed class TransferMasterEnsure : ITransferMasterEnsure
         var record = await LoadPartyAsync(srcDb, code, cancellationToken).ConfigureAwait(false);
         if (record is null)
             return $"Customer '{code}' was not found on the source.";
-        record.Code = code;
 
-        if (!await _read.MasterExistsByCodeAsync(dstDb, EntityCodes.Supplier, code, cancellationToken).ConfigureAwait(false))
+        var destCode = await ResolveDestSupplierCodeAsync(dstDb, code, record.Description, cancellationToken)
+            .ConfigureAwait(false);
+        record.Code = destCode;
+
+        if (!await _read.MasterExistsByCodeAsync(dstDb, EntityCodes.Supplier, destCode, cancellationToken).ConfigureAwait(false))
         {
             var write = await _write.CreateMasterAsync(
                 dstDb, EntityCodes.Supplier, record, txnStamp, srcDb, EntityCodes.Customer, cancellationToken)
                 .ConfigureAwait(false);
             if (!write.Success)
                 return write.Message;
-            notes.Add($"Created supplier {code} on {dstDb.DisplayName}.");
+            notes.Add($"Created supplier {destCode} on {dstDb.DisplayName}.");
         }
         else
         {
-            notes.Add($"Linked existing supplier {code} on {dstDb.DisplayName}.");
+            notes.Add($"Linked existing supplier {destCode} on {dstDb.DisplayName}.");
         }
 
         return await LinkAsync(
-            srcDb, dstDb, EntityCodes.Customer, EntityCodes.Supplier, code, record, user, originJobId, cancellationToken)
+            srcDb, dstDb, EntityCodes.Customer, EntityCodes.Supplier, code, destCode, record, user, originJobId, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -162,7 +166,7 @@ public sealed class TransferMasterEnsure : ITransferMasterEnsure
         {
             notes.Add($"Linked existing item {code} on {dstDb.DisplayName}.");
             return await LinkAsync(
-                srcDb, dstDb, EntityCodes.Item, EntityCodes.Item, code, record, user, originJobId, cancellationToken)
+                srcDb, dstDb, EntityCodes.Item, EntityCodes.Item, code, code, record, user, originJobId, cancellationToken)
                 .ConfigureAwait(false);
         }
 
@@ -177,7 +181,7 @@ public sealed class TransferMasterEnsure : ITransferMasterEnsure
 
         notes.Add($"Created item {code} on {dstDb.DisplayName}.");
         return await LinkAsync(
-            srcDb, dstDb, EntityCodes.Item, EntityCodes.Item, code, record, user, originJobId, cancellationToken)
+            srcDb, dstDb, EntityCodes.Item, EntityCodes.Item, code, code, record, user, originJobId, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -195,15 +199,38 @@ public sealed class TransferMasterEnsure : ITransferMasterEnsure
         if (existing is not null)
             return null;
 
-        var onDest = await _read.MasterExistsByCodeAsync(dstDb, EntityCodes.Supplier, code, cancellationToken)
-            .ConfigureAwait(false);
-        if (onDest)
-            return Check("Supplier", true, $"Supplier {code} already exists on {dstDb.DisplayName}. Would link the mapping.");
-
         var record = await LoadPartyAsync(srcDb, code, cancellationToken).ConfigureAwait(false);
-        return record is null
-            ? Check("Supplier", false, $"Customer '{code}' was not found on the source.")
-            : Check("Supplier", true, $"Would create supplier {code} on {dstDb.DisplayName}.");
+        if (record is null)
+            return Check("Supplier", false, $"Customer '{code}' was not found on the source.");
+
+        var destCode = await ResolveDestSupplierCodeAsync(dstDb, code, record.Description, cancellationToken)
+            .ConfigureAwait(false);
+        var onDest = await _read.MasterExistsByCodeAsync(dstDb, EntityCodes.Supplier, destCode, cancellationToken)
+            .ConfigureAwait(false);
+        return onDest
+            ? Check("Supplier", true, $"Supplier {destCode} already exists on {dstDb.DisplayName}. Would link the mapping.")
+            : Check("Supplier", true, $"Would create supplier {destCode} on {dstDb.DisplayName}.");
+    }
+
+    private async Task<string> ResolveDestSupplierCodeAsync(
+        RegisteredDatabase dstDb, string customerCode, string companyName, CancellationToken cancellationToken)
+    {
+        if (await _read.MasterExistsByCodeAsync(dstDb, EntityCodes.Supplier, customerCode, cancellationToken).ConfigureAwait(false))
+            return customerCode;
+        if (!await CustomerCodeTakenAsync(dstDb, customerCode, cancellationToken).ConfigureAwait(false))
+            return customerCode;
+
+        var suppliers = await _read.GetSuppliersAsync(dstDb, cancellationToken).ConfigureAwait(false);
+        var codes = suppliers.Select(s => s.Code).Append(customerCode);
+        return PartnerCodeRules.SuggestNext(EntityCodes.Supplier, codes, companyName);
+    }
+
+    private async Task<bool> CustomerCodeTakenAsync(
+        RegisteredDatabase dstDb, string customerCode, CancellationToken cancellationToken)
+    {
+        if (await _read.MasterExistsByCodeAsync(dstDb, EntityCodes.Customer, customerCode, cancellationToken).ConfigureAwait(false))
+            return true;
+        return await _read.MasterExistsByCodeAsync(dstDb, EntityCodes.Account, customerCode, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<List<DryRunCheck>> PreviewItemsAsync(
@@ -240,10 +267,10 @@ public sealed class TransferMasterEnsure : ITransferMasterEnsure
 
     private async Task<string?> LinkAsync(
         RegisteredDatabase srcDb, RegisteredDatabase dstDb,
-        string srcEntity, string dstEntity, string code, MasterRecord record,
+        string srcEntity, string dstEntity, string masterCode, string subCode, MasterRecord record,
         string user, int? originJobId, CancellationToken cancellationToken)
     {
-        var desc = string.IsNullOrWhiteSpace(record.Description) ? code : record.Description.Trim();
+        var desc = string.IsNullOrWhiteSpace(record.Description) ? masterCode : record.Description.Trim();
         var (ok, message, _) = await _mapping.ConfirmPairAsync(new EntityMapping
         {
             MasterDbId = srcDb.DbId,
@@ -251,8 +278,8 @@ public sealed class TransferMasterEnsure : ITransferMasterEnsure
             EntityCode = srcEntity,
             SrcEntityCode = srcEntity,
             DstEntityCode = dstEntity,
-            MasterCode = code,
-            SubCode = code,
+            MasterCode = masterCode,
+            SubCode = subCode,
             MasterDesc = desc,
             SubDesc = desc
         }, string.IsNullOrWhiteSpace(user) ? "sync" : user, false, originJobId, cancellationToken)

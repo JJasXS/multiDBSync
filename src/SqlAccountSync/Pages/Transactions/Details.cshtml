@@ -1,28 +1,66 @@
 @page "{id:int}"
 @model SqlAccountSync.Pages.Transactions.DetailsModel
+@using SqlAccountSync.Helpers
 @{
     ViewData["Title"] = Model.Txn?.TxnId ?? "Transaction";
     var t = Model.Txn!;
+    var srcDoc = string.IsNullOrWhiteSpace(t.SrcDocNo) ? t.SrcDocKey : t.SrcDocNo;
+    var dstDoc = string.IsNullOrWhiteSpace(t.DstDocNo) ? "—" : t.DstDocNo;
+    var error = t.ErrorMessage ?? "";
+    var split = error.IndexOf("}} ", StringComparison.Ordinal);
+    var errorLead = split < 0 ? error : error[..(split + 2)].Trim();
+    var errorHint = split < 0 ? "" : error[(split + 3)..].Trim();
 }
-<div class="card">
-    <p><a asp-page="/Logs">← Logs</a></p>
-    <p><strong>Source:</strong> @t.SourceName · @t.SrcDocType @t.SrcDocNo (@t.SrcDocKey)</p>
-    <p><strong>Destination:</strong> @t.DestName · @t.DstDocType @t.DstDocNo (@t.DstDocKey)</p>
-    <p><span class="badge badge-@(t.Status.ToLowerInvariant())">@t.Status</span></p>
-    @if (!string.IsNullOrEmpty(t.ErrorMessage))
+<div class="card txn-detail">
+    <a class="txn-detail-back" asp-page="/Logs">← Logs</a>
+    <div class="db-detail-top">
+        <div class="db-detail-status">
+            <span class="badge badge-@(t.Status.ToLowerInvariant())">@t.Status</span>
+            <span class="badge badge-type">@SyncDisplayNames.TxnType(t.TxnTypeCode)</span>
+        </div>
+    </div>
+    <dl class="db-detail-facts">
+        <div><dt>Source</dt><dd>@t.SourceName</dd></div>
+        <div><dt>Source document</dt><dd>@t.SrcDocType @srcDoc</dd></div>
+        <div><dt>Destination</dt><dd>@t.DestName</dd></div>
+        <div><dt>Destination document</dt><dd>@t.DstDocType @dstDoc</dd></div>
+    </dl>
+    @if (error.Length > 0)
     {
-        <p class="flash flash-err">@t.ErrorMessage</p>
+        <div class="txn-detail-error">
+            <p>@errorLead</p>
+            @if (errorHint.Length > 0)
+            {
+                <p class="muted">@errorHint</p>
+            }
+        </div>
     }
 </div>
-<div class="card">
+<div class="card txn-detail">
     <h3>Timeline</h3>
-    <div class="timeline">
+    <ol class="txn-timeline">
+        @{ var previousDetail = ""; }
         @foreach (var e in Model.Events)
         {
-            <div class="ev">
-                <div class="t">@e.AtUtc.ToString("HH:mm:ss") · @e.Result</div>
-                <div><strong>@e.Step</strong> @e.Detail</div>
-            </div>
+            var result = (e.Result ?? "").ToLowerInvariant();
+            var detail = e.Detail ?? "";
+            var cut = detail.IndexOf("}} ", StringComparison.Ordinal);
+            var shown = cut < 0 ? detail : detail[..(cut + 2)].Trim();
+            var repeat = shown.Length > 0 && shown == previousDetail;
+            previousDetail = shown;
+            <li class="txn-ev txn-ev-@result">
+                <div class="txn-ev-meta">
+                    <time>@e.AtUtc.ToString("HH:mm:ss")</time>
+                    <span class="badge badge-@result">@e.Result</span>
+                </div>
+                <div class="txn-ev-body">
+                    <strong>@e.Step</strong>
+                    @if (shown.Length > 0 && !repeat)
+                    {
+                        <p>@shown</p>
+                    }
+                </div>
+            </li>
         }
-    </div>
+    </ol>
 </div>
