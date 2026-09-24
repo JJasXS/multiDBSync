@@ -248,9 +248,10 @@ code {
 .empty { margin: 0; padding: 8px 0 4px; color: var(--ice-text-muted); font-size: 13px; }
 .empty-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
 .toolbar-field { max-width: 480px; }
-.form-stack { display: grid; gap: 12px; }
-.field-pair { display: grid; grid-template-columns: 1fr 110px; gap: 10px; }
-.field-pair.equal { grid-template-columns: 1fr 1fr; }
+.form-stack { display: grid; gap: 12px; min-width: 0; }
+.form-stack > * { min-width: 0; }
+.field-pair { display: grid; grid-template-columns: minmax(0, 1fr) 110px; gap: 10px; }
+.field-pair.equal { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 
 /* Partners create (Master data → Partners tab) */
 .partner-create {
@@ -477,11 +478,13 @@ code {
 
 .panel-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
   align-items: stretch;
+  width: 100%;
+  min-width: 0;
 }
-.panel-grid.two { grid-template-columns: 1fr 1fr; }
+.panel-grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .panel-grid.two.partner-create-grid {
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
   align-items: start;
@@ -489,8 +492,16 @@ code {
 .panel-grid .card {
   margin-bottom: 0;
   min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+.panel-grid input,
+.panel-grid select,
+.panel-grid textarea {
+  max-width: 100%;
+  min-width: 0;
 }
 .map-layout {
   display: grid;
@@ -1340,14 +1351,29 @@ code {
 }
 .form-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; padding-top: 4px; }
 .form-grid > .form-actions { justify-content: flex-end; }
-.field-hint { margin: 6px 0 0; font-size: 12px; color: var(--ice-text-muted); line-height: 1.4; }
+.field-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--ice-text-muted);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.field-hint code {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 .secret-input {
   position: relative;
   display: flex;
   align-items: center;
+  min-width: 0;
+  max-width: 100%;
 }
 .secret-input input {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   padding-right: 42px;
 }
 .secret-toggle {
@@ -1531,6 +1557,8 @@ th.col-actions {
 label { display: block; font-size: 12px; font-weight: 600; color: var(--ice-heading); margin-bottom: 5px; }
 input, select, textarea {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   padding: 8px 10px;
   border: 1px solid var(--ice-border);
   border-radius: var(--ice-radius);
@@ -1538,6 +1566,7 @@ input, select, textarea {
   color: var(--ice-text);
   font-family: inherit;
   font-size: 13px;
+  box-sizing: border-box;
 }
 input[type=checkbox], input[type=radio] {
   width: 16px;
