@@ -1363,20 +1363,23 @@ code {
   white-space: normal;
   overflow-wrap: anywhere;
 }
-.secret-input {
+.secret-input,
+.copy-input {
   position: relative;
   display: flex;
   align-items: center;
   min-width: 0;
   max-width: 100%;
 }
-.secret-input input {
+.secret-input input,
+.copy-input input {
   width: 100%;
   min-width: 0;
   max-width: 100%;
   padding-right: 42px;
 }
-.secret-toggle {
+.secret-toggle,
+.copy-toggle {
   position: absolute;
   right: 6px;
   top: 50%;
@@ -1389,7 +1392,8 @@ code {
   line-height: 0;
   border-radius: 6px;
 }
-.secret-toggle:hover { color: var(--ice-heading); background: var(--ice-border-soft); }
+.secret-toggle:hover,
+.copy-toggle:hover { color: var(--ice-heading); background: var(--ice-border-soft); }
 .check-field { display: flex; flex-direction: column; justify-content: flex-end; }
 .check {
   display: flex;

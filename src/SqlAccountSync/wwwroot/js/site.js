@@ -91,6 +91,29 @@
 })();
 
 (() => {
+  document.querySelectorAll("[data-copy-field]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const input = btn.closest(".copy-input")?.querySelector("input");
+      const text = (input?.value || input?.placeholder || "").trim();
+      if (!text) return;
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        input?.focus();
+        input?.select();
+        document.execCommand("copy");
+      }
+      btn.setAttribute("title", "Copied");
+      btn.setAttribute("aria-label", "Copied");
+      window.setTimeout(() => {
+        btn.setAttribute("title", "Copy");
+        btn.setAttribute("aria-label", "Copy credential reference");
+      }, 1200);
+    });
+  });
+})();
+
+(() => {
   const codeInput = document.querySelector("[data-db-code]");
   const credInput = document.querySelector("[data-api-cred-ref]");
   if (!codeInput || !credInput) return;
