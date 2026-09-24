@@ -33,15 +33,6 @@ public sealed class ConnectionTestService : IConnectionTestService
     {
         try
         {
-            _factory.GuardEnvironment(db);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return new ConnectionTestResult { Status = ConnectionResults.UnknownError, Message = ex.Message };
-        }
-
-        try
-        {
             using var tcp = new TcpClient();
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             cts.CancelAfter(TimeSpan.FromSeconds(8));

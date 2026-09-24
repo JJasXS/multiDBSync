@@ -23,23 +23,13 @@
                     <label>Name</label>
                     <input asp-for="Db.DisplayName" required placeholder="Headquarters" />
                 </div>
-                <div class="field-pair equal">
-                    <div>
-                        <label>Role</label>
-                        <select asp-for="Db.DbRole">
-                            <option>MASTER</option>
-                            <option>SUB</option>
-                            <option>BOTH</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label>Environment</label>
-                        <select asp-for="Db.Environment">
-                            <option>DEVELOPMENT</option>
-                            <option>TESTING</option>
-                            <option>PRODUCTION</option>
-                        </select>
-                    </div>
+                <div>
+                    <label>Role</label>
+                    <select asp-for="Db.DbRole">
+                        <option>MASTER</option>
+                        <option>SUB</option>
+                        <option>BOTH</option>
+                    </select>
                 </div>
             </div>
         </div>

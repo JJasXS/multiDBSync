@@ -165,41 +165,14 @@ public sealed class CentralDb
 public sealed class CompanyConnectionFactory
 {
     private readonly ISecretResolver _secrets;
-    private readonly SyncOptions _sync;
-    private readonly IHostEnvironment _host;
 
-    public CompanyConnectionFactory(ISecretResolver secrets, IOptions<SyncOptions> sync, IHostEnvironment host)
+    public CompanyConnectionFactory(ISecretResolver secrets)
     {
         _secrets = secrets;
-        _sync = sync.Value;
-        _host = host;
-    }
-
-    public void GuardEnvironment(RegisteredDatabase db)
-    {
-        var running = _host.EnvironmentName.ToUpperInvariant();
-        var target = (db.Environment ?? "").Trim().ToUpperInvariant();
-        if (target.Length == 0)
-            target = AppEnvironments.Development;
-
-        if (!_sync.AllowCrossEnvironment && !string.Equals(running, target, StringComparison.OrdinalIgnoreCase)
-            && !(running == "DEVELOPMENT" && target == "DEVELOPMENT")
-            && !(running == "PRODUCTION" && target == "PRODUCTION")
-            && !(running == "STAGING" && target == "TESTING"))
-        {
-            if (!string.Equals(running, target, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException(
-                    $"Refusing to connect to {db.DisplayName}: database environment is {target} but the application is {running}.");
-        }
-
-        if (target == AppEnvironments.Production && !_sync.AllowProductionConnections)
-            throw new InvalidOperationException(
-                $"Refusing to connect to PRODUCTION database {db.DisplayName}. Set Sync:AllowProductionConnections to enable.");
     }
 
     public async Task<string> BuildAsync(RegisteredDatabase db, CancellationToken cancellationToken = default)
     {
-        GuardEnvironment(db);
         var password = await _secrets.ResolveAsync(db.FbCredRef, cancellationToken).ConfigureAwait(false);
         if (string.IsNullOrEmpty(password))
         {

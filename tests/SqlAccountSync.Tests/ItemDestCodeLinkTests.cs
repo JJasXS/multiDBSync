@@ -24,7 +24,7 @@ public class ItemDestCodeLinkTests
     public async Task MasterExistsByCodeAsync_blank_code_returns_false(string code)
     {
         var adapter = new FirebirdReadAdapter(
-            new CompanyConnectionFactory(new NoopSecretResolver(), Microsoft.Extensions.Options.Options.Create(new SyncOptions()), new TestHostEnvironment()),
+            new CompanyConnectionFactory(new NoopSecretResolver()),
             NullLogger<FirebirdReadAdapter>.Instance);
 
         var db = new RegisteredDatabase { FbHost = "localhost", FbPath = "C:/missing.fdb" };
@@ -36,7 +36,7 @@ public class ItemDestCodeLinkTests
     public async Task MasterExistsByCodeAsync_unsupported_entity_returns_false()
     {
         var adapter = new FirebirdReadAdapter(
-            new CompanyConnectionFactory(new NoopSecretResolver(), Microsoft.Extensions.Options.Options.Create(new SyncOptions()), new TestHostEnvironment()),
+            new CompanyConnectionFactory(new NoopSecretResolver()),
             NullLogger<FirebirdReadAdapter>.Instance);
 
         var db = new RegisteredDatabase { FbHost = "localhost", FbPath = "C:/missing.fdb" };
@@ -48,7 +48,7 @@ public class ItemDestCodeLinkTests
     public async Task MasterExistsByCodeAsync_customer_on_missing_db_returns_false()
     {
         var adapter = new FirebirdReadAdapter(
-            new CompanyConnectionFactory(new NoopSecretResolver(), Microsoft.Extensions.Options.Options.Create(new SyncOptions()), new TestHostEnvironment()),
+            new CompanyConnectionFactory(new NoopSecretResolver()),
             NullLogger<FirebirdReadAdapter>.Instance);
 
         var db = new RegisteredDatabase { FbHost = "localhost", FbPath = "C:/missing.fdb" };
@@ -298,13 +298,5 @@ public class ItemDestCodeLinkTests
     private sealed class NoopSecretResolver : ISecretResolver
     {
         public Task<string?> ResolveAsync(string? reference, CancellationToken cancellationToken = default) => Task.FromResult<string?>("masterkey");
-    }
-
-    private sealed class TestHostEnvironment : Microsoft.Extensions.Hosting.IHostEnvironment
-    {
-        public string EnvironmentName { get; set; } = AppEnvironments.Development;
-        public string ApplicationName { get; set; } = "SqlAccountSync.Tests";
-        public string ContentRootPath { get; set; } = AppContext.BaseDirectory;
-        public Microsoft.Extensions.FileProviders.IFileProvider ContentRootFileProvider { get; set; } = new Microsoft.Extensions.FileProviders.NullFileProvider();
     }
 }
