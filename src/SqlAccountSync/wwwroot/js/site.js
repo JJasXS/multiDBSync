@@ -74,6 +74,14 @@
 })();
 
 (() => {
+  document.addEventListener("click", (e) => {
+    document.querySelectorAll("details.kebab[open]").forEach((menu) => {
+      if (!menu.contains(e.target)) menu.removeAttribute("open");
+    });
+  });
+})();
+
+(() => {
   document.querySelectorAll("[data-secret-toggle]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const wrap = btn.closest(".secret-input");
