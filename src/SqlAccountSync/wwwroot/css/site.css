@@ -485,7 +485,8 @@ code {
   min-width: 0;
 }
 .panel-grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.db-edit-grid { align-items: start; }
+.db-edit-grid { align-items: stretch; }
+.db-edit-grid > .card { height: 100%; }
 .db-edit-grid .lede { min-height: 2.8em; }
 .db-edit-notes { margin-top: 16px; }
 .panel-grid.two.partner-create-grid {
