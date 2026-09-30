@@ -252,44 +252,82 @@
   const titleEl = dialog.querySelector("[data-confirm-title]");
   const messageEl = dialog.querySelector("[data-confirm-message]");
   const okBtn = dialog.querySelector("[data-confirm-ok]");
+  const altBtn = dialog.querySelector("[data-confirm-alt]");
   const cancelBtn = dialog.querySelector("[data-confirm-cancel]");
   const closeBtn = dialog.querySelector("[data-confirm-close]");
   let settle = null;
 
-  const finish = (ok) => {
+  const finish = (value) => {
     if (dialog.open) dialog.close();
     const done = settle;
     settle = null;
-    if (done) done(ok);
+    if (done) done(value);
   };
 
-  cancelBtn?.addEventListener("click", () => finish(false));
-  closeBtn?.addEventListener("click", () => finish(false));
-  okBtn?.addEventListener("click", () => finish(true));
+  cancelBtn?.addEventListener("click", () => finish("cancel"));
+  closeBtn?.addEventListener("click", () => finish("cancel"));
+  okBtn?.addEventListener("click", () => finish("ok"));
+  altBtn?.addEventListener("click", () => finish("alt"));
   dialog.addEventListener("cancel", (e) => {
     e.preventDefault();
-    finish(false);
+    finish("cancel");
   });
   dialog.addEventListener("click", (e) => {
-    if (e.target === dialog) finish(false);
+    if (e.target === dialog) finish("cancel");
   });
 
-  const ask = ({ title, message, okLabel, cancelLabel, danger }) =>
+  const askChoice = ({ title, message, okLabel, altLabel, cancelLabel, danger }) =>
     new Promise((resolve) => {
       settle = resolve;
       if (titleEl) titleEl.textContent = title || "Please confirm";
       if (messageEl) messageEl.textContent = message || "";
       if (okBtn) {
         okBtn.textContent = okLabel || "Confirm";
-        okBtn.className = danger ? "btn danger" : "btn";
+        okBtn.className = danger && !altLabel ? "btn danger" : "btn";
+      }
+      if (altBtn) {
+        altBtn.hidden = !altLabel;
+        altBtn.textContent = altLabel || "Disable all";
       }
       if (cancelBtn) cancelBtn.textContent = cancelLabel || "Cancel";
       if (typeof dialog.showModal === "function") dialog.showModal();
       else dialog.setAttribute("open", "");
-      okBtn?.focus();
+      (okBtn)?.focus();
     });
 
+  const ask = (options) => askChoice(options).then((value) => value === "ok");
+
   window.appConfirm = ask;
+  window.appConfirmChoice = askChoice;
+
+  document.addEventListener(
+    "click",
+    async (e) => {
+      const form = e.target.closest("form[data-master-off='true']");
+      if (!form) return;
+      const turningOff = form.querySelector('input[name="active"]')?.value === "false";
+      const count = Number(form.getAttribute("data-sub-count")) || 0;
+      if (!turningOff || count < 1) return;
+
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const choice = await askChoice({
+        title: "Turn off master",
+        message: count === 1
+          ? "1 linked Sub is still active. Recommended: turn off only this Master and leave that Sub active."
+          : `${count} linked Subs are still active. Recommended: turn off only this Master and leave those Subs active.`,
+        okLabel: "Only disable master",
+        altLabel: "Disable all",
+        cancelLabel: "Cancel",
+      });
+      if (choice === "cancel") return;
+      const scope = form.querySelector("[data-status-scope]");
+      if (scope) scope.value = choice === "alt" ? "all" : "master";
+      if (typeof form.requestSubmit === "function") form.requestSubmit();
+      else form.submit();
+    },
+    true
+  );
 
   document.addEventListener(
     "click",

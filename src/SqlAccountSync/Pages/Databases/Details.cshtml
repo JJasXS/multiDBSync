@@ -18,6 +18,15 @@
         <div class="db-detail-status">
             <span class="badge badge-@(d.DbRole.ToLowerInvariant())">@d.DbRole</span>
             <span class="badge badge-@(online ? "online" : "offline")">@d.ConnStatus</span>
+            <partial name="_ActiveSwitch" model="new ActiveSwitchView {
+                Id = d.DbId,
+                Name = d.DisplayName,
+                IsActive = d.IsActive,
+                CanToggle = Model.IsAdmin,
+                ConfirmSubs = Model.IsAdmin && d.IsActive && (d.DbRole is DatabaseRoles.Master or DatabaseRoles.Both) && Model.ActiveSubCount > 0,
+                ActiveSubCount = Model.ActiveSubCount,
+                FormPage = "/Databases/Index"
+            }" />
         </div>
         <details class="kebab">
             <summary aria-label="Actions">
@@ -37,16 +46,6 @@
                 @if (showMappingsUi)
                 {
                     <a asp-page="/Mappings/Index" asp-route-entity="ITEM">View mappings</a>
-                }
-                @if (Model.IsAdmin)
-                {
-                    <form method="post" asp-page-handler="Disable"
-                          data-confirm="Disable this database? History is kept."
-                          data-confirm-title="Disable database"
-                          data-confirm-ok="Disable"
-                          data-confirm-danger>
-                        <button class="kebab-danger" type="submit">Disable database</button>
-                    </form>
                 }
             </div>
         </details>

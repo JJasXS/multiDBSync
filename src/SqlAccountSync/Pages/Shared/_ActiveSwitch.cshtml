@@ -1,0 +1,21 @@
+@model SqlAccountSync.Models.ActiveSwitchView
+<div class="status-switch @(Model.IsActive ? "is-active" : "")">
+    <span class="status-switch-label">Active</span>
+    @if (!Model.CanToggle)
+    {
+        <span class="user-switch @(Model.IsActive ? "is-on" : "") is-locked" aria-hidden="true">
+            <span class="user-switch-track"><span class="user-switch-knob"></span></span>
+        </span>
+    }
+    else
+    {
+        <form method="post" class="user-switch-form" asp-page="@Model.FormPage" asp-page-handler="SetActive" asp-route-id="@Model.Id" data-master-off="@(Model.ConfirmSubs ? "true" : null)" data-sub-count="@Model.ActiveSubCount">
+            <input type="hidden" name="active" value="@(Model.IsActive ? "false" : "true")" />
+            <input type="hidden" name="scope" value="master" data-status-scope />
+            <button class="user-switch @(Model.IsActive ? "is-on" : "")" type="submit" aria-pressed="@(Model.IsActive ? "true" : "false")" aria-label="@(Model.IsActive ? $"Set {Model.Name} inactive" : $"Set {Model.Name} active")">
+                <span class="user-switch-track" aria-hidden="true"><span class="user-switch-knob"></span></span>
+            </button>
+        </form>
+    }
+    <span class="status-switch-label">Inactive</span>
+</div>

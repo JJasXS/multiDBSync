@@ -32,13 +32,15 @@ public class IndexModel : SyncPageModel
     }
 
     public List<RegisteredDatabase> Databases { get; set; } = [];
+    public List<DatabaseLink> Links { get; set; } = [];
 
     public async Task OnGetAsync()
     {
         Databases = await _registry.ListAsync(includeInactive: true);
+        Links = await _registry.ListLinksAsync();
     }
 
-    public async Task<IActionResult> OnPostSetActiveAsync(int id, bool active)
+    public async Task<IActionResult> OnPostSetActiveAsync(int id, bool active, string scope = "")
     {
         if (!IsAdmin) return Forbid();
         var existing = await _registry.GetAsync(id);
@@ -50,15 +52,39 @@ public class IndexModel : SyncPageModel
             return RedirectToPage();
         }
 
-        await _registry.SetActiveAsync(id, active, CurrentEmail);
+        foreach (var dbId in await IdsToUpdateAsync(existing, active, scope))
+            await SetOneAsync(dbId, active);
+        return RedirectToPage();
+    }
+
+    private async Task<List<int>> IdsToUpdateAsync(RegisteredDatabase existing, bool active, string scope)
+    {
+        if (active || !DisableLinkedSubs(existing, scope))
+            return [existing.DbId];
+        var activeIds = (await _registry.ListAsync()).Select(d => d.DbId).ToHashSet();
+        var subs = (await _registry.ListLinksAsync())
+            .Where(link => link.MasterDbId == existing.DbId && activeIds.Contains(link.SubDbId))
+            .Select(link => link.SubDbId)
+            .Distinct()
+            .ToList();
+        subs.Insert(0, existing.DbId);
+        return subs;
+    }
+
+    private static bool DisableLinkedSubs(RegisteredDatabase existing, string scope) =>
+        string.Equals(scope, "all", StringComparison.OrdinalIgnoreCase)
+        && (existing.DbRole is DatabaseRoles.Master or DatabaseRoles.Both);
+
+    private async Task SetOneAsync(int dbId, bool active)
+    {
+        await _registry.SetActiveAsync(dbId, active, CurrentEmail);
         await _audit.WriteAsync(new AuditEntry
         {
             UserEmail = CurrentEmail,
             Action = active ? "USER ENABLED DATABASE" : "USER DISABLED DATABASE",
-            DbId = id,
+            DbId = dbId,
             Result = "SUCCESS"
         });
-        return RedirectToPage();
     }
 
     private async Task<string?> ActivateCapMessageAsync(RegisteredDatabase existing, bool active)
@@ -387,41 +413,33 @@ public class DetailsModel : SyncPageModel
     private readonly IDatabaseRegistry _registry;
     private readonly IConnectionTestService _test;
     private readonly IAuditService _audit;
-    private readonly ISqlApiCredentialBundle _bundle;
-    private readonly SyncOptions _sync;
 
     public DetailsModel(
         IDatabaseRegistry registry,
         IConnectionTestService test,
-        IAuditService audit,
-        ISqlApiCredentialBundle bundle,
-        IOptions<SyncOptions> sync)
+        IAuditService audit)
     {
         _registry = registry;
         _test = test;
         _audit = audit;
-        _bundle = bundle;
-        _sync = sync.Value;
     }
 
     public RegisteredDatabase? Db { get; set; }
     public List<DatabaseLink> Links { get; set; } = [];
     public string Message { get; set; } = "";
     public ConnectionTestResult? LastTest { get; set; }
+    public int ActiveSubCount { get; set; }
 
     public async Task<IActionResult> OnGetAsync(int id)
     {
-        Db = await _registry.GetAsync(id);
-        if (Db is null) return RedirectToPage("Index");
-        Links = (await _registry.ListLinksAsync()).Where(l => l.MasterDbId == id || l.SubDbId == id).ToList();
+        if (!await LoadAsync(id)) return RedirectToPage("Index");
         return Page();
     }
 
     public async Task<IActionResult> OnPostTestAsync(int id)
     {
         if (!CanOperate) return Forbid();
-        Db = await _registry.GetAsync(id);
-        if (Db is null) return RedirectToPage("Index");
+        if (!await LoadAsync(id) || Db is null) return RedirectToPage("Index");
         LastTest = await _test.TestAsync(Db);
         await _registry.UpdateStatusAsync(id, LastTest.Status, LastTest.Success);
         await _audit.WriteAsync(new AuditEntry
@@ -433,18 +451,16 @@ public class DetailsModel : SyncPageModel
             RequestId = RequestId.Current(HttpContext)
         });
         Message = LastTest.Message;
-        Links = (await _registry.ListLinksAsync()).Where(l => l.MasterDbId == id || l.SubDbId == id).ToList();
         return Page();
     }
 
-    public async Task<IActionResult> OnPostDisableAsync(int id)
+    private async Task<bool> LoadAsync(int id)
     {
-        if (!IsAdmin) return Forbid();
-        var existing = await _registry.GetAsync(id);
-        if (existing is not null)
-            await _bundle.RemoveAsync(_sync.TenantCode, existing.DbCode);
-        await _registry.DeactivateAsync(id, CurrentEmail);
-        await _audit.WriteAsync(new AuditEntry { UserEmail = CurrentEmail, Action = "USER DISABLED DATABASE", DbId = id, Result = "SUCCESS" });
-        return RedirectToPage("Index");
+        Db = await _registry.GetAsync(id);
+        if (Db is null) return false;
+        Links = (await _registry.ListLinksAsync()).Where(l => l.MasterDbId == id || l.SubDbId == id).ToList();
+        var activeIds = (await _registry.ListAsync()).Select(d => d.DbId).ToHashSet();
+        ActiveSubCount = Links.Count(l => l.MasterDbId == id && activeIds.Contains(l.SubDbId));
+        return true;
     }
 }

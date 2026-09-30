@@ -973,8 +973,9 @@ code {
   background: var(--ice-overlay);
 }
 .app-confirm {
-  max-width: 420px;
+  max-width: 520px;
 }
+.app-confirm .accounts-modal-actions { flex-wrap: wrap; }
 .app-confirm-message {
   margin: 0;
   font-size: 14px;
@@ -2402,6 +2403,22 @@ input:focus, select:focus, textarea:focus {
   margin-top: 4px;
   font-size: 11px;
 }
+.status-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.status-switch-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ice-muted, #6b7c8f);
+}
+.status-switch.is-active .status-switch-label:first-child,
+.status-switch:not(.is-active) .status-switch-label:last-child {
+  color: var(--ice-heading);
+}
+.status-switch .user-switch.is-on .user-switch-knob { transform: none; }
+.status-switch .user-switch:not(.is-on) .user-switch-knob { transform: translateX(16px); }
 
 @media (max-width: 900px) {
   .app-shell {
