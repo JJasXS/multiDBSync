@@ -8,6 +8,7 @@ using SqlAccountSync.Services.Auth;
 using SqlAccountSync.Services.Connections;
 using SqlAccountSync.Services.Databases;
 using SqlAccountSync.Services.Secrets;
+using SqlAccountSync.Services.Tenants;
 
 namespace SqlAccountSync.Pages.Databases;
 
@@ -127,17 +128,20 @@ public class EditModel : SyncPageModel
     private readonly IDatabaseRegistry _registry;
     private readonly IAuditService _audit;
     private readonly ISqlApiSecretProvisioner _secrets;
+    private readonly ITenantDatabaseBootstrap _tenants;
     private readonly SyncOptions _sync;
 
     public EditModel(
         IDatabaseRegistry registry,
         IAuditService audit,
         ISqlApiSecretProvisioner secrets,
+        ITenantDatabaseBootstrap tenants,
         IOptions<SyncOptions> sync)
     {
         _registry = registry;
         _audit = audit;
         _secrets = secrets;
+        _tenants = tenants;
         _sync = sync.Value;
     }
 
@@ -220,6 +224,9 @@ public class EditModel : SyncPageModel
         if (!IsAdmin) return Forbid();
         if (ApiKeysArePartial())
             return DbFailed("Enter both the access key and the secret key, or leave both blank.");
+        var capMessage = await OverCapMessageAsync();
+        if (capMessage is not null)
+            return DbFailed(capMessage);
 
         Db.DbRole = MasterOrSub(Db.DbRole);
         Db.CompanyName = (Db.DisplayName ?? "").Trim();
@@ -245,6 +252,19 @@ public class EditModel : SyncPageModel
         Message = message;
         PrepareForm();
         return Page();
+    }
+
+    private async Task<string?> OverCapMessageAsync()
+    {
+        if (Db.DbId != 0)
+            return null;
+        var max = await _tenants.GetMaxDatabasesAsync(TenantCode);
+        if (max is not int cap || cap <= 0)
+            return null;
+        var active = await _registry.ListAsync();
+        if (active.Count < cap)
+            return null;
+        return $"The plan allows {cap} databases.";
     }
 
     private bool ApiKeysArePartial()

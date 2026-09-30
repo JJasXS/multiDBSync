@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Options;
 using SqlAccountSync.Options;
 using SqlAccountSync.Services.Auth;
+using SqlAccountSync.Services.Tenants;
 
 namespace SqlAccountSync.Pages;
 
@@ -16,17 +17,23 @@ public class LoginModel : PageModel
     private readonly BootstrapOptions _bootstrap;
     private readonly SyncOptions _sync;
     private readonly IAntiforgery _antiforgery;
+    private readonly ITenantDatabaseBootstrap _tenantDb;
+    private readonly IConfiguration _config;
 
     public LoginModel(
         OtpAuthService auth,
         IOptions<BootstrapOptions> bootstrap,
         IOptions<SyncOptions> sync,
-        IAntiforgery antiforgery)
+        IAntiforgery antiforgery,
+        ITenantDatabaseBootstrap tenantDb,
+        IConfiguration config)
     {
         _auth = auth;
         _bootstrap = bootstrap.Value;
         _sync = sync.Value;
         _antiforgery = antiforgery;
+        _tenantDb = tenantDb;
+        _config = config;
     }
 
     public string SuggestedEmail =>
@@ -34,7 +41,19 @@ public class LoginModel : PageModel
 
     public int OtpSeconds => Math.Clamp(_sync.OtpMinutes, 2, 30) * 60;
 
-    public void OnGet() { }
+    public int? MaxDatabases { get; private set; }
+
+    public async Task OnGetAsync(CancellationToken cancellationToken)
+    {
+        var tenant = (_config["TenantBootstrap:TenantCode"]
+                      ?? _config["Sync:TenantCode"]
+                      ?? Environment.GetEnvironmentVariable("TENANT_CODE")
+                      ?? "").Trim();
+        if (tenant.Length == 0)
+            return;
+
+        MaxDatabases = await _tenantDb.GetMaxDatabasesAsync(tenant, cancellationToken).ConfigureAwait(false);
+    }
 
     public async Task<IActionResult> OnPostSendAsync([FromForm] string email)
     {

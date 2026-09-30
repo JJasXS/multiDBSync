@@ -377,6 +377,24 @@ body.login-page-body {
     line-height: 1.5;
 }
 
+.plan-cap {
+    position: fixed;
+    right: 22px;
+    bottom: 14px;
+    min-width: 24px;
+    min-height: 16px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: transparent;
+    font-size: 12px;
+    line-height: 16px;
+    text-align: right;
+    user-select: text;
+    cursor: default;
+}
+
 @media (max-width: 768px) {
     body.login-page-body {
         align-items: flex-start;

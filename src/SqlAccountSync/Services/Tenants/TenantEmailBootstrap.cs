@@ -13,6 +13,10 @@ public interface ITenantEmailBootstrap
 public interface ITenantDatabaseBootstrap
 {
     Task<TenantDatabaseInfo?> GetDatabaseAsync(string tenantCode, CancellationToken cancellationToken = default);
+
+    Task<int?> GetMaxDatabasesAsync(string tenantCode, CancellationToken cancellationToken = default);
+
+    Task RefreshAsync(string tenantCode, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -21,6 +25,7 @@ public interface ITenantDatabaseBootstrap
 /// </summary>
 public sealed class TenantEmailBootstrap : ITenantEmailBootstrap, ITenantDatabaseBootstrap
 {
+    private static readonly TimeSpan CacheFor = TimeSpan.FromMinutes(1);
     private readonly HttpClient _http;
     private readonly IConfiguration _config;
     private readonly IMemoryCache _cache;
@@ -55,7 +60,7 @@ public sealed class TenantEmailBootstrap : ITenantEmailBootstrap, ITenantDatabas
         using var doc = JsonDocument.Parse(raw);
         var email = TryParseTenantEmailFromRoot(doc.RootElement);
         if (email is not null)
-            _cache.Set(cacheKey, email, TimeSpan.FromMinutes(10));
+            _cache.Set(cacheKey, email, CacheFor);
         return email;
     }
 
@@ -95,8 +100,46 @@ public sealed class TenantEmailBootstrap : ITenantEmailBootstrap, ITenantDatabas
             && dialect > 0)
             info.DbDialect = dialect;
 
-        _cache.Set(cacheKey, info, TimeSpan.FromMinutes(10));
+        _cache.Set(cacheKey, info, CacheFor);
         return info;
+    }
+
+    public async Task<int?> GetMaxDatabasesAsync(string tenantCode, CancellationToken cancellationToken = default)
+    {
+        var code = (tenantCode ?? "").Trim();
+        if (code.Length == 0)
+            return null;
+
+        var cacheKey = "tenant-maxdb:" + code.ToUpperInvariant();
+        if (_cache.TryGetValue(cacheKey, out int cached) && cached > 0)
+            return cached;
+
+        var raw = await FetchPayloadJsonAsync(code, cancellationToken).ConfigureAwait(false);
+        if (raw is null)
+            return null;
+
+        using var doc = JsonDocument.Parse(raw);
+        var max = ReadMaxDatabases(doc.RootElement);
+        if (max is > 0)
+            _cache.Set(cacheKey, max.Value, CacheFor);
+        return max;
+    }
+
+    public async Task RefreshAsync(string tenantCode, CancellationToken cancellationToken = default)
+    {
+        var code = (tenantCode ?? "").Trim();
+        if (code.Length == 0)
+            return;
+
+        var key = code.ToUpperInvariant();
+        _cache.Remove("tenant-payload:" + key);
+        _cache.Remove("tenant-email:" + key);
+        _cache.Remove("tenant-db:" + key);
+        _cache.Remove("tenant-maxdb:" + key);
+        await FetchPayloadJsonAsync(code, cancellationToken).ConfigureAwait(false);
+        await GetEmailOverrideAsync(code, cancellationToken).ConfigureAwait(false);
+        await GetDatabaseAsync(code, cancellationToken).ConfigureAwait(false);
+        await GetMaxDatabasesAsync(code, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<string?> FetchPayloadJsonAsync(string code, CancellationToken cancellationToken)
@@ -132,7 +175,7 @@ public sealed class TenantEmailBootstrap : ITenantEmailBootstrap, ITenantDatabas
             {
                 var root = UnwrapPayload(doc.RootElement, ref inner);
                 var raw = root.GetRawText();
-                _cache.Set(payloadKey, raw, TimeSpan.FromMinutes(10));
+                _cache.Set(payloadKey, raw, CacheFor);
                 return raw;
             }
             finally
@@ -215,6 +258,32 @@ public sealed class TenantEmailBootstrap : ITenantEmailBootstrap, ITenantDatabas
         if (TryScalar(map, "otpEnabled", out var otpText))
             o.OtpEnabled = otpText.Equals("true", StringComparison.OrdinalIgnoreCase) || otpText == "1";
         return o;
+    }
+
+    private static int? ReadMaxDatabases(JsonElement root)
+    {
+        foreach (var name in new[] { "maxDatabases", "MAX_DBCREATE", "maxDbCreate" })
+        {
+            if (TryFindSection(root, name, 0, out var el) && TryLooseNumber(el, out var max))
+                return max;
+        }
+        return null;
+    }
+
+    private static bool TryLooseNumber(JsonElement el, out int number)
+    {
+        number = 0;
+        if (el.ValueKind == JsonValueKind.Number && el.TryGetInt32(out number))
+            return number > 0;
+        if (el.ValueKind == JsonValueKind.String
+            && int.TryParse(el.GetString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out number))
+            return number > 0;
+        if (el.ValueKind == JsonValueKind.Object && TryProp(el, "N", out var n))
+        {
+            var text = n.ValueKind == JsonValueKind.String ? n.GetString() : n.GetRawText();
+            return int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out number) && number > 0;
+        }
+        return false;
     }
 
     private static JsonElement UnwrapDynamoMap(JsonElement el)
