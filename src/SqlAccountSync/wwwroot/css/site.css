@@ -1469,6 +1469,65 @@ code {
   white-space: normal;
   overflow-wrap: anywhere;
 }
+.path-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.path-input input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.path-input .btn {
+  flex: 0 0 auto;
+}
+.db-path-modal {
+  max-width: 640px;
+}
+.db-path-current {
+  margin: 0;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.db-path-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: min(50vh, 360px);
+  overflow: auto;
+  border: 1px solid var(--ice-border-soft);
+  border-radius: 8px;
+}
+.db-path-list button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 8px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--ice-border-soft);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.db-path-list li:last-child button { border-bottom: 0; }
+.db-path-list button:hover { background: var(--ice-accent-soft); }
+.db-path-kind {
+  flex: 0 0 auto;
+  min-width: 3.2rem;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ice-text-muted);
+}
+.db-path-empty {
+  padding: 10px;
+  font-size: 13px;
+}
 .secret-input,
 .copy-input {
   position: relative;

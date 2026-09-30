@@ -52,7 +52,11 @@
                 </div>
                 <div>
                     <label>Database path</label>
-                    <input asp-for="Db.FbPath" required placeholder="C:/SQLAccount/Company.FDB" />
+                    <div class="path-input">
+                        <input asp-for="Db.FbPath" required placeholder="C:/SQLAccount/Company.FDB" data-db-path />
+                        <button class="btn secondary" type="button" data-db-browse>Browse</button>
+                    </div>
+                    <p class="field-hint">Browse the folders on this server and choose the company .FDB. The path is filled in for you.</p>
                 </div>
                 <input type="hidden" asp-for="Db.FbCharset" />
                 <input type="hidden" asp-for="Db.FbDialect" />
@@ -108,3 +112,18 @@
         <a class="btn secondary" asp-page="Index">Cancel</a>
     </div>
 </form>
+<dialog id="dbPathBrowse" class="accounts-modal db-path-modal" aria-labelledby="dbPathBrowseTitle">
+    <div class="accounts-modal-form">
+        <div class="accounts-modal-head">
+            <h3 id="dbPathBrowseTitle">Choose database file</h3>
+            <button type="button" class="accounts-modal-close" data-db-path-close aria-label="Close">&times;</button>
+        </div>
+        <div class="accounts-modal-body">
+            <p class="db-path-current" data-db-path-current>This computer</p>
+            <p class="field-hint" data-db-path-error hidden></p>
+            <button type="button" class="btn secondary small" data-db-path-up hidden>Up</button>
+            <ul class="db-path-list" data-db-path-list></ul>
+        </div>
+    </div>
+</dialog>
+<script src="~/js/db-path-browse.js" asp-append-version="true"></script>

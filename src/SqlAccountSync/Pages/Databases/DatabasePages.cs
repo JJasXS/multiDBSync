@@ -123,6 +123,13 @@ public class EditModel : SyncPageModel
         return Page();
     }
 
+    public IActionResult OnGetBrowse(string? path)
+    {
+        if (!IsAdmin) return Forbid();
+        var result = path is null ? DatabaseFileBrowser.Start() : DatabaseFileBrowser.List(path);
+        return new JsonResult(result);
+    }
+
     public async Task<IActionResult> OnPostAsync()
     {
         if (!IsAdmin) return Forbid();
