@@ -22,12 +22,10 @@ public class IndexModel : SyncPageModel
     }
 
     public List<RegisteredDatabase> Databases { get; set; } = [];
-    public List<DatabaseLink> Links { get; set; } = [];
 
     public async Task OnGetAsync()
     {
         Databases = await _registry.ListAsync(includeInactive: IsAdmin);
-        Links = await _registry.ListLinksAsync();
     }
 }
 
