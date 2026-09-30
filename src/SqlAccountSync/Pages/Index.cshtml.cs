@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Options;
 using SqlAccountSync.Data;
+using SqlAccountSync.Helpers;
 using SqlAccountSync.Models;
 using SqlAccountSync.Options;
 using SqlAccountSync.Services.Audit;
@@ -68,6 +69,16 @@ public class IndexModel : SyncPageModel
     public bool CentralConfigured { get; set; }
     public int? MaxDatabases { get; set; }
     public bool DatabaseCapReached => MaxDatabases is int cap && Databases.Count >= cap;
+    public string TenantCode => (_syncOptions.TenantCode ?? "").Trim();
+    public string ApiBaseUrl => "https://api.sql.my";
+    public string ApiCredRef
+    {
+        get
+        {
+            var id = SqlApiCredRefConvention.BuildBundleSecretId(TenantCode);
+            return id.Length == 0 ? "proacc/tenant/{TENANT_CODE}/sqlApiCredentials" : id;
+        }
+    }
 
     public async Task OnGetAsync()
     {
