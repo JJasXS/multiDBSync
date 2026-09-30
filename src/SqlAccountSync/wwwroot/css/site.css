@@ -1049,7 +1049,8 @@ code {
   color: var(--ice-text-muted);
   margin-bottom: 0.25rem;
 }
-.accounts-modal-body .field input {
+.accounts-modal-body .field input,
+.accounts-modal-body .field select {
   width: 100%;
 }
 .accounts-modal-body .field-row {

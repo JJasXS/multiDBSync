@@ -45,6 +45,7 @@ public class LinkModel : SyncPageModel
     public List<DatabaseLink> Links { get; set; } = [];
     [BindProperty] public int MasterDbId { get; set; }
     [BindProperty] public List<int> SubDbIds { get; set; } = [];
+    [BindProperty] public string ReturnTo { get; set; } = "";
     public string Message { get; set; } = "";
     public bool Error { get; set; }
 
@@ -67,8 +68,11 @@ public class LinkModel : SyncPageModel
             return await LinkFailedAsync("Those Master/Sub relationships already exist.");
 
         await _audit.WriteAsync(new AuditEntry { UserEmail = CurrentEmail, Action = "USER CREATED DBLINK", Result = "SUCCESS" });
-        return RedirectToPage("Index");
+        return FromDashboard ? RedirectToPage("/Index") : RedirectToPage("Index");
     }
+
+    private bool FromDashboard =>
+        string.Equals(ReturnTo, "dashboard", StringComparison.OrdinalIgnoreCase);
 
     private List<int> ChosenSubIds() =>
         SubDbIds.Where(id => id > 0 && id != MasterDbId).Distinct().ToList();
@@ -100,6 +104,11 @@ public class LinkModel : SyncPageModel
 
     private async Task<IActionResult> LinkFailedAsync(string message)
     {
+        if (FromDashboard)
+        {
+            TempData["LinkError"] = message;
+            return RedirectToPage("/Index");
+        }
         Error = true;
         Message = message;
         await LoadAsync();
