@@ -15,17 +15,60 @@ namespace SqlAccountSync.Pages.Databases;
 public class IndexModel : SyncPageModel
 {
     private readonly IDatabaseRegistry _registry;
+    private readonly IAuditService _audit;
+    private readonly ITenantDatabaseBootstrap _tenants;
+    private readonly SyncOptions _sync;
 
-    public IndexModel(IDatabaseRegistry registry)
+    public IndexModel(
+        IDatabaseRegistry registry,
+        IAuditService audit,
+        ITenantDatabaseBootstrap tenants,
+        IOptions<SyncOptions> sync)
     {
         _registry = registry;
+        _audit = audit;
+        _tenants = tenants;
+        _sync = sync.Value;
     }
 
     public List<RegisteredDatabase> Databases { get; set; } = [];
 
     public async Task OnGetAsync()
     {
-        Databases = await _registry.ListAsync(includeInactive: IsAdmin);
+        Databases = await _registry.ListAsync(includeInactive: true);
+    }
+
+    public async Task<IActionResult> OnPostSetActiveAsync(int id, bool active)
+    {
+        if (!IsAdmin) return Forbid();
+        var existing = await _registry.GetAsync(id);
+        if (existing is null) return RedirectToPage();
+        var capMessage = await ActivateCapMessageAsync(existing, active);
+        if (capMessage is not null)
+        {
+            TempData["DbStatusError"] = capMessage;
+            return RedirectToPage();
+        }
+
+        await _registry.SetActiveAsync(id, active, CurrentEmail);
+        await _audit.WriteAsync(new AuditEntry
+        {
+            UserEmail = CurrentEmail,
+            Action = active ? "USER ENABLED DATABASE" : "USER DISABLED DATABASE",
+            DbId = id,
+            Result = "SUCCESS"
+        });
+        return RedirectToPage();
+    }
+
+    private async Task<string?> ActivateCapMessageAsync(RegisteredDatabase existing, bool active)
+    {
+        if (!active || existing.IsActive)
+            return null;
+        var tenant = (_sync.TenantCode ?? "").Trim();
+        var max = await _tenants.GetMaxDatabasesAsync(tenant);
+        var activeCount = (await _registry.ListAsync()).Count;
+        return DatabasePlanLimit.NewDatabaseMessage(max, activeCount);
     }
 }
 

@@ -12,6 +12,7 @@ public interface IDatabaseRegistry
     Task<RegisteredDatabase?> GetAsync(int dbId, CancellationToken cancellationToken = default);
     Task<int> SaveAsync(RegisteredDatabase db, string user, CancellationToken cancellationToken = default);
     Task DeactivateAsync(int dbId, string user, CancellationToken cancellationToken = default);
+    Task SetActiveAsync(int dbId, bool active, string user, CancellationToken cancellationToken = default);
     Task PointSqlApiCredRefsAtBundleAsync(string tenantCode, CancellationToken cancellationToken = default);
     Task UpdateStatusAsync(int dbId, string status, bool success, CancellationToken cancellationToken = default);
     Task MarkSyncOkAsync(int dbId, CancellationToken cancellationToken = default);
@@ -115,8 +116,12 @@ WHERE UPPER(APICREDREF) LIKE UPPER(@SM) || '%'
     }
 
     public Task DeactivateAsync(int dbId, string user, CancellationToken cancellationToken = default) =>
-        _db.ExecuteAsync("UPDATE SYNC_DATABASE SET ISACTIVE=0, UPDATEDAT=CURRENT_TIMESTAMP, UPDATEDBY=@USER WHERE DBID=@DBID",
-            new { DBID = dbId, USER = user }, cancellationToken);
+        SetActiveAsync(dbId, false, user, cancellationToken);
+
+    public Task SetActiveAsync(int dbId, bool active, string user, CancellationToken cancellationToken = default) =>
+        _db.ExecuteAsync(
+            "UPDATE SYNC_DATABASE SET ISACTIVE=@ACTIVE, UPDATEDAT=CURRENT_TIMESTAMP, UPDATEDBY=@USER WHERE DBID=@DBID",
+            new { DBID = dbId, ACTIVE = active ? 1 : 0, USER = user }, cancellationToken);
 
     public Task UpdateStatusAsync(int dbId, string status, bool success, CancellationToken cancellationToken = default)
     {

@@ -3,6 +3,10 @@
 @{
     ViewData["Title"] = "Databases";
 }
+@if (TempData["DbStatusError"] is string statusError)
+{
+    <div class="flash flash-err">@statusError</div>
+}
 <div class="card">
     <div class="card-head">
         <h3>Companies</h3>
@@ -32,7 +36,31 @@
                     <tr>
                         <td><a asp-page="Details" asp-route-id="@d.DbId">@d.DisplayName</a></td>
                         <td><span class="badge badge-@(d.DbRole.ToLowerInvariant())">@d.DbRole</span></td>
-                        <td><span class="badge badge-@(d.ConnStatus == "ONLINE" ? "online" : "offline")">@d.ConnStatus</span></td>
+                        <td>
+                            <span class="badge @(d.IsActive ? "badge-online" : "badge-disabled")">@(d.IsActive ? "Active" : "Inactive")</span>
+                            @if (Model.IsAdmin && d.IsActive)
+                            {
+                                <form method="post" class="user-switch-form" asp-page-handler="SetActive" asp-route-id="@d.DbId">
+                                    <input type="hidden" name="active" value="false" />
+                                    <button class="user-switch is-on" type="submit" aria-pressed="true" aria-label="Set @d.DisplayName inactive"
+                                            data-confirm="Turn off @d.DisplayName?"
+                                            data-confirm-title="Turn off database"
+                                            data-confirm-ok="Turn off"
+                                            data-confirm-danger>
+                                        <span class="user-switch-track" aria-hidden="true"><span class="user-switch-knob"></span></span>
+                                    </button>
+                                </form>
+                            }
+                            else if (Model.IsAdmin)
+                            {
+                                <form method="post" class="user-switch-form" asp-page-handler="SetActive" asp-route-id="@d.DbId">
+                                    <input type="hidden" name="active" value="true" />
+                                    <button class="user-switch" type="submit" aria-pressed="false" aria-label="Set @d.DisplayName active">
+                                        <span class="user-switch-track" aria-hidden="true"><span class="user-switch-knob"></span></span>
+                                    </button>
+                                </form>
+                            }
+                        </td>
                         <td>@(d.LastConnOk?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
                         <td>@(d.LastSyncOk?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
                     </tr>
