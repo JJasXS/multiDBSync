@@ -8,6 +8,17 @@
     var d = Model.Db!;
     var showMappingsUi = FeatureOptions.Value.ShowMappingsUi;
     var online = d.ConnStatus == "ONLINE";
+    var isMaster = d.DbRole is DatabaseRoles.Master or DatabaseRoles.Both;
+    var statusSwitch = new ActiveSwitchView
+    {
+        Id = d.DbId,
+        Name = d.DisplayName,
+        IsActive = d.IsActive,
+        CanToggle = Model.IsAdmin,
+        ConfirmSubs = Model.IsAdmin && d.IsActive && isMaster && Model.ActiveSubCount > 0,
+        ActiveSubCount = Model.ActiveSubCount,
+        FormPage = "/Databases/Index"
+    };
 }
 @if (!string.IsNullOrEmpty(Model.Message))
 {
@@ -18,15 +29,7 @@
         <div class="db-detail-status">
             <span class="badge badge-@(d.DbRole.ToLowerInvariant())">@d.DbRole</span>
             <span class="badge badge-@(online ? "online" : "offline")">@d.ConnStatus</span>
-            <partial name="_ActiveSwitch" model="new ActiveSwitchView {
-                Id = d.DbId,
-                Name = d.DisplayName,
-                IsActive = d.IsActive,
-                CanToggle = Model.IsAdmin,
-                ConfirmSubs = Model.IsAdmin && d.IsActive && (d.DbRole is DatabaseRoles.Master or DatabaseRoles.Both) && Model.ActiveSubCount > 0,
-                ActiveSubCount = Model.ActiveSubCount,
-                FormPage = "/Databases/Index"
-            }" />
+            <partial name="_ActiveSwitch" model="statusSwitch" />
         </div>
         <details class="kebab">
             <summary aria-label="Actions">

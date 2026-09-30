@@ -42,15 +42,17 @@
                                     l.MasterDbId == d.DbId
                                     && Model.Databases.Any(s => s.DbId == l.SubDbId && s.IsActive));
                                 var isMaster = d.DbRole is DatabaseRoles.Master or DatabaseRoles.Both;
+                                var statusSwitch = new ActiveSwitchView
+                                {
+                                    Id = d.DbId,
+                                    Name = d.DisplayName,
+                                    IsActive = d.IsActive,
+                                    CanToggle = Model.IsAdmin,
+                                    ConfirmSubs = Model.IsAdmin && d.IsActive && isMaster && activeSubCount > 0,
+                                    ActiveSubCount = activeSubCount
+                                };
                             }
-                            <partial name="_ActiveSwitch" model="new ActiveSwitchView {
-                                Id = d.DbId,
-                                Name = d.DisplayName,
-                                IsActive = d.IsActive,
-                                CanToggle = Model.IsAdmin,
-                                ConfirmSubs = Model.IsAdmin && d.IsActive && isMaster && activeSubCount > 0,
-                                ActiveSubCount = activeSubCount
-                            }" />
+                            <partial name="_ActiveSwitch" model="statusSwitch" />
                         </td>
                         <td>@(d.LastConnOk?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
                         <td>@(d.LastSyncOk?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
