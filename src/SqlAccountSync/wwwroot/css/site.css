@@ -975,6 +975,19 @@ code {
 .db-create-sql { grid-column: 1; grid-row: 1 / span 2; }
 .db-create-identity { grid-column: 2; grid-row: 1; }
 .db-create-api { grid-column: 2; grid-row: 2; }
+.role-radios {
+  display: flex;
+  gap: 1rem;
+  min-height: 38px;
+  align-items: center;
+}
+.role-radios label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 600;
+  cursor: pointer;
+}
 .db-create-sql,
 .db-create-identity,
 .db-create-api {
