@@ -89,7 +89,8 @@
                             <div class="flash flash-err" data-db-error>@dbError</div>
                         }
                         <div class="db-create-layout">
-                            <section class="db-create-sql">
+                            <section class="db-create-sql db-create-panel">
+                                <h4>SQL connection</h4>
                                 <div class="field-row">
                                     <div class="field">
                                         <label for="dashDbHost">Host</label>
@@ -122,8 +123,8 @@
                                     </div>
                                 </div>
                             </section>
-                            <div class="db-create-side">
-                            <section class="db-create-identity">
+                            <div class="db-create-side db-create-panel">
+                            <h4>Company</h4>
                                 <div class="field">
                                     <label for="dashDbCode">Code</label>
                                     <input id="dashDbCode" name="Db.DbCode" required placeholder="HQ01" />
@@ -139,8 +140,7 @@
                                         <label class="role-choice"><input type="radio" name="Db.DbRole" value="SUB" /> Sub</label>
                                     </div>
                                 </div>
-                            </section>
-                            <section class="db-create-api">
+                            <h4 class="db-create-subhead">SQL API</h4>
                                 <div class="field">
                                     <label for="dashAccessKey">Access key</label>
                                     <input id="dashAccessKey" name="ApiAccessKey" type="password" autocomplete="off" />
@@ -150,7 +150,6 @@
                                     <input id="dashSecretKey" name="ApiSecretKey" type="password" autocomplete="off" />
                                 </div>
                                 <p class="field-hint">Leave both keys blank to skip Secrets Manager. Filling both stores them for this company.</p>
-                            </section>
                             </div>
                         </div>
                     </div>
