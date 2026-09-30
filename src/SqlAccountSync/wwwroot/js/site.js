@@ -410,6 +410,18 @@ function trimPlanLinks(root, cap) {
 }
 
 (() => {
+  document.querySelectorAll("dialog form[method='post']").forEach((form) => {
+    const save = form.querySelector("button[type='submit']");
+    if (!save) return;
+    save.addEventListener("click", (event) => {
+      event.preventDefault();
+      if (!form.reportValidity()) return;
+      form.submit();
+    });
+  });
+})();
+
+(() => {
   document.querySelectorAll("[data-plan-cap]").forEach((root) => {
     const cap = Number(root.getAttribute("data-plan-cap"));
     if (!cap) return;

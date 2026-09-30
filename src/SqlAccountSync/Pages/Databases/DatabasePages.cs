@@ -326,6 +326,18 @@ public class EditModel : SyncPageModel
     public async Task<IActionResult> OnPostAsync()
     {
         if (!IsAdmin) return Forbid();
+        try
+        {
+            return await SavePostedDatabaseAsync();
+        }
+        catch (Exception ex)
+        {
+            return DbFailed(DatabaseSaveError(ex));
+        }
+    }
+
+    private async Task<IActionResult> SavePostedDatabaseAsync()
+    {
         if (ApiKeysArePartial())
             return DbFailed("Enter both the access key and the secret key, or leave both blank.");
         var capMessage = await OverCapMessageAsync();
@@ -341,6 +353,16 @@ public class EditModel : SyncPageModel
         await SaveApiKeysAsync(id);
         await WriteDatabaseAuditAsync(wasNew, id);
         return FromDashboard ? RedirectToPage("/Index") : RedirectToPage("Details", new { id });
+    }
+
+    private static string DatabaseSaveError(Exception ex)
+    {
+        var text = ex.ToString();
+        if (text.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("duplicate", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("-803", StringComparison.Ordinal))
+            return "A company with that code already exists.";
+        return "Could not save this company. Check the code and database path, then try again.";
     }
 
     private bool FromDashboard =>
