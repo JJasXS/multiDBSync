@@ -54,9 +54,12 @@
                     <label>Database path</label>
                     <div class="path-input">
                         <input asp-for="Db.FbPath" required placeholder="C:/SQLAccount/Company.FDB" data-db-path />
-                        <button class="btn secondary" type="button" data-db-browse>Browse</button>
+                        <button type="button" class="path-pin" data-db-path-pin aria-label="Choose database file" title="Choose database file">
+                            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z"/></svg>
+                        </button>
+                        <input type="file" data-db-path-file accept=".fdb,.gdb" hidden />
                     </div>
-                    <p class="field-hint">Browse the folders on this server and choose the company .FDB. The path is filled in for you.</p>
+                    <p class="field-hint" data-db-path-hint>Use the pin to open the file picker and choose the company .FDB. The path is filled in for you.</p>
                 </div>
                 <input type="hidden" asp-for="Db.FbCharset" />
                 <input type="hidden" asp-for="Db.FbDialect" />
@@ -112,17 +115,15 @@
         <a class="btn secondary" asp-page="Index">Cancel</a>
     </div>
 </form>
-<dialog id="dbPathBrowse" class="accounts-modal db-path-modal" aria-labelledby="dbPathBrowseTitle">
+<dialog id="dbPathMatches" class="accounts-modal db-path-modal" aria-labelledby="dbPathMatchesTitle">
     <div class="accounts-modal-form">
         <div class="accounts-modal-head">
-            <h3 id="dbPathBrowseTitle">Choose database file</h3>
+            <h3 id="dbPathMatchesTitle">Choose a path</h3>
             <button type="button" class="accounts-modal-close" data-db-path-close aria-label="Close">&times;</button>
         </div>
         <div class="accounts-modal-body">
-            <p class="db-path-current" data-db-path-current>This computer</p>
-            <p class="field-hint" data-db-path-error hidden></p>
-            <button type="button" class="btn secondary small" data-db-path-up hidden>Up</button>
-            <ul class="db-path-list" data-db-path-list></ul>
+            <p class="field-hint">More than one file has that name. Pick the path to use.</p>
+            <ul class="db-path-list" data-db-path-matches></ul>
         </div>
     </div>
 </dialog>

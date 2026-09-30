@@ -1,110 +1,104 @@
 namespace SqlAccountSync.Helpers;
 
-public sealed record DatabaseBrowseResult(
-    string Path,
-    string? Parent,
-    string Error,
-    IReadOnlyList<DatabaseBrowseEntry> Entries);
-
-public sealed record DatabaseBrowseEntry(string Name, string Path, bool IsFile);
-
 public static class DatabaseFileBrowser
 {
-    private const int MaxEntries = 400;
+    private const int MaxMatches = 20;
+    private const int MaxDirs = 8000;
+    private static readonly TimeSpan SearchLimit = TimeSpan.FromSeconds(8);
     private static readonly string[] Preferred =
     [
         @"C:\eStream\SQLAccounting\DB",
         @"C:\SQLData"
     ];
-
-    public static DatabaseBrowseResult Start()
+    private static readonly HashSet<string> SkipNames = new(StringComparer.OrdinalIgnoreCase)
     {
-        foreach (var candidate in Preferred)
+        "Windows", "Program Files", "Program Files (x86)", "ProgramData",
+        "$Recycle.Bin", "System Volume Information", "AppData", "WinSxS",
+        "node_modules", ".git"
+    };
+
+    public static IReadOnlyList<string> FindByName(string? fileName)
+    {
+        var name = SafeName(fileName);
+        if (name is null)
+            return [];
+
+        var state = new SearchState(name, DateTime.UtcNow + SearchLimit);
+        foreach (var root in Preferred.Where(Directory.Exists))
+            Search(root, state);
+        if (state.Found.Count > 0)
+            return state.Found;
+
+        foreach (var drive in DriveInfo.GetDrives())
         {
-            if (Directory.Exists(candidate))
-                return ReadDirectory(candidate);
+            if (state.Stop) break;
+            if (!drive.IsReady || drive.DriveType != DriveType.Fixed) continue;
+            Search(drive.RootDirectory.FullName, state);
         }
-        return Roots();
+        return state.Found;
     }
 
-    public static DatabaseBrowseResult List(string? path)
+    private static void Search(string dir, SearchState state)
     {
-        var full = Normalize(path);
-        if (full is null)
-            return Roots();
-        if (IsDatabaseFile(full) && File.Exists(full))
-            full = System.IO.Path.GetDirectoryName(full) ?? full;
-        if (!Directory.Exists(full))
-            return Roots();
-        return ReadDirectory(full);
+        if (state.Stop) return;
+        state.Visited++;
+        foreach (var file in SafeFiles(dir, state.Name))
+        {
+            state.Found.Add(Display(file));
+            if (state.Found.Count >= MaxMatches) return;
+        }
+        foreach (var child in SafeDirs(dir))
+        {
+            if (state.Stop) return;
+            if (!CanEnter(child)) continue;
+            Search(child, state);
+        }
     }
 
-    private static DatabaseBrowseResult ReadDirectory(string full)
+    private static string? SafeName(string? fileName)
+    {
+        var name = Path.GetFileName((fileName ?? "").Trim().Trim('"'));
+        if (string.IsNullOrWhiteSpace(name) || name is "." or "..")
+            return null;
+        if (name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+            return null;
+        return IsDatabaseFile(name) ? name : null;
+    }
+
+    private static List<string> SafeFiles(string dir, string name)
     {
         try
         {
-            var entries = ReadEntries(full);
-            return new DatabaseBrowseResult(Display(full), ParentOf(full), "", entries);
+            return Directory.EnumerateFiles(dir, name).Take(MaxMatches).ToList();
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
         {
-            return new DatabaseBrowseResult(Display(full), ParentOf(full), "That folder cannot be opened.", []);
+            return [];
         }
     }
 
-    private static List<DatabaseBrowseEntry> ReadEntries(string full)
+    private static List<string> SafeDirs(string dir)
     {
-        var dirs = Directory.EnumerateDirectories(full)
-            .Where(CanShow)
-            .OrderBy(System.IO.Path.GetFileName, StringComparer.OrdinalIgnoreCase)
-            .Take(MaxEntries)
-            .Select(dir => new DatabaseBrowseEntry(System.IO.Path.GetFileName(dir) ?? dir, Display(dir), false));
-        var files = Directory.EnumerateFiles(full)
-            .Where(IsDatabaseFile)
-            .OrderBy(System.IO.Path.GetFileName, StringComparer.OrdinalIgnoreCase)
-            .Take(MaxEntries)
-            .Select(file => new DatabaseBrowseEntry(System.IO.Path.GetFileName(file) ?? file, Display(file), true));
-        return dirs.Concat(files).Take(MaxEntries).ToList();
-    }
-
-    private static DatabaseBrowseResult Roots()
-    {
-        var entries = DriveInfo.GetDrives()
-            .Where(drive => drive.IsReady)
-            .Select(drive => new DatabaseBrowseEntry(drive.Name.TrimEnd('\\'), Display(drive.Name), false))
-            .ToList();
-        return new DatabaseBrowseResult("", null, "", entries);
-    }
-
-    private static string? Normalize(string? path)
-    {
-        var raw = (path ?? "").Trim().Trim('"');
-        if (raw.Length == 0 || raw.Contains('\0'))
-            return null;
         try
         {
-            var full = System.IO.Path.GetFullPath(raw);
-            return System.IO.Path.IsPathRooted(full) ? full : null;
+            return Directory.EnumerateDirectories(dir).ToList();
         }
-        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
         {
-            return null;
+            return [];
         }
     }
 
-    private static string ParentOf(string full)
+    private static bool CanEnter(string path)
     {
-        var trimmed = full.TrimEnd(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar);
-        var parent = System.IO.Path.GetDirectoryName(trimmed);
-        return string.IsNullOrEmpty(parent) ? "" : Display(parent);
-    }
-
-    private static bool CanShow(string path)
-    {
+        var name = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        if (string.IsNullOrEmpty(name) || SkipNames.Contains(name))
+            return false;
         try
         {
             var attr = File.GetAttributes(path);
-            return (attr & (FileAttributes.Hidden | FileAttributes.System)) == 0;
+            var blocked = FileAttributes.Hidden | FileAttributes.System | FileAttributes.ReparsePoint;
+            return (attr & blocked) == 0;
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
         {
@@ -114,10 +108,25 @@ public static class DatabaseFileBrowser
 
     private static bool IsDatabaseFile(string path)
     {
-        var ext = System.IO.Path.GetExtension(path);
+        var ext = Path.GetExtension(path);
         return ext.Equals(".fdb", StringComparison.OrdinalIgnoreCase)
             || ext.Equals(".gdb", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string Display(string path) => path.Replace('\\', '/');
+
+    private sealed class SearchState
+    {
+        public SearchState(string name, DateTime deadline)
+        {
+            Name = name;
+            Deadline = deadline;
+        }
+
+        public string Name { get; }
+        public DateTime Deadline { get; }
+        public List<string> Found { get; } = [];
+        public int Visited { get; set; }
+        public bool Stop => Found.Count >= MaxMatches || Visited >= MaxDirs || DateTime.UtcNow >= Deadline;
+    }
 }
