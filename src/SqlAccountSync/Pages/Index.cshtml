@@ -94,6 +94,58 @@
             }
         </div>
 
+        <div class="card">
+            <div class="card-head">
+                <h3>Relationships</h3>
+                @if (Model.IsAdmin)
+                {
+                    <details class="kebab">
+                        <summary aria-label="Actions">
+                            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="5" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="19" r="1.6" fill="currentColor"/></svg>
+                        </summary>
+                        <div class="kebab-menu">
+                            <a asp-page="/Databases/Index" asp-route-add="1">Add relationship</a>
+                        </div>
+                    </details>
+                }
+            </div>
+            @if (!Model.CentralConfigured)
+            {
+                <p class="empty">Central database is not configured.</p>
+            }
+            else if (Model.Links.Count == 0)
+            {
+                <p class="empty">No relationships yet.</p>
+            }
+            else
+            {
+                var masters = Model.Databases.Where(d => d.DbRole is "MASTER" or "BOTH").ToList();
+                foreach (var m in masters)
+                {
+                    var masterLinks = Model.Links.Where(l => l.MasterDbId == m.DbId).ToList();
+                    if (masterLinks.Count == 0) continue;
+                    <div class="rel-master">
+                        <strong>@m.DisplayName</strong>
+                        <span class="badge badge-master">MASTER</span>
+                        <span class="badge badge-@(m.ConnStatus == "ONLINE" ? "online" : "offline")">@m.ConnStatus</span>
+                    </div>
+                    <div class="tree">
+                        @foreach (var link in masterLinks)
+                        {
+                            var sub = Model.Databases.FirstOrDefault(d => d.DbId == link.SubDbId);
+                            <div class="node">
+                                └── SUB @link.SubName
+                                @if (sub is not null)
+                                {
+                                    <span class="badge badge-@(sub.ConnStatus == "ONLINE" ? "online" : "offline")">@sub.ConnStatus</span>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            }
+        </div>
+
         @if (showMappingsUi)
         {
         <div class="card">

@@ -31,9 +31,10 @@ public class IndexModel : SyncPageModel
     public bool Error { get; set; }
     public bool ShowAddForm { get; set; }
 
-    public async Task OnGetAsync(string? tab)
+    public async Task OnGetAsync(string? tab, int? add)
     {
         Tab = string.Equals(tab, "relationships", StringComparison.OrdinalIgnoreCase) ? "relationships" : "databases";
+        ShowAddForm = add == 1;
         Databases = await _registry.ListAsync(includeInactive: IsAdmin);
         Links = await _registry.ListLinksAsync();
     }
@@ -113,6 +114,8 @@ public class EditModel : SyncPageModel
     }
 
     [BindProperty] public RegisteredDatabase Db { get; set; } = new();
+    [BindProperty] public string ApiAccessKey { get; set; } = "";
+    [BindProperty] public string ApiSecretKey { get; set; } = "";
     public string Message { get; set; } = "";
     public string TenantCode => (_sync.TenantCode ?? "").Trim();
     public bool AutoSqlApiCredRef => _sync.AutoAssignSqlApiCredRefByDbId && TenantCode.Length > 0;
@@ -171,23 +174,53 @@ public class EditModel : SyncPageModel
     public async Task<IActionResult> OnPostAsync()
     {
         if (!IsAdmin) return Forbid();
+        if (ApiKeysArePartial())
+        {
+            Message = "Enter both the access key and the secret key, or leave both blank.";
+            PrepareForm();
+            return Page();
+        }
+
         Db.DbRole = MasterOrSub(Db.DbRole);
         Db.CompanyName = (Db.DisplayName ?? "").Trim();
         Db.ApiBaseUrl = DefaultApiBaseUrl;
         Db.ApiCredRef = SqlApiCredRefConvention.ForStorage(Db.ApiCredRef);
         var wasNew = Db.DbId == 0;
         var id = await _registry.SaveAsync(Db, CurrentEmail);
-        var saved = await _registry.GetAsync(id);
-        if (saved is not null
-            && !string.IsNullOrWhiteSpace(_sync.TenantCode)
-            && !string.IsNullOrWhiteSpace(saved.DbCode)
-            && !string.IsNullOrWhiteSpace(saved.ApiCredRef)
-            && saved.ApiCredRef.StartsWith("sm:", StringComparison.OrdinalIgnoreCase))
-        {
-            await _secrets.EnsurePlaceholderAsync(_sync.TenantCode, saved.DbCode);
-        }
+        await SaveApiKeysAsync(id);
+        await WriteDatabaseAuditAsync(wasNew, id);
+        return RedirectToPage("Details", new { id });
+    }
 
-        await _audit.WriteAsync(new AuditEntry
+    private bool ApiKeysArePartial()
+    {
+        var hasAccess = !string.IsNullOrWhiteSpace(ApiAccessKey);
+        var hasSecret = !string.IsNullOrWhiteSpace(ApiSecretKey);
+        return hasAccess != hasSecret;
+    }
+
+    private void PrepareForm()
+    {
+        Db.DbRole = MasterOrSub(Db.DbRole);
+        Db.ApiBaseUrl = DefaultApiBaseUrl;
+        Db.ApiCredRef = SqlApiCredRefConvention.ForDisplay(Db.ApiCredRef);
+    }
+
+    private async Task SaveApiKeysAsync(int id)
+    {
+        if (string.IsNullOrWhiteSpace(ApiAccessKey) || string.IsNullOrWhiteSpace(ApiSecretKey))
+            return;
+        var saved = await _registry.GetAsync(id);
+        if (saved is null || string.IsNullOrWhiteSpace(saved.DbCode))
+            return;
+        var (ok, message) = await _secrets.SaveCredentialsAsync(
+            _sync.TenantCode, saved.DbCode, ApiAccessKey, ApiSecretKey);
+        if (!ok)
+            TempData["Flash"] = message;
+    }
+
+    private Task WriteDatabaseAuditAsync(bool wasNew, int id) =>
+        _audit.WriteAsync(new AuditEntry
         {
             UserEmail = CurrentEmail,
             Action = wasNew ? "USER CREATED DATABASE" : "USER UPDATED DATABASE",
@@ -198,8 +231,6 @@ public class EditModel : SyncPageModel
             Ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "",
             RequestId = RequestId.Current(HttpContext)
         });
-        return RedirectToPage("Details", new { id });
-    }
 }
 
 public class DetailsModel : SyncPageModel

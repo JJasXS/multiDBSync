@@ -4,6 +4,8 @@
     ViewData["Title"] = "Databases";
     var masters = Model.Databases.Where(d => d.DbRole is "MASTER" or "BOTH").ToList();
     var subs = Model.Databases.Where(d => d.DbRole is "SUB" or "BOTH").ToList();
+    var linkedSubIds = Model.Links.Select(l => l.SubDbId).ToHashSet();
+    var availableSubs = subs.Where(d => !linkedSubIds.Contains(d.DbId)).ToList();
     var showForm = Model.Error || Model.ShowAddForm;
 }
 @if (!string.IsNullOrEmpty(Model.Message))
@@ -115,16 +117,23 @@
                     </div>
                     <div>
                         <label>Sub</label>
-                        <div class="sub-multi">
-                            @foreach (var d in subs)
-                            {
-                                var selected = Model.SubDbIds.Contains(d.DbId);
-                                <label class="sub-multi-row">
-                                    <input type="checkbox" name="SubDbIds" value="@d.DbId" @(selected ? "checked" : null) />
-                                    <span>@d.DisplayName (@d.DbRole)</span>
-                                </label>
-                            }
-                        </div>
+                        @if (availableSubs.Count == 0)
+                        {
+                            <p class="empty">Every Sub is already linked to a Master.</p>
+                        }
+                        else
+                        {
+                            <div class="sub-multi">
+                                @foreach (var d in availableSubs)
+                                {
+                                    var selected = Model.SubDbIds.Contains(d.DbId);
+                                    <label class="sub-multi-row">
+                                        <input type="checkbox" name="SubDbIds" value="@d.DbId" @(selected ? "checked" : null) />
+                                        <span>@d.DisplayName (@d.DbRole)</span>
+                                    </label>
+                                }
+                            </div>
+                        }
                     </div>
                     <div class="form-actions">
                         <button class="btn" type="submit">Save links</button>

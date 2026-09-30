@@ -63,7 +63,7 @@ public sealed class SyncOptions
     /// (falls back to numeric DBID if Code is empty).
     /// </summary>
     public bool AutoAssignSqlApiCredRefByDbId { get; set; } = true;
-    /// <summary>When true, create an empty Secrets Manager placeholder for the assigned path if missing.</summary>
+    /// <summary>Kept for existing config. Secrets are written only when access and secret keys are entered.</summary>
     public bool EnsureSqlApiSecretPlaceholder { get; set; } = true;
     public string[] RequiredTables { get; set; } = ["ST_ITEM", "AR_CUSTOMER", "SY_USER"];
 }

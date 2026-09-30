@@ -580,16 +580,16 @@ code {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border: 1px solid var(--ice-border);
-  border-radius: var(--ice-radius);
-  background: var(--ice-surface);
+  width: 28px;
+  height: 28px;
+  border: 0;
+  background: transparent;
   color: var(--ice-heading);
   cursor: pointer;
 }
 .kebab summary::-webkit-details-marker { display: none; }
-.kebab summary:hover { background: var(--ice-accent-soft); }
+.kebab summary:hover,
+.kebab summary:focus { background: transparent; color: var(--ice-accent); outline: none; }
 .kebab-menu {
   position: absolute;
   top: calc(100% + 6px);
