@@ -24,6 +24,7 @@ public class IndexModel : SyncPageModel
     public int CurrentUserId => CurrentUser.UserId(User);
     [BindProperty] public string Email { get; set; } = "";
     [BindProperty] public string DisplayName { get; set; } = "";
+    [BindProperty] public string Mobile { get; set; } = "";
     [BindProperty] public string Role { get; set; } = AppRoles.Viewer;
 
     public async Task OnGetAsync() => await LoadAsync();
@@ -35,7 +36,7 @@ public class IndexModel : SyncPageModel
 
         try
         {
-            await _users.AddAsync(Email, DisplayName, AppRoles.Normalize(Role));
+            await _users.AddAsync(Email, DisplayName, AppRoles.Normalize(Role), Mobile);
             await _audit.WriteAsync(new AuditEntry { UserEmail = CurrentEmail, Action = "USER CREATED USER", RecordId = Email, Result = "SUCCESS" });
             return RedirectToPage();
         }

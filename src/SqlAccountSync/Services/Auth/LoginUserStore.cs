@@ -13,7 +13,7 @@ public interface ILoginUserStore
     Task<AppUser?> FindActiveByEmailAsync(string email, CancellationToken cancellationToken = default);
     Task<AppUser?> GetByIdAsync(int userId, CancellationToken cancellationToken = default);
     Task<List<AppUser>> ListAsync(CancellationToken cancellationToken = default);
-    Task<int> AddAsync(string email, string displayName, string role, CancellationToken cancellationToken = default);
+    Task<int> AddAsync(string email, string displayName, string role, string? mobile, CancellationToken cancellationToken = default);
     Task SetActiveAsync(int userId, bool active, CancellationToken cancellationToken = default);
     Task SetRoleAsync(int userId, string role, CancellationToken cancellationToken = default);
     Task<int> CountActiveAdminsAsync(CancellationToken cancellationToken = default);
@@ -23,6 +23,8 @@ public interface ILoginUserStore
 public sealed class LoginUserStore : ILoginUserStore
 {
     private const string RoleColumn = "UDF_SYNCROLE";
+    private const string CreatedColumn = "UDF_SYNCCREATED";
+    private const string UserColumns = "AUTOKEY, TRIM(CODE), TRIM(NAME), TRIM(MOBILE), TRIM(EMAIL), ISACTIVE, TRIM(UDF_SYNCROLE), UDF_SYNCCREATED";
     private readonly ILoginDatabaseSource _source;
     private readonly ISecretResolver _secrets;
     private readonly IUserDirectory _syncUsers;
@@ -67,10 +69,11 @@ public sealed class LoginUserStore : ILoginUserStore
         return users.OrderBy(u => u.DisplayName, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
-    public async Task<int> AddAsync(string email, string displayName, string role, CancellationToken cancellationToken = default)
+    public async Task<int> AddAsync(string email, string displayName, string role, string? mobile, CancellationToken cancellationToken = default)
     {
         email = (email ?? "").Trim().ToLowerInvariant();
         displayName = (displayName ?? "").Trim();
+        mobile = (mobile ?? "").Trim();
         role = AppRoles.Normalize(role);
         if (email.Length == 0 || !email.Contains('@', StringComparison.Ordinal))
             throw new InvalidOperationException("Enter a valid email.");
@@ -83,7 +86,7 @@ public sealed class LoginUserStore : ILoginUserStore
 
         var id = await NextIdAsync(conn, cancellationToken).ConfigureAwait(false);
         var code = await UniqueCodeAsync(conn, email, cancellationToken).ConfigureAwait(false);
-        await InsertAsync(conn, id, code, displayName, email, role, cancellationToken).ConfigureAwait(false);
+        await InsertAsync(conn, id, code, displayName, mobile, email, role, cancellationToken).ConfigureAwait(false);
         return id;
     }
 
@@ -137,9 +140,12 @@ public sealed class LoginUserStore : ILoginUserStore
         {
             UserId = row.Id,
             Email = row.Email,
+            Code = row.Code,
+            Mobile = row.Mobile,
             DisplayName = name,
             Role = role,
-            IsActive = row.Active
+            IsActive = row.Active,
+            CreatedAt = row.Created ?? default
         };
     }
 
@@ -178,21 +184,28 @@ public sealed class LoginUserStore : ILoginUserStore
         };
         var conn = new FbConnection(csb.ToString());
         await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await EnsureRoleColumnAsync(conn, cancellationToken).ConfigureAwait(false);
+        await EnsureColumnsAsync(conn, cancellationToken).ConfigureAwait(false);
         return conn;
     }
 
-    private async Task EnsureRoleColumnAsync(FbConnection conn, CancellationToken cancellationToken)
+    private async Task EnsureColumnsAsync(FbConnection conn, CancellationToken cancellationToken)
     {
         if (_roleColumnReady) return;
+        if (await ColumnMissingAsync(conn, RoleColumn, cancellationToken).ConfigureAwait(false))
+            await ExecuteAsync(conn, "ALTER TABLE SY_USER ADD UDF_SYNCROLE VARCHAR(20)", cancellationToken).ConfigureAwait(false);
+        if (await ColumnMissingAsync(conn, CreatedColumn, cancellationToken).ConfigureAwait(false))
+            await ExecuteAsync(conn, "ALTER TABLE SY_USER ADD UDF_SYNCCREATED TIMESTAMP", cancellationToken).ConfigureAwait(false);
+        _roleColumnReady = true;
+    }
+
+    private static async Task<bool> ColumnMissingAsync(FbConnection conn, string column, CancellationToken cancellationToken)
+    {
         const string sql = """
             SELECT COUNT(*) FROM RDB$RELATION_FIELDS
-            WHERE TRIM(RDB$RELATION_NAME) = 'SY_USER' AND TRIM(RDB$FIELD_NAME) = 'UDF_SYNCROLE'
+            WHERE TRIM(RDB$RELATION_NAME) = 'SY_USER' AND TRIM(RDB$FIELD_NAME) = @Col
             """;
-        var count = await ScalarAsync(conn, sql, cancellationToken).ConfigureAwait(false);
-        if (Convert.ToInt32(count ?? 0) == 0)
-            await ExecuteAsync(conn, "ALTER TABLE SY_USER ADD UDF_SYNCROLE VARCHAR(20)", cancellationToken).ConfigureAwait(false);
-        _roleColumnReady = true;
+        var count = await ScalarAsync(conn, sql, cancellationToken, ("@Col", column)).ConfigureAwait(false);
+        return Convert.ToInt32(count ?? 0) == 0;
     }
 
     private async Task<string> PasswordAsync(CancellationToken cancellationToken)
@@ -210,11 +223,7 @@ public sealed class LoginUserStore : ILoginUserStore
 
     private static async Task<List<RawUser>> ReadAllAsync(FbConnection conn, CancellationToken cancellationToken)
     {
-        var sql = $"""
-            SELECT AUTOKEY, TRIM(CODE), TRIM(NAME), TRIM(EMAIL), ISACTIVE, TRIM({RoleColumn})
-            FROM SY_USER
-            ORDER BY AUTOKEY
-            """;
+        var sql = $"SELECT {UserColumns} FROM SY_USER ORDER BY AUTOKEY";
         await using var cmd = new FbCommand(sql, conn);
         await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         var rows = new List<RawUser>();
@@ -225,17 +234,14 @@ public sealed class LoginUserStore : ILoginUserStore
 
     private static async Task<RawUser?> ReadByIdAsync(FbConnection conn, int id, CancellationToken cancellationToken)
     {
-        var sql = $"""
-            SELECT FIRST 1 AUTOKEY, TRIM(CODE), TRIM(NAME), TRIM(EMAIL), ISACTIVE, TRIM({RoleColumn})
-            FROM SY_USER WHERE AUTOKEY = @Id
-            """;
+        var sql = $"SELECT FIRST 1 {UserColumns} FROM SY_USER WHERE AUTOKEY = @Id";
         return await ReadSingleAsync(conn, sql, cancellationToken, ("@Id", id)).ConfigureAwait(false);
     }
 
     private static async Task<RawUser?> ReadByEmailAsync(FbConnection conn, string email, CancellationToken cancellationToken)
     {
         var sql = $"""
-            SELECT FIRST 1 AUTOKEY, TRIM(CODE), TRIM(NAME), TRIM(EMAIL), ISACTIVE, TRIM({RoleColumn})
+            SELECT FIRST 1 {UserColumns}
             FROM SY_USER
             WHERE UPPER(TRIM(CAST(EMAIL AS VARCHAR(320)))) = UPPER(TRIM(@Email))
             """;
@@ -258,8 +264,10 @@ public sealed class LoginUserStore : ILoginUserStore
         Text(reader, 1),
         Text(reader, 2),
         Text(reader, 3),
-        reader.IsDBNull(4) || IsActive(reader.GetValue(4)),
-        Text(reader, 5));
+        Text(reader, 4),
+        reader.IsDBNull(5) || IsActive(reader.GetValue(5)),
+        Text(reader, 6),
+        reader.IsDBNull(7) ? null : Convert.ToDateTime(reader.GetValue(7), CultureInfo.InvariantCulture));
 
     private static async Task<bool> EmailExistsAsync(FbConnection conn, string email, CancellationToken cancellationToken)
     {
@@ -301,14 +309,14 @@ public sealed class LoginUserStore : ILoginUserStore
     }
 
     private static Task InsertAsync(
-        FbConnection conn, int id, string code, string name, string email, string role, CancellationToken cancellationToken)
+        FbConnection conn, int id, string code, string name, string mobile, string email, string role, CancellationToken cancellationToken)
     {
         var sql = $"""
-            INSERT INTO SY_USER (AUTOKEY, CODE, NAME, EMAIL, ISACTIVE, {RoleColumn})
-            VALUES (@Id, @Code, @Name, @Email, TRUE, @Role)
+            INSERT INTO SY_USER (AUTOKEY, CODE, NAME, MOBILE, EMAIL, ISACTIVE, {RoleColumn}, {CreatedColumn})
+            VALUES (@Id, @Code, @Name, @Mobile, @Email, TRUE, @Role, CURRENT_TIMESTAMP)
             """;
         return ExecuteAsync(conn, sql, cancellationToken,
-            ("@Id", id), ("@Code", code), ("@Name", name), ("@Email", email), ("@Role", role));
+            ("@Id", id), ("@Code", code), ("@Name", name), ("@Mobile", mobile), ("@Email", email), ("@Role", role));
     }
 
     private static Task WriteRoleAsync(FbConnection conn, int id, string role, CancellationToken cancellationToken) =>
@@ -370,5 +378,5 @@ public sealed class LoginUserStore : ILoginUserStore
         return t is null or "" or "1" or "T" or "Y" or "TRUE";
     }
 
-    private sealed record RawUser(int Id, string Code, string Name, string Email, bool Active, string Role);
+    private sealed record RawUser(int Id, string Code, string Name, string Mobile, string Email, bool Active, string Role, DateTime? Created);
 }

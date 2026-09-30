@@ -2247,11 +2247,8 @@ input:focus, select:focus, textarea:focus {
 
 /* Users page */
 .users-page {
-  display: grid;
-  grid-template-columns: minmax(260px, 380px) minmax(0, 1fr);
-  gap: 16px;
-  align-items: start;
-  max-width: 1100px;
+  display: block;
+  max-width: none;
 }
 .users-form-card,
 .users-list-card {
@@ -2483,7 +2480,7 @@ input:focus, select:focus, textarea:focus {
   .settings-search-wrap { flex: 1 1 100%; min-width: 0; }
   .sync-config-grid { grid-template-columns: 1fr; }
   .toolbar-field { max-width: none; }
-  .users-page { grid-template-columns: 1fr; }
+  .users-page { display: block; }
   .users-form { max-width: none; }
   .users-field-role { max-width: 220px; }
 }

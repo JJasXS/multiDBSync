@@ -4,50 +4,18 @@
     ViewData["Title"] = "Users";
     var activeAdminCount = Model.Users.Count(u => u.IsActive && AppRoles.Rank(u.Role) >= AppRoles.Rank(AppRoles.Admin));
 }
+@section TopbarActions {
+    @if (Model.IsAdmin)
+    {
+        <button class="btn" type="button" id="openAddUser">Add user</button>
+    }
+}
 @if (!string.IsNullOrWhiteSpace(Model.Message))
 {
     <div class="flash @(Model.Error ? "flash-err" : "flash-ok")">@Model.Message</div>
 }
 <div class="users-page">
-    <div class="card users-form-card">
-        <div class="card-head">
-            <h3>Add user</h3>
-        </div>
-        <p class="muted users-form-lede">Add a user to the company login database. The file path comes from AWS, and the new user can sign in with a one-time code.</p>
-        @if (!Model.IsAdmin)
-        {
-            <p class="muted users-form-lede">Only an ADMIN can add users or turn accounts on and off.</p>
-        }
-        else
-        {
-        <form method="post" class="users-form">
-            <div class="users-field">
-                <label asp-for="Email">Email</label>
-                <input asp-for="Email" type="email" required placeholder="name@company.com" autocomplete="email" />
-            </div>
-            <div class="users-field">
-                <label asp-for="DisplayName">Name</label>
-                <input asp-for="DisplayName" required placeholder="Display name" autocomplete="name" />
-            </div>
-            <div class="users-field users-field-role">
-                <label asp-for="Role">Role</label>
-                <select asp-for="Role">
-                    <option>ADMIN</option>
-                    <option>VIEWER</option>
-                </select>
-            </div>
-            <div class="users-form-actions">
-                <button class="btn" type="submit">Save</button>
-            </div>
-        </form>
-        }
-    </div>
-
     <div class="card users-list-card">
-        <div class="card-head">
-            <h3>Users</h3>
-        </div>
-        <p class="muted lede">An ADMIN turns accounts on or off. You cannot turn off your own account, and the last ADMIN must stay on.</p>
         @if (Model.Users.Count == 0)
         {
             <p class="empty">No users yet.</p>
@@ -55,8 +23,19 @@
         else
         {
             <div class="table-wrap">
-                <table>
-                    <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Active</th></tr></thead>
+                <table class="users-table">
+                    <thead>
+                        <tr>
+                            <th>Datetime</th>
+                            <th>Code</th>
+                            <th>Name</th>
+                            <th>Mobile</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
                     <tbody>
                     @foreach (var u in Model.Users)
                     {
@@ -69,22 +48,28 @@
                         var lockTitle = isSelf
                             ? "You cannot turn off your own account."
                             : "The last ADMIN must stay on.";
+                        var when = u.CreatedAt.Year < 2000 ? "—" : u.CreatedAt.ToString("dd/MM/yyyy HH:mm");
                         <tr>
+                            <td>@when</td>
+                            <td>@u.Code</td>
                             <td>@u.DisplayName</td>
-                            <td>@u.Email</td>
+                            <td>@(string.IsNullOrWhiteSpace(u.Mobile) ? "—" : u.Mobile)</td>
+                            <td>@(string.IsNullOrWhiteSpace(u.Email) ? "—" : u.Email)</td>
                             <td>@u.Role</td>
+                            <td>
+                                <span class="badge @(u.IsActive ? "badge-online" : "badge-disabled")">
+                                    @(u.IsActive ? "Active" : "Inactive")
+                                </span>
+                            </td>
                             <td>
                                 @if (!Model.IsAdmin)
                                 {
-                                    <span class="badge @(u.IsActive ? "badge-online" : "badge-disabled")">
-                                        @(u.IsActive ? "On" : "Off")
-                                    </span>
+                                    <span class="muted">—</span>
                                 }
                                 else if (locked)
                                 {
                                     <span class="user-switch is-on is-locked" title="@lockTitle">
                                         <span class="user-switch-track" aria-hidden="true"><span class="user-switch-knob"></span></span>
-                                        <span class="user-switch-label">On</span>
                                     </span>
                                     <span class="muted user-switch-note">@lockNote</span>
                                 }
@@ -92,13 +77,12 @@
                                 {
                                     <form method="post" class="user-switch-form" asp-page-handler="SetActive" asp-route-id="@u.UserId">
                                         <input type="hidden" name="active" value="false" />
-                                        <button class="user-switch is-on" type="submit" aria-pressed="true"
+                                        <button class="user-switch is-on" type="submit" aria-pressed="true" aria-label="Set inactive"
                                                 data-confirm="Turn off @u.DisplayName? They will not be able to sign in."
                                                 data-confirm-title="Turn off user"
                                                 data-confirm-ok="Turn off"
                                                 data-confirm-danger>
                                             <span class="user-switch-track" aria-hidden="true"><span class="user-switch-knob"></span></span>
-                                            <span class="user-switch-label">On</span>
                                         </button>
                                     </form>
                                 }
@@ -106,9 +90,8 @@
                                 {
                                     <form method="post" class="user-switch-form" asp-page-handler="SetActive" asp-route-id="@u.UserId">
                                         <input type="hidden" name="active" value="true" />
-                                        <button class="user-switch" type="submit" aria-pressed="false">
+                                        <button class="user-switch" type="submit" aria-pressed="false" aria-label="Set active">
                                             <span class="user-switch-track" aria-hidden="true"><span class="user-switch-knob"></span></span>
-                                            <span class="user-switch-label">Off</span>
                                         </button>
                                     </form>
                                 }
@@ -121,3 +104,54 @@
         }
     </div>
 </div>
+@if (Model.IsAdmin)
+{
+    <dialog id="addUserDialog" class="accounts-modal" aria-labelledby="addUserTitle">
+        <form method="post" class="accounts-modal-form">
+            <div class="accounts-modal-head">
+                <h3 id="addUserTitle">Add user</h3>
+                <button type="button" class="accounts-modal-close" data-add-user-close aria-label="Close">&times;</button>
+            </div>
+            <div class="accounts-modal-body">
+                <p class="field-hint">The user is created in the company login database. The code and time are filled in for you.</p>
+                <div class="field">
+                    <label asp-for="DisplayName">Name</label>
+                    <input asp-for="DisplayName" required placeholder="Display name" autocomplete="name" />
+                </div>
+                <div class="field">
+                    <label asp-for="Mobile">Mobile</label>
+                    <input asp-for="Mobile" placeholder="Phone number" autocomplete="tel" />
+                </div>
+                <div class="field">
+                    <label asp-for="Email">Email</label>
+                    <input asp-for="Email" type="email" required placeholder="name@company.com" autocomplete="email" />
+                </div>
+                <div class="field">
+                    <label asp-for="Role">Role</label>
+                    <select asp-for="Role">
+                        <option>ADMIN</option>
+                        <option>VIEWER</option>
+                    </select>
+                </div>
+            </div>
+            <div class="accounts-modal-actions">
+                <button type="button" class="btn btn-ghost" data-add-user-close>Cancel</button>
+                <button class="btn" type="submit">Save</button>
+            </div>
+        </form>
+    </dialog>
+    <script>
+        function openAddUser() {
+            const dialog = document.getElementById("addUserDialog");
+            if (dialog && typeof dialog.showModal === "function" && !dialog.open) dialog.showModal();
+        }
+        document.getElementById("openAddUser")?.addEventListener("click", openAddUser);
+        document.querySelectorAll("[data-add-user-close]").forEach((btn) => {
+            btn.addEventListener("click", () => document.getElementById("addUserDialog")?.close());
+        });
+    </script>
+    @if (Model.Error)
+    {
+        <script>openAddUser();</script>
+    }
+}

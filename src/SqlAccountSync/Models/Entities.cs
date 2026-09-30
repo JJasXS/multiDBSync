@@ -188,7 +188,9 @@ public sealed class ErrorEntry
 public sealed class AppUser
 {
     public int UserId { get; set; }
+    public string Code { get; set; } = "";
     public string Email { get; set; } = "";
+    public string Mobile { get; set; } = "";
     public string DisplayName { get; set; } = "";
     public string Role { get; set; } = AppRoles.Viewer;
     public bool IsActive { get; set; } = true;
