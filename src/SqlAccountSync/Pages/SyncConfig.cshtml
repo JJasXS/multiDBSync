@@ -31,7 +31,7 @@
             <p class="empty-actions">
                 @if (Model.DatabaseCount < 2)
                 {
-                    <a class="btn" asp-page="/Databases/Edit">Add databases</a>
+                    <a class="btn" asp-page="/Databases/Create">Add databases</a>
                     <a class="btn secondary" asp-page="/Databases/Index">View databases</a>
                 }
                 else
@@ -72,7 +72,7 @@
                 <p class="empty-actions">
                     @if (Model.DatabaseCount < 2)
                     {
-                        <a class="btn" asp-page="/Databases/Edit">Add databases</a>
+                        <a class="btn" asp-page="/Databases/Create">Add databases</a>
                     }
                     else
                     {

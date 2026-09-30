@@ -14,9 +14,28 @@ namespace SqlAccountSync.Pages.Databases;
 public class IndexModel : SyncPageModel
 {
     private readonly IDatabaseRegistry _registry;
+
+    public IndexModel(IDatabaseRegistry registry)
+    {
+        _registry = registry;
+    }
+
+    public List<RegisteredDatabase> Databases { get; set; } = [];
+    public List<DatabaseLink> Links { get; set; } = [];
+
+    public async Task OnGetAsync()
+    {
+        Databases = await _registry.ListAsync(includeInactive: IsAdmin);
+        Links = await _registry.ListLinksAsync();
+    }
+}
+
+public class LinkModel : SyncPageModel
+{
+    private readonly IDatabaseRegistry _registry;
     private readonly IAuditService _audit;
 
-    public IndexModel(IDatabaseRegistry registry, IAuditService audit)
+    public LinkModel(IDatabaseRegistry registry, IAuditService audit)
     {
         _registry = registry;
         _audit = audit;
@@ -24,25 +43,21 @@ public class IndexModel : SyncPageModel
 
     public List<RegisteredDatabase> Databases { get; set; } = [];
     public List<DatabaseLink> Links { get; set; } = [];
-    public string Tab { get; set; } = "databases";
     [BindProperty] public int MasterDbId { get; set; }
     [BindProperty] public List<int> SubDbIds { get; set; } = [];
     public string Message { get; set; } = "";
     public bool Error { get; set; }
-    public bool ShowAddForm { get; set; }
 
-    public async Task OnGetAsync(string? tab, int? add)
-    {
-        Tab = string.Equals(tab, "relationships", StringComparison.OrdinalIgnoreCase) ? "relationships" : "databases";
-        ShowAddForm = add == 1;
-        Databases = await _registry.ListAsync(includeInactive: IsAdmin);
-        Links = await _registry.ListLinksAsync();
-    }
-
-    public async Task<IActionResult> OnPostAddLinkAsync()
+    public async Task<IActionResult> OnGetAsync()
     {
         if (!IsAdmin) return Forbid();
-        Tab = "relationships";
+        await LoadAsync();
+        return Page();
+    }
+
+    public async Task<IActionResult> OnPostAsync()
+    {
+        if (!IsAdmin) return Forbid();
         var ids = ChosenSubIds();
         if (ids.Count == 0)
             return await LinkFailedAsync("Choose at least one Sub that is not the Master.");
@@ -52,7 +67,7 @@ public class IndexModel : SyncPageModel
             return await LinkFailedAsync("Those Master/Sub relationships already exist.");
 
         await _audit.WriteAsync(new AuditEntry { UserEmail = CurrentEmail, Action = "USER CREATED DBLINK", Result = "SUCCESS" });
-        return RedirectToPage(new { tab = "relationships" });
+        return RedirectToPage("Index");
     }
 
     private List<int> ChosenSubIds() =>
@@ -86,11 +101,15 @@ public class IndexModel : SyncPageModel
     private async Task<IActionResult> LinkFailedAsync(string message)
     {
         Error = true;
-        ShowAddForm = true;
         Message = message;
+        await LoadAsync();
+        return Page();
+    }
+
+    private async Task LoadAsync()
+    {
         Databases = await _registry.ListAsync(includeInactive: IsAdmin);
         Links = await _registry.ListLinksAsync();
-        return Page();
     }
 }
 
@@ -138,26 +157,41 @@ public class EditModel : SyncPageModel
     public async Task<IActionResult> OnGetAsync(int? id)
     {
         if (!IsAdmin) return Forbid();
-        if (id is > 0)
+        if (IsCreatePage)
         {
-            var existing = await _registry.GetAsync(id.Value);
-            if (existing is null) return RedirectToPage("Index");
-            Db = existing;
-            Db.DbRole = MasterOrSub(Db.DbRole);
+            ApplyNewDefaults();
+            PrepareDisplay();
+            return Page();
         }
-        else
-        {
-            Db.DbRole = DatabaseRoles.Master;
-            if (string.IsNullOrWhiteSpace(Db.ApiCredRef))
-                Db.ApiCredRef = SqlApiCredRefPlaceholder;
-            if (string.IsNullOrWhiteSpace(Db.FbHost))
-                Db.FbHost = "localhost";
-            if (string.IsNullOrWhiteSpace(Db.FbCredRef))
-                Db.FbCredRef = "masterkey";
-        }
+        if (id is not > 0)
+            return RedirectToPage("/Databases/Create");
+        var existing = await _registry.GetAsync(id.Value);
+        if (existing is null) return RedirectToPage("Index");
+        Db = existing;
+        Db.DbRole = MasterOrSub(Db.DbRole);
         Db.ApiBaseUrl = DefaultApiBaseUrl;
         Db.ApiCredRef = SqlApiCredRefConvention.ForDisplay(Db.ApiCredRef);
         return Page();
+    }
+
+    private bool IsCreatePage =>
+        string.Equals(RouteData.Values["page"]?.ToString(), "/Databases/Create", StringComparison.OrdinalIgnoreCase);
+
+    private void ApplyNewDefaults()
+    {
+        Db.DbRole = DatabaseRoles.Master;
+        if (string.IsNullOrWhiteSpace(Db.ApiCredRef))
+            Db.ApiCredRef = SqlApiCredRefPlaceholder;
+        if (string.IsNullOrWhiteSpace(Db.FbHost))
+            Db.FbHost = "localhost";
+        if (string.IsNullOrWhiteSpace(Db.FbCredRef))
+            Db.FbCredRef = "masterkey";
+    }
+
+    private void PrepareDisplay()
+    {
+        Db.ApiBaseUrl = DefaultApiBaseUrl;
+        Db.ApiCredRef = SqlApiCredRefConvention.ForDisplay(Db.ApiCredRef);
     }
 
     private static string MasterOrSub(string? role) =>

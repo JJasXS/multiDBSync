@@ -71,10 +71,13 @@
                         <table class="push-panel-table">
                             <thead>
                                 <tr>
-                                    <th class="col-check">
-                                        <input type="checkbox" data-check-all="txn-docs" aria-label="Select all documents"
-                                               @(Model.Documents.Count == 0 ? "disabled" : null) />
-                                    </th>
+                                    @if (Model.CanOperate)
+                                    {
+                                        <th class="col-check">
+                                            <input type="checkbox" data-check-all="txn-docs" aria-label="Select all documents"
+                                                   @(Model.Documents.Count == 0 ? "disabled" : null) />
+                                        </th>
+                                    }
                                     <th>Document</th>
                                     <th>Date</th>
                                     @if (isStockTransfer)
@@ -92,7 +95,7 @@
                                 @if (Model.Documents.Count == 0)
                                 {
                                     <tr>
-                                        <td colspan="@(isStockTransfer ? 4 : 5)" class="empty">No documents. Pick source and type.</td>
+                                        <td colspan="@((isStockTransfer ? 3 : 4) + (Model.CanOperate ? 1 : 0))" class="empty">No documents. Pick source and type.</td>
                                     </tr>
                                 }
                                 else
@@ -102,10 +105,13 @@
                                         var docId = string.IsNullOrWhiteSpace(doc.DocNo) ? doc.DocKey : doc.DocNo;
                                         var selected = Model.SelectedDocs.Contains(docId, StringComparer.OrdinalIgnoreCase);
                                         <tr>
-                                            <td class="col-check">
-                                                <input type="checkbox" name="SelectedDocs" value="@docId" data-check-group="txn-docs"
-                                                       @(selected ? "checked" : null) />
-                                            </td>
+                                            @if (Model.CanOperate)
+                                            {
+                                                <td class="col-check">
+                                                    <input type="checkbox" name="SelectedDocs" value="@docId" data-check-group="txn-docs"
+                                                           @(selected ? "checked" : null) />
+                                                </td>
+                                            }
                                             <td>@doc.DocNo</td>
                                             <td>@(doc.DocDate?.ToString("yyyy-MM-dd") ?? "")</td>
                                             @if (isStockTransfer)
@@ -134,9 +140,12 @@
                                 @if (Model.TargetDatabases.Count > 0)
                                 {
                                     <tr>
-                                        <th class="col-check">
-                                            <input type="checkbox" data-check-all="txn-dests" aria-label="Select all target databases" />
-                                        </th>
+                                        @if (Model.CanOperate)
+                                        {
+                                            <th class="col-check">
+                                                <input type="checkbox" data-check-all="txn-dests" aria-label="Select all target databases" />
+                                            </th>
+                                        }
                                         <th>Database</th>
                                         <th>Code</th>
                                     </tr>
@@ -146,7 +155,7 @@
                                 @if (Model.TargetDatabases.Count == 0)
                                 {
                                     <tr>
-                                        <td colspan="3" class="empty">No target databases.</td>
+                                        <td colspan="@(Model.CanOperate ? 3 : 2)" class="empty">No target databases.</td>
                                     </tr>
                                 }
                                 else
@@ -155,10 +164,13 @@
                                     {
                                         var selected = Model.SelectedDestDbIds.Contains(d.DbId);
                                         <tr>
-                                            <td class="col-check">
-                                                <input type="checkbox" name="SelectedDestDbIds" value="@d.DbId" data-check-group="txn-dests"
-                                                       @(selected ? "checked" : null) />
-                                            </td>
+                                            @if (Model.CanOperate)
+                                            {
+                                                <td class="col-check">
+                                                    <input type="checkbox" name="SelectedDestDbIds" value="@d.DbId" data-check-group="txn-dests"
+                                                           @(selected ? "checked" : null) />
+                                                </td>
+                                            }
                                             <td class="push-target-name">@d.DisplayName</td>
                                             <td class="muted">@d.DbCode</td>
                                         </tr>
@@ -169,9 +181,12 @@
                     </div>
                 </div>
 
-                <div class="txn-form-actions">
-                    <label class="check"><input asp-for="Confirmed" /> <span>I confirm this will create destination accounting documents</span></label>
-                </div>
+                @if (Model.CanOperate)
+                {
+                    <div class="txn-form-actions">
+                        <label class="check"><input asp-for="Confirmed" /> <span>I confirm this will create destination accounting documents</span></label>
+                    </div>
+                }
             </form>
             <p id="txnPreview" class="muted" hidden></p>
             <partial name="_DryRunToast" model="Model.DryRun" />

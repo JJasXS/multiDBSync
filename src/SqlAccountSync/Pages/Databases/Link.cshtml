@@ -1,0 +1,78 @@
+@page
+@model SqlAccountSync.Pages.Databases.LinkModel
+@{
+    ViewData["Title"] = "Add relationship";
+    var masters = Model.Databases.Where(d => d.DbRole is "MASTER" or "BOTH").ToList();
+    var subs = Model.Databases.Where(d => d.DbRole is "SUB" or "BOTH").ToList();
+    var linkedSubIds = Model.Links.Select(l => l.SubDbId).ToHashSet();
+    var availableSubs = subs.Where(d => !linkedSubIds.Contains(d.DbId)).ToList();
+}
+@if (!string.IsNullOrEmpty(Model.Message))
+{
+    <div class="flash flash-err">@Model.Message</div>
+}
+<div class="card">
+    <div class="card-head">
+        <h3>Add relationship</h3>
+    </div>
+    @if (masters.Count == 0 || subs.Count == 0)
+    {
+        <p class="empty">Add at least one Master and one Sub before creating a relationship.</p>
+        <p class="empty-actions">
+            <a class="btn" asp-page="Create">Add database</a>
+            <a class="btn secondary" asp-page="Index">Back</a>
+        </p>
+    }
+    else
+    {
+        <p class="muted lede">Choose a Master and one or more Subs. A company cannot be linked to itself.</p>
+        <form method="post" class="form-stack">
+            <div>
+                <label>Master</label>
+                <select asp-for="MasterDbId" id="linkMaster">
+                    @foreach (var d in masters) { <option value="@d.DbId">@d.DisplayName (@d.DbRole)</option> }
+                </select>
+            </div>
+            <div>
+                <label>Sub</label>
+                @if (availableSubs.Count == 0)
+                {
+                    <p class="empty">Every Sub is already linked to a Master.</p>
+                }
+                else
+                {
+                    <div class="sub-multi">
+                        @foreach (var d in availableSubs)
+                        {
+                            var selected = Model.SubDbIds.Contains(d.DbId);
+                            <label class="sub-multi-row">
+                                <input type="checkbox" name="SubDbIds" value="@d.DbId" @(selected ? "checked" : null) />
+                                <span>@d.DisplayName (@d.DbRole)</span>
+                            </label>
+                        }
+                    </div>
+                }
+            </div>
+            <div class="form-actions">
+                <button class="btn" type="submit">Save links</button>
+                <a class="btn secondary" asp-page="Index">Cancel</a>
+            </div>
+        </form>
+        <script>
+            (function () {
+                const master = document.getElementById("linkMaster");
+                if (!master) return;
+                function syncSubs() {
+                    document.querySelectorAll(".sub-multi-row").forEach((row) => {
+                        const box = row.querySelector("input");
+                        const same = box && box.value === master.value;
+                        row.hidden = !!same;
+                        if (box && same) box.checked = false;
+                    });
+                }
+                master.addEventListener("change", syncSubs);
+                syncSubs();
+            })();
+        </script>
+    }
+</div>

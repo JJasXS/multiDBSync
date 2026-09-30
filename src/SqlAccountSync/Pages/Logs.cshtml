@@ -19,7 +19,18 @@
             {
                 <div class="table-wrap push-jobs-table-wrap">
                     <table>
-                        <thead><tr><th>ID</th><th>Type</th><th>Source → Destination</th><th>Status</th><th class="col-actions"></th></tr></thead>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Type</th>
+                                <th>Source → Destination</th>
+                                <th>Status</th>
+                                @if (Model.CanOperate)
+                                {
+                                    <th class="col-actions"></th>
+                                }
+                            </tr>
+                        </thead>
                         <tbody>
                         @foreach (var t in Model.Transactions)
                         {
@@ -37,12 +48,15 @@
                                     </span>
                                 </td>
                                 <td><span class="badge badge-@(t.Status.ToLowerInvariant())">@t.Status</span></td>
-                                <td class="col-actions">
-                                    @if (t.Status is not "COMPLETED")
-                                    {
-                                        <form method="post" asp-page-handler="Retry" asp-route-txnPk="@t.TxnPk"><button class="btn small" type="submit">Retry</button></form>
-                                    }
-                                </td>
+                                @if (Model.CanOperate)
+                                {
+                                    <td class="col-actions">
+                                        @if (t.Status is not "COMPLETED")
+                                        {
+                                            <form method="post" asp-page-handler="Retry" asp-route-txnPk="@t.TxnPk"><button class="btn small" type="submit">Retry</button></form>
+                                        }
+                                    </td>
+                                }
                             </tr>
                         }
                         </tbody>
@@ -66,19 +80,33 @@
             {
                 <div class="table-wrap push-jobs-table-wrap">
                     <table>
-                        <thead><tr><th>When</th><th>User</th><th>Action</th><th>Entity</th><th>Record</th><th>Result</th><th class="col-actions"></th></tr></thead>
+                        <thead>
+                            <tr>
+                                <th>When</th>
+                                <th>User</th>
+                                <th>Action</th>
+                                <th>Entity</th>
+                                <th>Record</th>
+                                <th>Result</th>
+                                @if (Model.CanOperate)
+                                {
+                                    <th class="col-actions"></th>
+                                }
+                            </tr>
+                        </thead>
                         <tbody>
                         @foreach (var row in Model.Audits)
                         {
                             var a = row.Entry;
                             var badge = SyncDisplayNames.AuditResultBadgeClass(row.DisplayResult);
+                            var hideJobLink = !Model.CanOperate && row.LinkLabel == "View job";
                             <tr>
                                 <td>@a.AtUtc.ToString("yyyy-MM-dd HH:mm")</td>
                                 <td>@a.UserEmail</td>
                                 <td>@SyncDisplayNames.AuditAction(a.Action)</td>
                                 <td>@(string.IsNullOrWhiteSpace(a.Entity) ? "—" : SyncDisplayNames.TxnType(a.Entity))</td>
                                 <td>
-                                    @if (!string.IsNullOrWhiteSpace(row.LinkUrl))
+                                    @if (!hideJobLink && !string.IsNullOrWhiteSpace(row.LinkUrl))
                                     {
                                         <a href="@row.LinkUrl">@a.RecordId</a>
                                     }
@@ -90,12 +118,15 @@
                                 <td>
                                     <span class="badge @badge" title="@row.StatusDetail">@row.DisplayResult</span>
                                 </td>
-                                <td class="col-actions">
-                                    @if (!string.IsNullOrWhiteSpace(row.LinkUrl))
-                                    {
-                                        <a class="btn small secondary" href="@row.LinkUrl">@row.LinkLabel</a>
-                                    }
-                                </td>
+                                @if (Model.CanOperate)
+                                {
+                                    <td class="col-actions">
+                                        @if (!string.IsNullOrWhiteSpace(row.LinkUrl))
+                                        {
+                                            <a class="btn small secondary" href="@row.LinkUrl">@row.LinkLabel</a>
+                                        }
+                                    </td>
+                                }
                             </tr>
                         }
                         </tbody>
@@ -120,7 +151,18 @@
             {
                 <div class="table-wrap push-jobs-table-wrap">
                     <table>
-                        <thead><tr><th>When</th><th>Type</th><th>Message</th><th>Resolved</th><th class="col-actions"></th></tr></thead>
+                        <thead>
+                            <tr>
+                                <th>When</th>
+                                <th>Type</th>
+                                <th>Message</th>
+                                <th>Resolved</th>
+                                @if (Model.CanManage)
+                                {
+                                    <th class="col-actions"></th>
+                                }
+                            </tr>
+                        </thead>
                         <tbody>
                         @foreach (var e in Model.Errors)
                         {
@@ -129,14 +171,17 @@
                                 <td>@e.ErrorType</td>
                                 <td><span class="cell-truncate" title="@e.UserMessage">@e.UserMessage</span></td>
                                 <td>@(e.Resolved ? "Yes" : "No")</td>
-                                <td class="col-actions">
-                                    @if (!e.Resolved && Model.CanManage)
-                                    {
-                                        <form method="post" asp-page-handler="ResolveError" asp-route-id="@e.ErrorId">
-                                            <button class="btn small secondary" type="submit">Resolve</button>
-                                        </form>
-                                    }
-                                </td>
+                                @if (Model.CanManage)
+                                {
+                                    <td class="col-actions">
+                                        @if (!e.Resolved)
+                                        {
+                                            <form method="post" asp-page-handler="ResolveError" asp-route-id="@e.ErrorId">
+                                                <button class="btn small secondary" type="submit">Resolve</button>
+                                            </form>
+                                        }
+                                    </td>
+                                }
                             </tr>
                         }
                         </tbody>

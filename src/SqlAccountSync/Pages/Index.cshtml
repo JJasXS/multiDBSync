@@ -31,7 +31,7 @@
                         <a asp-page="/Databases/Index">View</a>
                         @if (Model.IsAdmin)
                         {
-                            <a asp-page="/Databases/Edit">Add database</a>
+                            <a asp-page="/Databases/Create">Add database</a>
                         }
                     </div>
                 </details>
@@ -104,7 +104,7 @@
                             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="5" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="19" r="1.6" fill="currentColor"/></svg>
                         </summary>
                         <div class="kebab-menu">
-                            <a asp-page="/Databases/Index" asp-route-add="1">Add relationship</a>
+                            <a asp-page="/Databases/Link">Add relationship</a>
                         </div>
                     </details>
                 }

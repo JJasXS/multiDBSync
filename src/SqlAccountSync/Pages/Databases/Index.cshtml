@@ -4,13 +4,6 @@
     ViewData["Title"] = "Databases";
     var masters = Model.Databases.Where(d => d.DbRole is "MASTER" or "BOTH").ToList();
     var subs = Model.Databases.Where(d => d.DbRole is "SUB" or "BOTH").ToList();
-    var linkedSubIds = Model.Links.Select(l => l.SubDbId).ToHashSet();
-    var availableSubs = subs.Where(d => !linkedSubIds.Contains(d.DbId)).ToList();
-    var showForm = Model.Error || Model.ShowAddForm;
-}
-@if (!string.IsNullOrEmpty(Model.Message))
-{
-    <div class="flash @(Model.Error ? "flash-err" : "flash-ok")">@Model.Message</div>
 }
 <div class="panel-grid two">
     <div class="card">
@@ -18,7 +11,7 @@
             <h3>Companies</h3>
             @if (Model.IsAdmin)
             {
-                <a class="btn small" asp-page="Edit">+ Add database</a>
+                <a class="btn small" asp-page="Create">+ Add database</a>
             }
         </div>
         @if (Model.Databases.Count == 0)
@@ -27,7 +20,7 @@
             <p class="empty-actions">
                 @if (Model.IsAdmin)
                 {
-                    <a class="btn" asp-page="Edit">Add database</a>
+                    <a class="btn" asp-page="Create">Add database</a>
                 }
             </p>
         }
@@ -58,26 +51,26 @@
             <h3>Relationships</h3>
             @if (Model.IsAdmin)
             {
-                <button type="button" class="btn small" data-reveal="#add-link" aria-expanded="@(showForm ? "true" : "false")" aria-controls="add-link">+ Add link</button>
+                <a class="btn small" asp-page="Link">+ Add relationship</a>
             }
         </div>
         @if (Model.Databases.Count == 0)
         {
             <p class="empty">No companies registered yet. Add at least one Master and one Sub, then create a link.</p>
             <p class="empty-actions">
-                <a class="btn" asp-page="Edit">Add database</a>
+                <a class="btn" asp-page="Create">Add database</a>
             </p>
         }
         else if (masters.Count == 0 || subs.Count == 0)
         {
             <p class="empty">You need at least one Master and one Sub (or BOTH) before a link can be created.</p>
             <p class="empty-actions">
-                <a class="btn" asp-page="Edit">Add database</a>
+                <a class="btn" asp-page="Create">Add database</a>
             </p>
         }
         else if (Model.Links.Count == 0)
         {
-            <p class="empty">No Master → Sub links yet. Use <strong>+ Add link</strong> to connect two companies.</p>
+            <p class="empty">No Master → Sub links yet.</p>
         }
         else
         {
@@ -102,61 +95,6 @@
                     }
                 </div>
             }
-        }
-
-        @if (Model.IsAdmin && masters.Count > 0 && subs.Count > 0)
-        {
-            <div id="add-link" class="inset-form" @(showForm ? null : "hidden")>
-                <p class="muted lede">Choose a Master and one or more Subs. A company cannot be linked to itself.</p>
-                <form method="post" asp-page-handler="AddLink" class="form-stack">
-                    <div>
-                        <label>Master</label>
-                        <select asp-for="MasterDbId" id="linkMaster">
-                            @foreach (var d in masters) { <option value="@d.DbId">@d.DisplayName (@d.DbRole)</option> }
-                        </select>
-                    </div>
-                    <div>
-                        <label>Sub</label>
-                        @if (availableSubs.Count == 0)
-                        {
-                            <p class="empty">Every Sub is already linked to a Master.</p>
-                        }
-                        else
-                        {
-                            <div class="sub-multi">
-                                @foreach (var d in availableSubs)
-                                {
-                                    var selected = Model.SubDbIds.Contains(d.DbId);
-                                    <label class="sub-multi-row">
-                                        <input type="checkbox" name="SubDbIds" value="@d.DbId" @(selected ? "checked" : null) />
-                                        <span>@d.DisplayName (@d.DbRole)</span>
-                                    </label>
-                                }
-                            </div>
-                        }
-                    </div>
-                    <div class="form-actions">
-                        <button class="btn" type="submit">Save links</button>
-                        <button type="button" class="btn secondary" data-reveal-hide="#add-link">Cancel</button>
-                    </div>
-                </form>
-                <script>
-                    (function () {
-                        const master = document.getElementById("linkMaster");
-                        if (!master) return;
-                        function syncSubs() {
-                            document.querySelectorAll(".sub-multi-row").forEach((row) => {
-                                const box = row.querySelector("input");
-                                const same = box && box.value === master.value;
-                                row.hidden = !!same;
-                                if (box && same) box.checked = false;
-                            });
-                        }
-                        master.addEventListener("change", syncSubs);
-                        syncSubs();
-                    })();
-                </script>
-            </div>
         }
     </div>
 </div>

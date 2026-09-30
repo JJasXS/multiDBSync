@@ -21,6 +21,11 @@
         return string.Equals(Context.Request.Query["entity"].ToString(), entity, StringComparison.OrdinalIgnoreCase);
     }
     string NavClass(string page, string? entity = null) => IsActive(page, entity) ? "active" : "";
+    string DatabasesNavClass()
+    {
+        var current = ViewContext.RouteData.Values["page"]?.ToString() ?? "";
+        return current.StartsWith("/Databases/", StringComparison.OrdinalIgnoreCase) ? "active" : "";
+    }
     string LogsNavClass()
     {
         var current = ViewContext.RouteData.Values["page"]?.ToString() ?? "";
@@ -58,7 +63,7 @@
             </div>
             <div class="group">Overview</div>
             <a class="@NavClass("/Index")" asp-page="/Index">Dashboard</a>
-            <a class="@NavClass("/Databases/Index")" asp-page="/Databases/Index">Databases</a>
+            <a class="@DatabasesNavClass()" asp-page="/Databases/Index">Databases</a>
             @if (showSyncConfigUi || showMappingsUi)
             {
                 <div class="group">Configuration</div>

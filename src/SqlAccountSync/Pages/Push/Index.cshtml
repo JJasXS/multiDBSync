@@ -115,9 +115,12 @@
                             @if (Model.Records.Count > 0)
                             {
                                 <tr>
-                                    <th class="col-check">
-                                        <input type="checkbox" data-check-all="master-codes" aria-label="Select all records" />
-                                    </th>
+                                    @if (Model.CanOperate)
+                                    {
+                                        <th class="col-check">
+                                            <input type="checkbox" data-check-all="master-codes" aria-label="Select all records" />
+                                        </th>
+                                    }
                                     <th>Code</th>
                                     <th>Description</th>
                                 </tr>
@@ -127,7 +130,7 @@
                             @if (Model.Records.Count == 0)
                             {
                                 <tr>
-                                    <td colspan="3" class="empty">No records. Pick source and entity.</td>
+                                    <td colspan="@(Model.CanOperate ? 3 : 2)" class="empty">No records. Pick source and entity.</td>
                                 </tr>
                             }
                             else
@@ -138,16 +141,19 @@
                                     var indent = r.Fields.TryGetValue("indent", out var ind) ? ind : "";
                                     var desc = string.IsNullOrEmpty(indent) ? r.Description : indent + r.Description;
                                     <tr data-push-code="@r.Code">
-                                        <td class="col-check">
-                                            <input type="checkbox" name="SelectedCodes" value="@r.Code" data-check-group="master-codes"
-                                                   @(selected ? "checked" : null) />
-                                        </td>
+                                        @if (Model.CanOperate)
+                                        {
+                                            <td class="col-check">
+                                                <input type="checkbox" name="SelectedCodes" value="@r.Code" data-check-group="master-codes"
+                                                       @(selected ? "checked" : null) />
+                                            </td>
+                                        }
                                         <td class="code-cell">@r.Code</td>
                                         <td><span class="cell-truncate" title="@r.Description">@desc</span></td>
                                     </tr>
                                 }
                                 <tr id="pushCodeSearchEmpty" class="accounts-search-empty" hidden>
-                                    <td colspan="3" class="empty">No records match that code.</td>
+                                    <td colspan="@(Model.CanOperate ? 3 : 2)" class="empty">No records match that code.</td>
                                 </tr>
                             }
                         </tbody>
@@ -164,9 +170,12 @@
                             @if (Model.TargetSubs.Count > 0)
                             {
                                 <tr>
-                                    <th class="col-check">
-                                        <input type="checkbox" data-check-all="sub-dbs" aria-label="Select all target databases" />
-                                    </th>
+                                    @if (Model.CanOperate)
+                                    {
+                                        <th class="col-check">
+                                            <input type="checkbox" data-check-all="sub-dbs" aria-label="Select all target databases" />
+                                        </th>
+                                    }
                                     <th>Database</th>
                                     <th>Code</th>
                                     <th>Note</th>
@@ -177,7 +186,7 @@
                             @if (Model.TargetSubs.Count == 0)
                             {
                                 <tr>
-                                    <td colspan="4" class="empty">No targets for this source.</td>
+                                    <td colspan="@(Model.CanOperate ? 4 : 3)" class="empty">No targets for this source.</td>
                                 </tr>
                             }
                             else
@@ -187,10 +196,13 @@
                                     var selected = Model.SelectedSubDbIds.Contains(s.DbId);
                                     Model.TargetEntityHints.TryGetValue(s.DbId, out var hint);
                                     <tr>
-                                        <td class="col-check">
-                                            <input type="checkbox" name="SelectedSubDbIds" value="@s.DbId" data-check-group="sub-dbs"
-                                                   @(selected ? "checked" : null) />
-                                        </td>
+                                        @if (Model.CanOperate)
+                                        {
+                                            <td class="col-check">
+                                                <input type="checkbox" name="SelectedSubDbIds" value="@s.DbId" data-check-group="sub-dbs"
+                                                       @(selected ? "checked" : null) />
+                                            </td>
+                                        }
                                         <td class="push-target-name">@s.DisplayName</td>
                                         <td class="muted">@s.DbCode</td>
                                         <td class="push-target-note muted">@hint</td>
@@ -239,6 +251,8 @@
 }
 else
 {
+    @if (Model.CanOperate)
+    {
     <form id="manualSyncForm" method="post" class="manual-sync-form">
         <input type="hidden" name="Tab" value="jobs" />
         <div class="form-grid manual-sync-fields">
@@ -260,11 +274,24 @@ else
             <div><label>Code</label><input asp-for="MasterCode" /></div>
         </div>
     </form>
+    }
     <partial name="_DryRunToast" model="Model.DryRun" />
     <div class="sync-jobs-section">
         <div class="table-wrap push-jobs-table-wrap">
             <table>
-                <thead><tr><th>Job</th><th>Kind</th><th>Status</th><th>Attempts</th><th class="col-job-error">Error</th><th class="col-actions"></th></tr></thead>
+                <thead>
+                    <tr>
+                        <th>Job</th>
+                        <th>Kind</th>
+                        <th>Status</th>
+                        <th>Attempts</th>
+                        <th class="col-job-error">Error</th>
+                        @if (Model.CanOperate)
+                        {
+                            <th class="col-actions"></th>
+                        }
+                    </tr>
+                </thead>
                 <tbody>
                 @foreach (var j in Model.Jobs)
                 {
@@ -274,26 +301,29 @@ else
                         <td><span class="badge badge-@(j.Status.ToLowerInvariant())">@j.Status</span></td>
                         <td>@j.Attempts / @j.MaxAttempts</td>
                         <td class="col-job-error"><span class="job-error-text">@j.ErrorMessage</span></td>
-                        <td class="col-actions">
-                            @if (j.Status is "PROCESSING")
-                            {
-                                <form method="post" asp-page-handler="Unlock" asp-route-jobId="@j.JobId" style="display:inline">
-                                    <input type="hidden" name="Tab" value="jobs" />
-                                    <button class="btn small secondary" type="submit" data-confirm="Unlock this stuck PROCESSING job so the worker can retry it?">Unlock</button>
-                                </form>
-                                <form method="post" asp-page-handler="Cancel" asp-route-jobId="@j.JobId" style="display:inline">
-                                    <input type="hidden" name="Tab" value="jobs" />
-                                    <button class="btn small secondary" type="submit" data-confirm="Cancel this PROCESSING job?">Cancel</button>
-                                </form>
-                            }
-                            else if (j.Status is "PENDING" or "RETRYING" or "FAILED")
-                            {
-                                <form method="post" asp-page-handler="Cancel" asp-route-jobId="@j.JobId">
-                                    <input type="hidden" name="Tab" value="jobs" />
-                                    <button class="btn small secondary" type="submit">Cancel</button>
-                                </form>
-                            }
-                        </td>
+                        @if (Model.CanOperate)
+                        {
+                            <td class="col-actions">
+                                @if (j.Status is "PROCESSING")
+                                {
+                                    <form method="post" asp-page-handler="Unlock" asp-route-jobId="@j.JobId" style="display:inline">
+                                        <input type="hidden" name="Tab" value="jobs" />
+                                        <button class="btn small secondary" type="submit" data-confirm="Unlock this stuck PROCESSING job so the worker can retry it?">Unlock</button>
+                                    </form>
+                                    <form method="post" asp-page-handler="Cancel" asp-route-jobId="@j.JobId" style="display:inline">
+                                        <input type="hidden" name="Tab" value="jobs" />
+                                        <button class="btn small secondary" type="submit" data-confirm="Cancel this PROCESSING job?">Cancel</button>
+                                    </form>
+                                }
+                                else if (j.Status is "PENDING" or "RETRYING" or "FAILED")
+                                {
+                                    <form method="post" asp-page-handler="Cancel" asp-route-jobId="@j.JobId">
+                                        <input type="hidden" name="Tab" value="jobs" />
+                                        <button class="btn small secondary" type="submit">Cancel</button>
+                                    </form>
+                                }
+                            </td>
+                        }
                     </tr>
                 }
                 </tbody>
