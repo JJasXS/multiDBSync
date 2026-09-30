@@ -1335,24 +1335,39 @@ code {
   border-top: 1px solid var(--ice-border-soft);
 }
 .sub-multi {
-  display: grid;
-  gap: 4px;
-  max-height: 180px;
+  display: block;
+  max-height: 220px;
   overflow: auto;
-  padding: 8px 10px;
+  padding: 0;
   border: 1px solid var(--ice-border);
   border-radius: var(--ice-radius);
   background: var(--ice-surface);
 }
 .sub-multi-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
   align-items: center;
   gap: 8px;
   margin: 0;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ice-border-soft);
   font-size: 13px;
   font-weight: 500;
   text-transform: none;
   letter-spacing: 0;
+  color: var(--ice-heading);
+}
+.sub-multi-row:last-child { border-bottom: 0; }
+.accounts-modal-body .field .sub-multi-row {
+  display: grid;
+  margin-bottom: 0;
+}
+.sub-multi-row input,
+.accounts-modal-body .field .sub-multi-row input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  justify-self: center;
 }
 .table-wrap {
   overflow-x: auto;
