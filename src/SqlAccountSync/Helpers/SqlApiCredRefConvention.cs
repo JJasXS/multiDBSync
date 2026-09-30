@@ -3,12 +3,14 @@ using System.Text.RegularExpressions;
 namespace SqlAccountSync.Helpers;
 
 /// <summary>
-/// Standardized SQL Accounting API secret path using the database <c>Code</c> field:
-/// <c>sm:proacc/tenant/{tenantCode}/sqlApiCredentials/{DbCode}</c>
+/// One Secrets Manager secret per tenant holds every company key pair:
+/// <c>sm:proacc/tenant/{tenantCode}/sqlApiCredentials</c>, inside a <c>databases</c> array.
+/// Older per-code secrets <c>sqlApiCredentials/{DbCode}</c> are only read during migration.
 /// </summary>
 public static partial class SqlApiCredRefConvention
 {
     public const string SecretIdPrefix = "proacc/tenant/";
+    public const string BundleName = "sqlApiCredentials";
 
     public static string SanitizeDbCode(string? dbCode)
     {
@@ -18,7 +20,19 @@ public static partial class SqlApiCredRefConvention
         return CodeSanitizeRegex().Replace(raw, "");
     }
 
-    public static string BuildSecretId(string tenantCode, string? dbCode)
+    public static string BuildBundleSecretId(string? tenantCode)
+    {
+        var tenant = (tenantCode ?? "").Trim();
+        return tenant.Length == 0 ? "" : $"{SecretIdPrefix}{tenant}/{BundleName}";
+    }
+
+    public static string BuildBundleCredRef(string? tenantCode)
+    {
+        var id = BuildBundleSecretId(tenantCode);
+        return id.Length == 0 ? "" : "sm:" + id;
+    }
+
+    public static string BuildLegacySecretId(string? tenantCode, string? dbCode)
     {
         var tenant = (tenantCode ?? "").Trim();
         var code = SanitizeDbCode(dbCode);
@@ -27,10 +41,10 @@ public static partial class SqlApiCredRefConvention
         return $"{SecretIdPrefix}{tenant}/sqlApiCredentials/{code}";
     }
 
-    public static string BuildCredRef(string tenantCode, string? dbCode)
+    public static string LegacyPrefix(string? tenantCode)
     {
-        var id = BuildSecretId(tenantCode, dbCode);
-        return id.Length == 0 ? "" : "sm:" + id;
+        var tenant = (tenantCode ?? "").Trim();
+        return tenant.Length == 0 ? "" : $"{SecretIdPrefix}{tenant}/sqlApiCredentials/";
     }
 
     public static string ForDisplay(string? apiCredRef)
@@ -65,8 +79,14 @@ public static partial class SqlApiCredRefConvention
         var tenant = (tenantCode ?? "").Trim();
         if (tenant.Length == 0)
             return false;
-        var prefix = $"sm:{SecretIdPrefix}{tenant}/sqlApiCredentials/";
-        return (apiCredRef ?? "").Trim().StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
+        var cred = (apiCredRef ?? "").Trim();
+        if (cred.Equals(BuildBundleCredRef(tenant), StringComparison.OrdinalIgnoreCase)
+            || cred.Equals(BuildBundleSecretId(tenant), StringComparison.OrdinalIgnoreCase))
+            return true;
+        var prefix = "sm:" + LegacyPrefix(tenant);
+        var bare = LegacyPrefix(tenant);
+        return cred.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+            || cred.StartsWith(bare, StringComparison.OrdinalIgnoreCase);
     }
 
     public static bool ShouldAutoAssign(string? apiCredRef, string tenantCode) =>

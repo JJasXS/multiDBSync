@@ -101,6 +101,7 @@ builder.Services.AddHttpClient<TenantEmailBootstrap>(client =>
 builder.Services.AddTransient<ITenantEmailBootstrap>(sp => sp.GetRequiredService<TenantEmailBootstrap>());
 builder.Services.AddTransient<ITenantDatabaseBootstrap>(sp => sp.GetRequiredService<TenantEmailBootstrap>());
 builder.Services.AddSingleton<ISecretResolver, SecretResolver>();
+builder.Services.AddSingleton<ISqlApiCredentialBundle, SqlApiCredentialBundle>();
 builder.Services.AddSingleton<ISqlApiSecretProvisioner, SqlApiSecretProvisioner>();
 builder.Services.AddSingleton<CentralDb>();
 builder.Services.AddSingleton<CompanyConnectionFactory>();

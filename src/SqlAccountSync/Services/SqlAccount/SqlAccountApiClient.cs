@@ -3,8 +3,10 @@ using System.Text;
 using System.Text.Json;
 using Amazon.SecretsManager;
 using Amazon.SecretsManager.Model;
+using Microsoft.Extensions.Options;
 using SqlAccountSync.Helpers;
 using SqlAccountSync.Models;
+using SqlAccountSync.Options;
 using SqlAccountSync.Services.Secrets;
 
 namespace SqlAccountSync.Services.SqlAccount;
@@ -20,6 +22,8 @@ public sealed class SqlAccountApiClient : ISqlAccountApiClient
 {
     private readonly HttpClient _http;
     private readonly ISecretResolver _secrets;
+    private readonly ISqlApiCredentialBundle _bundle;
+    private readonly SyncOptions _sync;
     private readonly IAmazonSecretsManager? _aws;
     private readonly ILogger<SqlAccountApiClient> _logger;
     private const string Region = "ap-southeast-1";
@@ -27,11 +31,15 @@ public sealed class SqlAccountApiClient : ISqlAccountApiClient
     public SqlAccountApiClient(
         HttpClient http,
         ISecretResolver secrets,
+        ISqlApiCredentialBundle bundle,
+        IOptions<SyncOptions> sync,
         ILogger<SqlAccountApiClient> logger,
         IAmazonSecretsManager? aws = null)
     {
         _http = http;
         _secrets = secrets;
+        _bundle = bundle;
+        _sync = sync.Value;
         _logger = logger;
         _aws = aws;
     }
@@ -153,6 +161,10 @@ public sealed class SqlAccountApiClient : ISqlAccountApiClient
 
     private async Task<SqlApiCredentials?> ResolveCredsAsync(RegisteredDatabase db, CancellationToken cancellationToken)
     {
+        var bundled = await _bundle.ResolveAsync(_sync.TenantCode, db, cancellationToken).ConfigureAwait(false);
+        if (bundled is not null)
+            return bundled;
+
         var raw = await _secrets.ResolveAsync(db.ApiCredRef, cancellationToken).ConfigureAwait(false);
         if (!string.IsNullOrWhiteSpace(raw))
         {

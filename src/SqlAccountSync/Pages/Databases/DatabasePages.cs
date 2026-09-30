@@ -158,15 +158,13 @@ public class EditModel : SyncPageModel
         get
         {
             var tenant = TenantCode.Length > 0 ? TenantCode : "{TENANT_CODE}";
-            var code = SqlApiCredRefConvention.SanitizeDbCode(Db.DbCode);
-            var dbPart = code.Length > 0 ? code : "{CODE}";
-            return $"proacc/tenant/{tenant}/sqlApiCredentials/{dbPart}";
+            return $"proacc/tenant/{tenant}/{SqlApiCredRefConvention.BundleName}";
         }
     }
     public string SqlApiCredRefHint =>
         AutoSqlApiCredRef
-            ? $"Secrets Manager name. Follows the Code field: proacc/tenant/{TenantCode}/sqlApiCredentials/{{CODE}}"
-            : "Secrets Manager name, for example proacc/tenant/{TENANT_CODE}/sqlApiCredentials/{CODE}";
+            ? $"One secret for this tenant. The Code field selects that company's keys inside {SqlApiCredRefConvention.BuildBundleSecretId(TenantCode)}."
+            : "Secrets Manager name, for example proacc/tenant/{TENANT_CODE}/sqlApiCredentials";
 
     public async Task<IActionResult> OnGetAsync(int? id)
     {
@@ -313,12 +311,21 @@ public class DetailsModel : SyncPageModel
     private readonly IDatabaseRegistry _registry;
     private readonly IConnectionTestService _test;
     private readonly IAuditService _audit;
+    private readonly ISqlApiCredentialBundle _bundle;
+    private readonly SyncOptions _sync;
 
-    public DetailsModel(IDatabaseRegistry registry, IConnectionTestService test, IAuditService audit)
+    public DetailsModel(
+        IDatabaseRegistry registry,
+        IConnectionTestService test,
+        IAuditService audit,
+        ISqlApiCredentialBundle bundle,
+        IOptions<SyncOptions> sync)
     {
         _registry = registry;
         _test = test;
         _audit = audit;
+        _bundle = bundle;
+        _sync = sync.Value;
     }
 
     public RegisteredDatabase? Db { get; set; }
@@ -357,6 +364,9 @@ public class DetailsModel : SyncPageModel
     public async Task<IActionResult> OnPostDisableAsync(int id)
     {
         if (!IsAdmin) return Forbid();
+        var existing = await _registry.GetAsync(id);
+        if (existing is not null)
+            await _bundle.RemoveAsync(_sync.TenantCode, existing.DbCode);
         await _registry.DeactivateAsync(id, CurrentEmail);
         await _audit.WriteAsync(new AuditEntry { UserEmail = CurrentEmail, Action = "USER DISABLED DATABASE", DbId = id, Result = "SUCCESS" });
         return RedirectToPage("Index");

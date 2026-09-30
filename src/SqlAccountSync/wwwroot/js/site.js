@@ -130,8 +130,8 @@
   const tenant = (codeInput.getAttribute("data-tenant-code") || "").trim();
   if (!tenant) return;
 
-  const prefix = `proacc/tenant/${tenant}/sqlApiCredentials/`;
-  const sanitize = (v) => (v || "").trim().toUpperCase().replace(/[^A-Z0-9._@+=-]/g, "");
+  const bundle = `proacc/tenant/${tenant}/sqlApiCredentials`;
+  const legacy = `proacc/tenant/${tenant}/sqlApiCredentials/`;
   const visible = (v) => (v || "").trim().replace(/^sm:/i, "");
 
   const sync = () => {
@@ -140,10 +140,10 @@
       !current ||
       current.includes("{CODE}") ||
       current.includes("{DBID}") ||
-      current.startsWith(prefix);
+      current === bundle ||
+      current.startsWith(legacy);
     if (!managed) return;
-    const code = sanitize(codeInput.value);
-    credInput.value = code ? prefix + code : prefix + "{CODE}";
+    credInput.value = bundle;
   };
 
   codeInput.addEventListener("input", sync);

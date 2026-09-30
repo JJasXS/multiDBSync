@@ -59,8 +59,7 @@ public sealed class SyncOptions
     public string TenantCode { get; set; } = "";
     /// <summary>
     /// When true and <see cref="TenantCode"/> is set, blank/convention ApiCredRef is filled as
-    /// <c>sm:proacc/tenant/{TenantCode}/sqlApiCredentials/{DbCode}</c> after save
-    /// (falls back to numeric DBID if Code is empty).
+    /// <c>sm:proacc/tenant/{TenantCode}/sqlApiCredentials</c>. Company keys live in that secret's databases array.
     /// </summary>
     public bool AutoAssignSqlApiCredRefByDbId { get; set; } = true;
     /// <summary>Kept for existing config. Secrets are written only when access and secret keys are entered.</summary>

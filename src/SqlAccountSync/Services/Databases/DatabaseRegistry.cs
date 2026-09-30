@@ -12,6 +12,7 @@ public interface IDatabaseRegistry
     Task<RegisteredDatabase?> GetAsync(int dbId, CancellationToken cancellationToken = default);
     Task<int> SaveAsync(RegisteredDatabase db, string user, CancellationToken cancellationToken = default);
     Task DeactivateAsync(int dbId, string user, CancellationToken cancellationToken = default);
+    Task PointSqlApiCredRefsAtBundleAsync(string tenantCode, CancellationToken cancellationToken = default);
     Task UpdateStatusAsync(int dbId, string status, bool success, CancellationToken cancellationToken = default);
     Task MarkSyncOkAsync(int dbId, CancellationToken cancellationToken = default);
     Task<List<DatabaseLink>> ListLinksAsync(CancellationToken cancellationToken = default);
@@ -66,7 +67,7 @@ public sealed class DatabaseRegistry : IDatabaseRegistry
         if (db.DbId == 0)
         {
             id = (int)await _db.NextIdAsync("GEN_SYNC_DATABASE", cancellationToken).ConfigureAwait(false);
-            ApplyAutoSqlApiCredRef(db, id);
+            ApplyAutoSqlApiCredRef(db);
             await _db.ExecuteAsync(@"
 INSERT INTO SYNC_DATABASE (DBID, DBCODE, DISPLAYNAME, COMPANYNAME, DBROLE, FBHOST, FBPORT, FBPATH, FBCHARSET, FBDIALECT, FBUSER, FBCREDREF, APIBASEURL, APICREDREF, ENVIRONMENT, ISACTIVE, CONNSTATUS, CREATEDAT, CREATEDBY, UPDATEDAT, UPDATEDBY, NOTES)
 VALUES (@DBID, @DBCODE, @DISPLAYNAME, @COMPANYNAME, @DBROLE, @FBHOST, @FBPORT, @FBPATH, @FBCHARSET, @FBDIALECT, @FBUSER, @FBCREDREF, @APIBASEURL, @APICREDREF, @ENVIRONMENT, 1, 'OFFLINE', CURRENT_TIMESTAMP, @USER, CURRENT_TIMESTAMP, @USER, @NOTES)",
@@ -75,7 +76,7 @@ VALUES (@DBID, @DBCODE, @DISPLAYNAME, @COMPANYNAME, @DBROLE, @FBHOST, @FBPORT, @
         }
 
         id = db.DbId;
-        ApplyAutoSqlApiCredRef(db, id);
+        ApplyAutoSqlApiCredRef(db);
         await _db.ExecuteAsync(@"
 UPDATE SYNC_DATABASE SET
     DBCODE=@DBCODE, DISPLAYNAME=@DISPLAYNAME, COMPANYNAME=@COMPANYNAME, DBROLE=@DBROLE,
@@ -86,7 +87,7 @@ WHERE DBID=@DBID AND ISACTIVE=1", Args(db, id, user), cancellationToken).Configu
         return id;
     }
 
-    private void ApplyAutoSqlApiCredRef(RegisteredDatabase db, int dbId)
+    private void ApplyAutoSqlApiCredRef(RegisteredDatabase db)
     {
         if (!_sync.AutoAssignSqlApiCredRefByDbId)
             return;
@@ -95,15 +96,22 @@ WHERE DBID=@DBID AND ISACTIVE=1", Args(db, id, user), cancellationToken).Configu
         if (!SqlApiCredRefConvention.ShouldAutoAssign(db.ApiCredRef, _sync.TenantCode))
             return;
 
-        var fromCode = SqlApiCredRefConvention.BuildCredRef(_sync.TenantCode, db.DbCode);
-        if (fromCode.Length > 0)
-        {
-            db.ApiCredRef = fromCode;
-            return;
-        }
+        var bundle = SqlApiCredRefConvention.BuildBundleCredRef(_sync.TenantCode);
+        if (bundle.Length > 0)
+            db.ApiCredRef = bundle;
+    }
 
-        // Code empty: fall back to numeric id so a secret path still exists.
-        db.ApiCredRef = SqlApiCredRefConvention.BuildCredRef(_sync.TenantCode, dbId.ToString());
+    public Task PointSqlApiCredRefsAtBundleAsync(string tenantCode, CancellationToken cancellationToken = default)
+    {
+        var cred = SqlApiCredRefConvention.BuildBundleCredRef(tenantCode);
+        var prefix = SqlApiCredRefConvention.LegacyPrefix(tenantCode);
+        if (cred.Length == 0 || prefix.Length == 0 || !_db.IsConfigured)
+            return Task.CompletedTask;
+        return _db.ExecuteAsync(@"
+UPDATE SYNC_DATABASE SET APICREDREF = @CRED
+WHERE UPPER(APICREDREF) LIKE UPPER(@SM) || '%'
+   OR UPPER(APICREDREF) LIKE UPPER(@BARE) || '%'",
+            new { CRED = cred, SM = "sm:" + prefix, BARE = prefix }, cancellationToken);
     }
 
     public Task DeactivateAsync(int dbId, string user, CancellationToken cancellationToken = default) =>
