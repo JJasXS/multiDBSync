@@ -88,6 +88,7 @@ public sealed class UserDirectory : IUserDirectory
 
     public async Task<int> SaveAsync(AppUser user, CancellationToken cancellationToken = default)
     {
+        user.Role = AppRoles.Normalize(user.Role);
         if (user.UserId == 0)
         {
             var id = (int)await _db.NextIdAsync("GEN_SYNC_USER", cancellationToken).ConfigureAwait(false);
@@ -164,7 +165,7 @@ WHERE USERID=@USERID",
                 CanSync = CentralDb.Flag(r, "CANSYNC")
             }, new { USERID = userId, DBID = dbId }, cancellationToken).ConfigureAwait(false);
         if (acl is null)
-            return AppRoles.Rank(role) >= AppRoles.Rank(AppRoles.Viewer) && !forSync && AppRoles.Rank(role) >= AppRoles.Rank(AppRoles.Manager);
+            return false;
         return forSync ? acl.CanSync : acl.CanView;
     }
 

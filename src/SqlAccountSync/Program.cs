@@ -144,9 +144,9 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy(PolicyNames.Admin, p => p.RequireRole(AppRoles.Admin));
-    options.AddPolicy(PolicyNames.Manager, p => p.RequireRole(AppRoles.Admin, AppRoles.Manager));
-    options.AddPolicy(PolicyNames.Operator, p => p.RequireRole(AppRoles.Admin, AppRoles.Manager, AppRoles.Operator));
-    options.AddPolicy(PolicyNames.Viewer, p => p.RequireRole(AppRoles.Admin, AppRoles.Manager, AppRoles.Operator, AppRoles.Viewer));
+    options.AddPolicy(PolicyNames.Manager, p => p.RequireRole(AppRoles.Admin));
+    options.AddPolicy(PolicyNames.Operator, p => p.RequireRole(AppRoles.Admin));
+    options.AddPolicy(PolicyNames.Viewer, p => p.RequireRole(AppRoles.Admin, AppRoles.Viewer));
 });
 
 builder.Services.AddControllers();

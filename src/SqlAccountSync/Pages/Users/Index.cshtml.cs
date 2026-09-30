@@ -29,13 +29,19 @@ public class IndexModel : SyncPageModel
 
     public async Task<IActionResult> OnPostAsync()
     {
-        await _users.SaveAsync(new AppUser { Email = Email, DisplayName = DisplayName, Role = Role });
+        if (!IsAdmin)
+            return Forbid();
+
+        await _users.SaveAsync(new AppUser { Email = Email, DisplayName = DisplayName, Role = AppRoles.Normalize(Role) });
         await _audit.WriteAsync(new AuditEntry { UserEmail = CurrentEmail, Action = "USER CREATED USER", RecordId = Email, Result = "SUCCESS" });
         return RedirectToPage();
     }
 
     public async Task<IActionResult> OnPostDisableAsync(int id)
     {
+        if (!IsAdmin)
+            return Forbid();
+
         try
         {
             await _users.DeactivateAsync(id);

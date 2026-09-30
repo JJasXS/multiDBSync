@@ -14,6 +14,12 @@
             <h3>Add user</h3>
         </div>
         <p class="muted users-form-lede">Add a SYNC user (role + access). Their email must also exist on LOGIN.FDB <code>SY_USER.EMAIL</code> to receive an OTP.</p>
+        @if (!Model.IsAdmin)
+        {
+            <p class="muted users-form-lede">Only an ADMIN can add or remove users.</p>
+        }
+        else
+        {
         <form method="post" class="users-form">
             <div class="users-field">
                 <label asp-for="Email">Email</label>
@@ -27,8 +33,6 @@
                 <label asp-for="Role">Role</label>
                 <select asp-for="Role">
                     <option>ADMIN</option>
-                    <option>MANAGER</option>
-                    <option>OPERATOR</option>
                     <option>VIEWER</option>
                 </select>
             </div>
@@ -36,6 +40,7 @@
                 <button class="btn" type="submit">Save</button>
             </div>
         </form>
+        }
     </div>
 
     <div class="card users-list-card">
@@ -68,6 +73,10 @@
                             </td>
                             <td class="col-actions">
                                 @if (!u.IsActive)
+                                {
+                                    <span class="muted">—</span>
+                                }
+                                else if (!Model.IsAdmin)
                                 {
                                     <span class="muted">—</span>
                                 }

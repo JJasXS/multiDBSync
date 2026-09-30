@@ -3,11 +3,12 @@ namespace SqlAccountSync.Authorization;
 public static class AppRoles
 {
     public const string Admin = "ADMIN";
-    public const string Manager = "MANAGER";
-    public const string Operator = "OPERATOR";
     public const string Viewer = "VIEWER";
 
-    public static readonly string[] All = [Admin, Manager, Operator, Viewer];
+    public static readonly string[] All = [Admin, Viewer];
+
+    public static string Normalize(string? role) =>
+        string.Equals(role?.Trim(), Admin, StringComparison.OrdinalIgnoreCase) ? Admin : Viewer;
 
     public static bool IsAtLeast(string? role, string required)
     {
@@ -17,9 +18,7 @@ public static class AppRoles
 
     public static int Rank(string? role) => role?.Trim().ToUpperInvariant() switch
     {
-        Admin => 4,
-        Manager => 3,
-        Operator => 2,
+        Admin => 2,
         Viewer => 1,
         _ => 0
     };

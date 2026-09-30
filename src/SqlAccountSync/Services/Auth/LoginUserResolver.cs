@@ -25,7 +25,6 @@ public sealed class LoginUserResolver : ILoginUserResolver
     private readonly ISecretResolver _secrets;
     private readonly IConfiguration _config;
     private readonly CentralDbOptions _central;
-    private readonly BootstrapOptions _bootstrap;
     private readonly ILogger<LoginUserResolver> _logger;
 
     public LoginUserResolver(
@@ -34,7 +33,6 @@ public sealed class LoginUserResolver : ILoginUserResolver
         ISecretResolver secrets,
         IConfiguration config,
         IOptions<CentralDbOptions> central,
-        IOptions<BootstrapOptions> bootstrap,
         ILogger<LoginUserResolver> logger)
     {
         _users = users;
@@ -42,7 +40,6 @@ public sealed class LoginUserResolver : ILoginUserResolver
         _secrets = secrets;
         _config = config;
         _central = central.Value;
-        _bootstrap = bootstrap.Value;
         _logger = logger;
     }
 
@@ -56,7 +53,10 @@ public sealed class LoginUserResolver : ILoginUserResolver
         if (db is null || string.IsNullOrWhiteSpace(db.DbPath))
         {
             _logger.LogWarning("No login database path; falling back to SYNC_USER.");
-            return await _users.FindByEmailAsync(email, cancellationToken).ConfigureAwait(false);
+            var fallback = await _users.FindByEmailAsync(email, cancellationToken).ConfigureAwait(false);
+            return fallback is null
+                ? null
+                : await KeepKnownRoleAsync(fallback, cancellationToken).ConfigureAwait(false);
         }
 
         var displayName = await LookupSyUserDisplayNameAsync(db, email, cancellationToken).ConfigureAwait(false);
@@ -161,34 +161,30 @@ public sealed class LoginUserResolver : ILoginUserResolver
 
     private async Task<AppUser?> EnsureSyncUserAsync(string email, string displayName, CancellationToken cancellationToken)
     {
-        var bootstrapEmail = (_bootstrap.AdminEmail ?? "").Trim();
-        var adminCount = await _users.CountActiveAdminsAsync(cancellationToken).ConfigureAwait(false);
-        var preferAdmin = adminCount == 0
-            || string.Equals(email, bootstrapEmail, StringComparison.OrdinalIgnoreCase);
-
         var existing = await _users.FindByEmailAsync(email, cancellationToken).ConfigureAwait(false);
         if (existing is not null)
-        {
-            if (preferAdmin && AppRoles.Rank(existing.Role) < AppRoles.Rank(AppRoles.Admin))
-            {
-                existing.Role = AppRoles.Admin;
-                existing.IsActive = true;
-                await _users.SaveAsync(existing, cancellationToken).ConfigureAwait(false);
-                return await _users.GetByIdAsync(existing.UserId, cancellationToken).ConfigureAwait(false);
-            }
-
-            return existing;
-        }
+            return await KeepKnownRoleAsync(existing, cancellationToken).ConfigureAwait(false);
 
         var id = await _users.SaveAsync(new AppUser
         {
             Email = email.ToLowerInvariant(),
             DisplayName = string.IsNullOrWhiteSpace(displayName) ? email : displayName,
-            Role = preferAdmin ? AppRoles.Admin : AppRoles.Operator,
+            Role = AppRoles.Viewer,
             IsActive = true
         }, cancellationToken).ConfigureAwait(false);
 
         return await _users.GetByIdAsync(id, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<AppUser?> KeepKnownRoleAsync(AppUser user, CancellationToken cancellationToken)
+    {
+        var role = AppRoles.Normalize(user.Role);
+        if (string.Equals(user.Role, role, StringComparison.OrdinalIgnoreCase))
+            return user;
+
+        user.Role = role;
+        await _users.SaveAsync(user, cancellationToken).ConfigureAwait(false);
+        return await _users.GetByIdAsync(user.UserId, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<string?> ResolveFirebirdPasswordAsync(CancellationToken cancellationToken)

@@ -288,9 +288,9 @@ public static class CurrentUser
 
     public static string Role(ClaimsPrincipal user) => user.FindFirstValue(ClaimTypes.Role) ?? AppRoles.Viewer;
 
-    public static bool CanManage(ClaimsPrincipal user) => AppRoles.Rank(Role(user)) >= AppRoles.Rank(AppRoles.Manager);
+    public static bool CanManage(ClaimsPrincipal user) => IsAdmin(user);
 
     public static bool IsAdmin(ClaimsPrincipal user) => AppRoles.Rank(Role(user)) >= AppRoles.Rank(AppRoles.Admin);
 
-    public static bool CanOperate(ClaimsPrincipal user) => AppRoles.Rank(Role(user)) >= AppRoles.Rank(AppRoles.Operator);
+    public static bool CanOperate(ClaimsPrincipal user) => IsAdmin(user);
 }
