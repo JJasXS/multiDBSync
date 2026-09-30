@@ -2,7 +2,8 @@ async function dbPathPicked(input, picker, hint) {
   const file = picker.files && picker.files[0];
   if (!file) return;
   dbPathHint(hint, "");
-  const url = new URL(window.location.href);
+  const findPage = input.getAttribute("data-find-page");
+  const url = findPage ? new URL(findPage, window.location.origin) : new URL(window.location.href);
   url.searchParams.set("handler", "Find");
   url.searchParams.set("name", file.name);
   let data;

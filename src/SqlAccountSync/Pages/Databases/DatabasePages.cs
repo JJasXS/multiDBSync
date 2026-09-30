@@ -144,6 +144,7 @@ public class EditModel : SyncPageModel
     [BindProperty] public RegisteredDatabase Db { get; set; } = new();
     [BindProperty] public string ApiAccessKey { get; set; } = "";
     [BindProperty] public string ApiSecretKey { get; set; } = "";
+    [BindProperty] public string ReturnTo { get; set; } = "";
     public string Message { get; set; } = "";
     public string TenantCode => (_sync.TenantCode ?? "").Trim();
     public bool AutoSqlApiCredRef => _sync.AutoAssignSqlApiCredRefByDbId && TenantCode.Length > 0;
@@ -218,11 +219,7 @@ public class EditModel : SyncPageModel
     {
         if (!IsAdmin) return Forbid();
         if (ApiKeysArePartial())
-        {
-            Message = "Enter both the access key and the secret key, or leave both blank.";
-            PrepareForm();
-            return Page();
-        }
+            return DbFailed("Enter both the access key and the secret key, or leave both blank.");
 
         Db.DbRole = MasterOrSub(Db.DbRole);
         Db.CompanyName = (Db.DisplayName ?? "").Trim();
@@ -232,7 +229,22 @@ public class EditModel : SyncPageModel
         var id = await _registry.SaveAsync(Db, CurrentEmail);
         await SaveApiKeysAsync(id);
         await WriteDatabaseAuditAsync(wasNew, id);
-        return RedirectToPage("Details", new { id });
+        return FromDashboard ? RedirectToPage("/Index") : RedirectToPage("Details", new { id });
+    }
+
+    private bool FromDashboard =>
+        string.Equals(ReturnTo, "dashboard", StringComparison.OrdinalIgnoreCase);
+
+    private IActionResult DbFailed(string message)
+    {
+        if (FromDashboard)
+        {
+            TempData["DbError"] = message;
+            return RedirectToPage("/Index");
+        }
+        Message = message;
+        PrepareForm();
+        return Page();
     }
 
     private bool ApiKeysArePartial()

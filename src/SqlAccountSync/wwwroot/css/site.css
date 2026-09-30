@@ -964,6 +964,11 @@ code {
   color: var(--ice-text);
   box-shadow: 0 16px 40px var(--ice-shadow);
 }
+.db-create-modal { max-width: 640px; }
+.db-create-modal .accounts-modal-body {
+  max-height: min(70vh, 640px);
+  overflow: auto;
+}
 .accounts-modal::backdrop {
   background: var(--ice-overlay);
 }
