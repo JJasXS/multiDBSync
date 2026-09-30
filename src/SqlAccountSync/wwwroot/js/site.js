@@ -349,3 +349,36 @@
     true
   );
 })();
+
+function planLinkIds(root) {
+  const ids = new Set((root.getAttribute("data-linked-ids") || "").split(",").filter(Boolean));
+  const master = root.querySelector("[data-plan-master]");
+  if (master && master.value) ids.add(master.value);
+  root.querySelectorAll('input[name="SubDbIds"]').forEach((box) => {
+    const row = box.closest(".sub-multi-row");
+    if (box.checked && !(row && row.hidden)) ids.add(box.value);
+  });
+  return ids;
+}
+
+function trimPlanLinks(root, cap) {
+  const boxes = [...root.querySelectorAll('input[name="SubDbIds"]')].filter((box) => box.checked);
+  let trimmed = false;
+  while (planLinkIds(root).size > cap && boxes.length) {
+    boxes.pop().checked = false;
+    trimmed = true;
+  }
+  return trimmed;
+}
+
+(() => {
+  document.querySelectorAll("[data-plan-cap]").forEach((root) => {
+    const cap = Number(root.getAttribute("data-plan-cap"));
+    if (!cap) return;
+    const hint = root.querySelector("[data-plan-hint]");
+    root.addEventListener("change", () => {
+      const trimmed = trimPlanLinks(root, cap);
+      if (hint) hint.hidden = !trimmed && planLinkIds(root).size <= cap;
+    });
+  });
+})();

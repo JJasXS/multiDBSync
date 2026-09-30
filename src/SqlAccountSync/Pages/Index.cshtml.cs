@@ -1,11 +1,14 @@
+using Microsoft.Extensions.Options;
 using SqlAccountSync.Data;
 using SqlAccountSync.Models;
+using SqlAccountSync.Options;
 using SqlAccountSync.Services.Audit;
 using SqlAccountSync.Services.Auth;
 using SqlAccountSync.Services.Databases;
 using SqlAccountSync.Services.Mapping;
 using SqlAccountSync.Services.Queue;
 using SqlAccountSync.Services.Sync;
+using SqlAccountSync.Services.Tenants;
 using SqlAccountSync.Services.Transactions;
 
 namespace SqlAccountSync.Pages;
@@ -20,6 +23,8 @@ public class IndexModel : SyncPageModel
     private readonly IErrorLogService _errors;
     private readonly IAuditService _audit;
     private readonly ILoginUserStore _users;
+    private readonly ITenantDatabaseBootstrap _tenants;
+    private readonly SyncOptions _syncOptions;
     private readonly CentralDb _db;
 
     public IndexModel(
@@ -31,6 +36,8 @@ public class IndexModel : SyncPageModel
         IErrorLogService errors,
         IAuditService audit,
         ILoginUserStore users,
+        ITenantDatabaseBootstrap tenants,
+        IOptions<SyncOptions> syncOptions,
         CentralDb db)
     {
         _registry = registry;
@@ -41,6 +48,8 @@ public class IndexModel : SyncPageModel
         _errors = errors;
         _audit = audit;
         _users = users;
+        _tenants = tenants;
+        _syncOptions = syncOptions.Value;
         _db = db;
     }
 
@@ -57,6 +66,8 @@ public class IndexModel : SyncPageModel
     public int EnabledRuleCount { get; set; }
     public int SettingsKeyCount { get; set; }
     public bool CentralConfigured { get; set; }
+    public int? MaxDatabases { get; set; }
+    public bool DatabaseCapReached => MaxDatabases is int cap && Databases.Count >= cap;
 
     public async Task OnGetAsync()
     {
@@ -64,6 +75,7 @@ public class IndexModel : SyncPageModel
         Stats = await _registry.DashboardAsync();
         Databases = await _registry.ListAsync();
         Links = await _registry.ListLinksAsync();
+        MaxDatabases = await _tenants.GetMaxDatabasesAsync((_syncOptions.TenantCode ?? "").Trim());
         RecentJobs = await _jobs.ListAsync(take: 8);
         await LoadSummariesAsync();
     }

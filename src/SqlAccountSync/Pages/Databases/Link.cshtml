@@ -26,10 +26,11 @@
     else
     {
         <p class="muted lede">Choose a Master and one or more Subs. A company cannot be linked to itself.</p>
-        <form method="post" class="form-stack">
+        <form method="post" class="form-stack" data-plan-cap="@Model.MaxDatabases" data-linked-ids="@Model.LinkedActiveIds">
+            <p class="field-hint" data-plan-hint hidden>The plan allows @Model.MaxDatabases active databases.</p>
             <div>
                 <label>Master</label>
-                <select asp-for="MasterDbId" id="linkMaster">
+                <select asp-for="MasterDbId" id="linkMaster" data-plan-master>
                     @foreach (var d in masters) { <option value="@d.DbId">@d.DisplayName (@d.DbRole)</option> }
                 </select>
             </div>

@@ -109,7 +109,11 @@
                         <button type="button" class="accounts-modal-close" data-add-database-close aria-label="Close">&times;</button>
                     </div>
                     <div class="accounts-modal-body">
-                        @if (!string.IsNullOrWhiteSpace(dbError))
+                        @if (Model.DatabaseCapReached)
+                        {
+                            <div class="flash flash-err">The plan allows @Model.MaxDatabases active databases.</div>
+                        }
+                        else if (!string.IsNullOrWhiteSpace(dbError))
                         {
                             <div class="flash flash-err" data-db-error>@dbError</div>
                         }
@@ -173,7 +177,10 @@
                     </div>
                     <div class="accounts-modal-actions">
                         <button type="button" class="btn btn-ghost" data-add-database-close>Cancel</button>
-                        <button class="btn" type="submit">Save</button>
+                        @if (!Model.DatabaseCapReached)
+                        {
+                            <button class="btn" type="submit">Save</button>
+                        }
                     </div>
                 </form>
             </dialog>
@@ -263,8 +270,12 @@
             var linkedSubIds = Model.Links.Select(l => l.SubDbId).ToHashSet();
             var availableSubs = linkSubs.Where(d => !linkedSubIds.Contains(d.DbId)).ToList();
             var linkError = TempData["LinkError"] as string;
+            var planLinkedIds = string.Join(",", Model.Links
+                .SelectMany(l => new[] { l.MasterDbId, l.SubDbId })
+                .Where(id => Model.Databases.Any(d => d.DbId == id))
+                .Distinct());
             <dialog id="addRelationshipDialog" class="accounts-modal" aria-labelledby="addRelationshipTitle">
-                <form method="post" asp-page="/Databases/Link" class="accounts-modal-form">
+                <form method="post" asp-page="/Databases/Link" class="accounts-modal-form" data-plan-cap="@Model.MaxDatabases" data-linked-ids="@planLinkedIds">
                     <input type="hidden" name="ReturnTo" value="dashboard" />
                     <div class="accounts-modal-head">
                         <h3 id="addRelationshipTitle">Add relationship</h3>
@@ -282,9 +293,10 @@
                         else
                         {
                             <p class="field-hint">Choose a Master and one or more Subs. A company cannot be linked to itself.</p>
+                            <p class="field-hint" data-plan-hint hidden>The plan allows @Model.MaxDatabases active databases.</p>
                             <div class="field">
                                 <label for="dashLinkMaster">Master</label>
-                                <select name="MasterDbId" id="dashLinkMaster">
+                                <select name="MasterDbId" id="dashLinkMaster" data-plan-master>
                                     @foreach (var d in linkMasters) { <option value="@d.DbId">@d.DisplayName (@d.DbRole)</option> }
                                 </select>
                             </div>

@@ -35,11 +35,19 @@ public class LinkModel : SyncPageModel
 {
     private readonly IDatabaseRegistry _registry;
     private readonly IAuditService _audit;
+    private readonly ITenantDatabaseBootstrap _tenants;
+    private readonly SyncOptions _sync;
 
-    public LinkModel(IDatabaseRegistry registry, IAuditService audit)
+    public LinkModel(
+        IDatabaseRegistry registry,
+        IAuditService audit,
+        ITenantDatabaseBootstrap tenants,
+        IOptions<SyncOptions> sync)
     {
         _registry = registry;
         _audit = audit;
+        _tenants = tenants;
+        _sync = sync.Value;
     }
 
     public List<RegisteredDatabase> Databases { get; set; } = [];
@@ -49,6 +57,9 @@ public class LinkModel : SyncPageModel
     [BindProperty] public string ReturnTo { get; set; } = "";
     public string Message { get; set; } = "";
     public bool Error { get; set; }
+    public int? MaxDatabases { get; set; }
+    public string LinkedActiveIds { get; set; } = "";
+    private string TenantCode => (_sync.TenantCode ?? "").Trim();
 
     public async Task<IActionResult> OnGetAsync()
     {
@@ -60,9 +71,12 @@ public class LinkModel : SyncPageModel
     public async Task<IActionResult> OnPostAsync()
     {
         if (!IsAdmin) return Forbid();
-        var ids = ChosenSubIds();
+        var ids = await ActiveSubIdsAsync();
         if (ids.Count == 0)
-            return await LinkFailedAsync("Choose at least one Sub that is not the Master.");
+            return await LinkFailedAsync("Choose at least one active Sub that is not the Master.");
+        var capMessage = await OverLinkCapAsync(ids);
+        if (capMessage is not null)
+            return await LinkFailedAsync(capMessage);
 
         var added = await AddFreshLinksAsync(ids);
         if (added == 0)
@@ -77,6 +91,24 @@ public class LinkModel : SyncPageModel
 
     private List<int> ChosenSubIds() =>
         SubDbIds.Where(id => id > 0 && id != MasterDbId).Distinct().ToList();
+
+    private async Task<List<int>> ActiveSubIdsAsync()
+    {
+        var active = (await _registry.ListAsync()).Select(d => d.DbId).ToHashSet();
+        if (!active.Contains(MasterDbId))
+            return [];
+        return ChosenSubIds().Where(active.Contains).ToList();
+    }
+
+    private async Task<string?> OverLinkCapAsync(List<int> ids)
+    {
+        var active = (await _registry.ListAsync()).Select(d => d.DbId).ToHashSet();
+        var linked = (await _registry.ListLinksAsync())
+            .SelectMany(link => new[] { link.MasterDbId, link.SubDbId })
+            .Where(active.Contains);
+        var max = await _tenants.GetMaxDatabasesAsync(TenantCode);
+        return DatabasePlanLimit.NewLinksMessage(max, linked, MasterDbId, ids);
+    }
 
     private async Task<int> AddFreshLinksAsync(List<int> ids)
     {
@@ -118,8 +150,14 @@ public class LinkModel : SyncPageModel
 
     private async Task LoadAsync()
     {
-        Databases = await _registry.ListAsync(includeInactive: IsAdmin);
+        Databases = await _registry.ListAsync();
         Links = await _registry.ListLinksAsync();
+        MaxDatabases = await _tenants.GetMaxDatabasesAsync(TenantCode);
+        var active = Databases.Select(d => d.DbId).ToHashSet();
+        LinkedActiveIds = string.Join(",", Links
+            .SelectMany(link => new[] { link.MasterDbId, link.SubDbId })
+            .Where(active.Contains)
+            .Distinct());
     }
 }
 
@@ -173,6 +211,7 @@ public class EditModel : SyncPageModel
         {
             ApplyNewDefaults();
             PrepareDisplay();
+            Message = await OverCapMessageAsync() ?? "";
             return Page();
         }
         if (id is not > 0)
@@ -257,12 +296,8 @@ public class EditModel : SyncPageModel
         if (Db.DbId != 0)
             return null;
         var max = await _tenants.GetMaxDatabasesAsync(TenantCode);
-        if (max is not int cap || cap <= 0)
-            return null;
         var active = await _registry.ListAsync();
-        if (active.Count < cap)
-            return null;
-        return $"The plan allows {cap} databases.";
+        return DatabasePlanLimit.NewDatabaseMessage(max, active.Count);
     }
 
     private bool ApiKeysArePartial()
