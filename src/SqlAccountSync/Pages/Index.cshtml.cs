@@ -19,7 +19,7 @@ public class IndexModel : SyncPageModel
     private readonly ITransactionEngine _txns;
     private readonly IErrorLogService _errors;
     private readonly IAuditService _audit;
-    private readonly IUserDirectory _users;
+    private readonly ILoginUserStore _users;
     private readonly CentralDb _db;
 
     public IndexModel(
@@ -30,7 +30,7 @@ public class IndexModel : SyncPageModel
         ITransactionEngine txns,
         IErrorLogService errors,
         IAuditService audit,
-        IUserDirectory users,
+        ILoginUserStore users,
         CentralDb db)
     {
         _registry = registry;

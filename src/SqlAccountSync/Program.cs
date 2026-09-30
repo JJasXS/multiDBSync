@@ -107,6 +107,8 @@ builder.Services.AddSingleton<CompanyConnectionFactory>();
 builder.Services.AddSingleton<SchemaBootstrap>();
 builder.Services.AddScoped<IDatabaseRegistry, DatabaseRegistry>();
 builder.Services.AddScoped<IUserDirectory, UserDirectory>();
+builder.Services.AddScoped<ILoginDatabaseSource, LoginDatabaseSource>();
+builder.Services.AddScoped<ILoginUserStore, LoginUserStore>();
 builder.Services.AddScoped<ILoginUserResolver, LoginUserResolver>();
 builder.Services.AddScoped<OtpAuthService>();
 builder.Services.AddScoped<IAuditService, AuditService>();

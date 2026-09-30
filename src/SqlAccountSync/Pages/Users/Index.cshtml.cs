@@ -9,10 +9,10 @@ namespace SqlAccountSync.Pages.Users;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public class IndexModel : SyncPageModel
 {
-    private readonly IUserDirectory _users;
+    private readonly ILoginUserStore _users;
     private readonly IAuditService _audit;
 
-    public IndexModel(IUserDirectory users, IAuditService audit)
+    public IndexModel(ILoginUserStore users, IAuditService audit)
     {
         _users = users;
         _audit = audit;
@@ -33,9 +33,19 @@ public class IndexModel : SyncPageModel
         if (!IsAdmin)
             return Forbid();
 
-        await _users.SaveAsync(new AppUser { Email = Email, DisplayName = DisplayName, Role = AppRoles.Normalize(Role) });
-        await _audit.WriteAsync(new AuditEntry { UserEmail = CurrentEmail, Action = "USER CREATED USER", RecordId = Email, Result = "SUCCESS" });
-        return RedirectToPage();
+        try
+        {
+            await _users.AddAsync(Email, DisplayName, AppRoles.Normalize(Role));
+            await _audit.WriteAsync(new AuditEntry { UserEmail = CurrentEmail, Action = "USER CREATED USER", RecordId = Email, Result = "SUCCESS" });
+            return RedirectToPage();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = true;
+            Message = ex.Message;
+            await LoadAsync();
+            return Page();
+        }
     }
 
     public async Task<IActionResult> OnPostSetActiveAsync(int id, bool active)
@@ -64,9 +74,9 @@ public class IndexModel : SyncPageModel
             throw new InvalidOperationException("You cannot turn off your own account.");
 
         if (active)
-            await _users.ActivateAsync(id);
+            await _users.SetActiveAsync(id, true);
         else
-            await _users.DeactivateAsync(id);
+            await _users.SetActiveAsync(id, false);
 
         await _audit.WriteAsync(new AuditEntry
         {

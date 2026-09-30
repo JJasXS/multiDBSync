@@ -6,7 +6,7 @@ public static class SettingsCatalog
     [
         new(
             "User Management",
-            "Manage who can sign in (SYNC roles). Login emails must exist on LOGIN.FDB SY_USER.",
+            "Manage who can sign in. Users are stored on the AWS login database SY_USER.",
             "users",
             "/Settings/Users",
             "accounts people login otp email"),

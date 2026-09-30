@@ -6,7 +6,7 @@ using SqlAccountSync.Models;
 
 namespace SqlAccountSync.Services.Auth;
 
-/// <summary>Keeps cookie role/name in sync with <c>SYNC_USER</c> (e.g. after first-admin promotion).</summary>
+/// <summary>Keeps the cookie in sync with the AWS login database <c>SY_USER</c> row.</summary>
 public static class AuthCookieEvents
 {
     public static async Task ValidatePrincipalAsync(CookieValidatePrincipalContext context)
@@ -21,8 +21,8 @@ public static class AuthCookieEvents
         if (email.Length == 0 || !email.Contains('@', StringComparison.Ordinal))
             return;
 
-        var users = context.HttpContext.RequestServices.GetRequiredService<IUserDirectory>();
-        var user = await users.FindByEmailAsync(email, context.HttpContext.RequestAborted).ConfigureAwait(false);
+        var users = context.HttpContext.RequestServices.GetRequiredService<ILoginUserStore>();
+        var user = await users.FindActiveByEmailAsync(email, context.HttpContext.RequestAborted).ConfigureAwait(false);
         if (user is null)
         {
             context.RejectPrincipal();
@@ -56,7 +56,7 @@ public static class AuthCookieEvents
     }
 
     private static async Task<AppUser?> EnsureAdminIfNoneAsync(
-        IUserDirectory users, AppUser user, CancellationToken cancellationToken)
+        ILoginUserStore users, AppUser user, CancellationToken cancellationToken)
     {
         if (AppRoles.Rank(user.Role) >= AppRoles.Rank(AppRoles.Admin))
             return user;
@@ -65,9 +65,7 @@ public static class AuthCookieEvents
         if (admins > 0)
             return user;
 
-        user.Role = AppRoles.Admin;
-        user.IsActive = true;
-        await users.SaveAsync(user, cancellationToken).ConfigureAwait(false);
+        await users.SetRoleAsync(user.UserId, AppRoles.Admin, cancellationToken).ConfigureAwait(false);
         return await users.GetByIdAsync(user.UserId, cancellationToken).ConfigureAwait(false) ?? user;
     }
 }

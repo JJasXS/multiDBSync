@@ -13,7 +13,7 @@
         <div class="card-head">
             <h3>Add user</h3>
         </div>
-        <p class="muted users-form-lede">Add a SYNC user (role + access). Their email must also exist on LOGIN.FDB <code>SY_USER.EMAIL</code> to receive an OTP.</p>
+        <p class="muted users-form-lede">Add a user to the company login database. The file path comes from AWS, and the new user can sign in with a one-time code.</p>
         @if (!Model.IsAdmin)
         {
             <p class="muted users-form-lede">Only an ADMIN can add users or turn accounts on and off.</p>
