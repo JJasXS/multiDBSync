@@ -21,6 +21,7 @@ public class IndexModel : SyncPageModel
     public List<AppUser> Users { get; set; } = [];
     public string Message { get; set; } = "";
     public bool Error { get; set; }
+    public int CurrentUserId => CurrentUser.UserId(User);
     [BindProperty] public string Email { get; set; } = "";
     [BindProperty] public string DisplayName { get; set; } = "";
     [BindProperty] public string Role { get; set; } = AppRoles.Viewer;
@@ -37,21 +38,14 @@ public class IndexModel : SyncPageModel
         return RedirectToPage();
     }
 
-    public async Task<IActionResult> OnPostDisableAsync(int id)
+    public async Task<IActionResult> OnPostSetActiveAsync(int id, bool active)
     {
         if (!IsAdmin)
             return Forbid();
 
         try
         {
-            await _users.DeactivateAsync(id);
-            await _audit.WriteAsync(new AuditEntry
-            {
-                UserEmail = CurrentEmail,
-                Action = "USER DISABLED USER",
-                RecordId = id.ToString(),
-                Result = "SUCCESS"
-            });
+            await SetActiveAsync(id, active);
             return RedirectToPage();
         }
         catch (InvalidOperationException ex)
@@ -62,6 +56,30 @@ public class IndexModel : SyncPageModel
             return Page();
         }
     }
+
+    private async Task SetActiveAsync(int id, bool active)
+    {
+        var target = await _users.GetByIdAsync(id) ?? throw new InvalidOperationException("User not found.");
+        if (!active && IsCurrentUser(target))
+            throw new InvalidOperationException("You cannot turn off your own account.");
+
+        if (active)
+            await _users.ActivateAsync(id);
+        else
+            await _users.DeactivateAsync(id);
+
+        await _audit.WriteAsync(new AuditEntry
+        {
+            UserEmail = CurrentEmail,
+            Action = active ? "USER ENABLED USER" : "USER DISABLED USER",
+            RecordId = target.Email,
+            Result = "SUCCESS"
+        });
+    }
+
+    private bool IsCurrentUser(AppUser target) =>
+        target.UserId == CurrentUserId
+        || string.Equals(target.Email.Trim(), CurrentEmail.Trim(), StringComparison.OrdinalIgnoreCase);
 
     private async Task LoadAsync() => Users = await _users.ListAsync();
 }

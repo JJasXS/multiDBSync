@@ -16,7 +16,7 @@
         <p class="muted users-form-lede">Add a SYNC user (role + access). Their email must also exist on LOGIN.FDB <code>SY_USER.EMAIL</code> to receive an OTP.</p>
         @if (!Model.IsAdmin)
         {
-            <p class="muted users-form-lede">Only an ADMIN can add or remove users.</p>
+            <p class="muted users-form-lede">Only an ADMIN can add users or turn accounts on and off.</p>
         }
         else
         {
@@ -47,7 +47,7 @@
         <div class="card-head">
             <h3>Users</h3>
         </div>
-        <p class="muted lede">At least one active ADMIN is always required.</p>
+        <p class="muted lede">An ADMIN turns accounts on or off. You cannot turn off your own account, and the last ADMIN must stay on.</p>
         @if (Model.Users.Count == 0)
         {
             <p class="empty">No users yet.</p>
@@ -56,38 +56,60 @@
         {
             <div class="table-wrap">
                 <table>
-                    <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Active</th><th class="col-actions"></th></tr></thead>
+                    <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Active</th></tr></thead>
                     <tbody>
                     @foreach (var u in Model.Users)
                     {
-                        var isAdmin = AppRoles.Rank(u.Role) >= AppRoles.Rank(AppRoles.Admin);
-                        var isLastAdmin = u.IsActive && isAdmin && activeAdminCount <= 1;
+                        var isAdminRole = AppRoles.Rank(u.Role) >= AppRoles.Rank(AppRoles.Admin);
+                        var isSelf = u.UserId == Model.CurrentUserId
+                            || string.Equals(u.Email.Trim(), Model.CurrentEmail.Trim(), StringComparison.OrdinalIgnoreCase);
+                        var isLastAdmin = u.IsActive && isAdminRole && activeAdminCount <= 1;
+                        var locked = u.IsActive && (isSelf || isLastAdmin);
+                        var lockNote = isSelf ? "Your account" : "Last admin";
+                        var lockTitle = isSelf
+                            ? "You cannot turn off your own account."
+                            : "The last ADMIN must stay on.";
                         <tr>
                             <td>@u.DisplayName</td>
                             <td>@u.Email</td>
                             <td>@u.Role</td>
                             <td>
-                                <span class="badge @(u.IsActive ? "badge-online" : "badge-disabled")">
-                                    @(u.IsActive ? "Yes" : "No")
-                                </span>
-                            </td>
-                            <td class="col-actions">
-                                @if (!u.IsActive)
+                                @if (!Model.IsAdmin)
                                 {
-                                    <span class="muted">—</span>
+                                    <span class="badge @(u.IsActive ? "badge-online" : "badge-disabled")">
+                                        @(u.IsActive ? "On" : "Off")
+                                    </span>
                                 }
-                                else if (!Model.IsAdmin)
+                                else if (locked)
                                 {
-                                    <span class="muted">—</span>
+                                    <span class="user-switch is-on is-locked" title="@lockTitle">
+                                        <span class="user-switch-track" aria-hidden="true"><span class="user-switch-knob"></span></span>
+                                        <span class="user-switch-label">On</span>
+                                    </span>
+                                    <span class="muted user-switch-note">@lockNote</span>
                                 }
-                                else if (isLastAdmin)
+                                else if (u.IsActive)
                                 {
-                                    <span class="muted">Cannot disable (last admin)</span>
+                                    <form method="post" class="user-switch-form" asp-page-handler="SetActive" asp-route-id="@u.UserId">
+                                        <input type="hidden" name="active" value="false" />
+                                        <button class="user-switch is-on" type="submit" aria-pressed="true"
+                                                data-confirm="Turn off @u.DisplayName? They will not be able to sign in."
+                                                data-confirm-title="Turn off user"
+                                                data-confirm-ok="Turn off"
+                                                data-confirm-danger>
+                                            <span class="user-switch-track" aria-hidden="true"><span class="user-switch-knob"></span></span>
+                                            <span class="user-switch-label">On</span>
+                                        </button>
+                                    </form>
                                 }
                                 else
                                 {
-                                    <form method="post" asp-page-handler="Disable" asp-route-id="@u.UserId">
-                                        <button class="btn small danger" type="submit">Disable</button>
+                                    <form method="post" class="user-switch-form" asp-page-handler="SetActive" asp-route-id="@u.UserId">
+                                        <input type="hidden" name="active" value="true" />
+                                        <button class="user-switch" type="submit" aria-pressed="false">
+                                            <span class="user-switch-track" aria-hidden="true"><span class="user-switch-knob"></span></span>
+                                            <span class="user-switch-label">Off</span>
+                                        </button>
                                     </form>
                                 }
                             </td>

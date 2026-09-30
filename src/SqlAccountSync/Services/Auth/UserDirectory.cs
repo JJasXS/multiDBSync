@@ -16,6 +16,7 @@ public interface IUserDirectory
     Task<List<int>> ListActiveAdminIdsAsync(CancellationToken cancellationToken = default);
     Task<int> SaveAsync(AppUser user, CancellationToken cancellationToken = default);
     Task DeactivateAsync(int userId, CancellationToken cancellationToken = default);
+    Task ActivateAsync(int userId, CancellationToken cancellationToken = default);
     Task<bool> CanAccessDbAsync(int userId, string role, int dbId, bool forSync, CancellationToken cancellationToken = default);
     Task SetAclAsync(int userId, int dbId, bool canView, bool canSync, CancellationToken cancellationToken = default);
     Task<List<UserDbAcl>> ListAclAsync(int userId, CancellationToken cancellationToken = default);
@@ -125,6 +126,17 @@ WHERE USERID=@USERID",
         await EnsureNotRemovingLastAdminAsync(userId, existing.Role, isActive: false, cancellationToken).ConfigureAwait(false);
         await _db.ExecuteAsync(
             "UPDATE SYNC_USER SET ISACTIVE=0 WHERE USERID=@USERID",
+            new { USERID = userId }, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task ActivateAsync(int userId, CancellationToken cancellationToken = default)
+    {
+        var existing = await GetByIdAsync(userId, cancellationToken).ConfigureAwait(false);
+        if (existing is null)
+            throw new InvalidOperationException("User not found.");
+
+        await _db.ExecuteAsync(
+            "UPDATE SYNC_USER SET ISACTIVE=1 WHERE USERID=@USERID",
             new { USERID = userId }, cancellationToken).ConfigureAwait(false);
     }
 
