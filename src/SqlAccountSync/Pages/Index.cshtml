@@ -122,6 +122,7 @@
                                     </div>
                                 </div>
                             </section>
+                            <div class="db-create-side">
                             <section class="db-create-identity">
                                 <div class="field">
                                     <label for="dashDbCode">Code</label>
@@ -132,10 +133,10 @@
                                     <input id="dashDbName" name="Db.DisplayName" required placeholder="Headquarters" />
                                 </div>
                                 <div class="field">
-                                    <span id="dashDbRole">Role</span>
+                                    <span class="field-caption" id="dashDbRole">Role</span>
                                     <div class="role-radios" role="radiogroup" aria-labelledby="dashDbRole">
-                                        <label><input type="radio" name="Db.DbRole" value="MASTER" checked /> Master</label>
-                                        <label><input type="radio" name="Db.DbRole" value="SUB" /> Sub</label>
+                                        <label class="role-choice"><input type="radio" name="Db.DbRole" value="MASTER" checked /> Master</label>
+                                        <label class="role-choice"><input type="radio" name="Db.DbRole" value="SUB" /> Sub</label>
                                     </div>
                                 </div>
                             </section>
@@ -150,6 +151,7 @@
                                 </div>
                                 <p class="field-hint">Leave both keys blank to skip Secrets Manager. Filling both stores them for this company.</p>
                             </section>
+                            </div>
                         </div>
                     </div>
                     <div class="accounts-modal-actions">
