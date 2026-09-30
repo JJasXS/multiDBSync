@@ -88,63 +88,71 @@
                         {
                             <div class="flash flash-err" data-db-error>@dbError</div>
                         }
-                        <div class="field">
-                            <label for="dashDbCode">Code</label>
-                            <input id="dashDbCode" name="Db.DbCode" required placeholder="HQ01" />
+                        <div class="db-create-layout">
+                            <section class="db-create-sql">
+                                <div class="field-row">
+                                    <div class="field">
+                                        <label for="dashDbHost">Host</label>
+                                        <input id="dashDbHost" name="Db.FbHost" required value="localhost" />
+                                    </div>
+                                    <div class="field">
+                                        <label for="dashDbPort">Port</label>
+                                        <input id="dashDbPort" name="Db.FbPort" value="3050" />
+                                    </div>
+                                </div>
+                                <div class="field">
+                                    <label for="dashDbPath">Database path</label>
+                                    <div class="path-input">
+                                        <input id="dashDbPath" name="Db.FbPath" required placeholder="C:/SQLAccount/Company.FDB" data-db-path data-find-page="/Databases/Create" />
+                                        <button type="button" class="path-pin" data-db-path-pin aria-label="Choose database file" title="Choose database file">
+                                            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z"/></svg>
+                                        </button>
+                                        <input type="file" data-db-path-file accept=".fdb,.gdb" hidden />
+                                    </div>
+                                    <p class="field-hint" data-db-path-hint>Use the pin to choose the company .FDB.</p>
+                                </div>
+                                <div class="field-row">
+                                    <div class="field">
+                                        <label for="dashDbUser">User</label>
+                                        <input id="dashDbUser" name="Db.FbUser" value="SYSDBA" />
+                                    </div>
+                                    <div class="field">
+                                        <label for="dashDbKey">Master key reference</label>
+                                        <input id="dashDbKey" name="Db.FbCredRef" type="password" autocomplete="off" value="masterkey" required />
+                                    </div>
+                                </div>
+                            </section>
+                            <section class="db-create-identity">
+                                <div class="field">
+                                    <label for="dashDbCode">Code</label>
+                                    <input id="dashDbCode" name="Db.DbCode" required placeholder="HQ01" />
+                                </div>
+                                <div class="field">
+                                    <label for="dashDbName">Name</label>
+                                    <input id="dashDbName" name="Db.DisplayName" required placeholder="Headquarters" />
+                                </div>
+                                <div class="field">
+                                    <label for="dashDbRole">Role</label>
+                                    <select id="dashDbRole" name="Db.DbRole">
+                                        <option>MASTER</option>
+                                        <option>SUB</option>
+                                    </select>
+                                </div>
+                            </section>
+                            <section class="db-create-api">
+                                <div class="field-row">
+                                    <div class="field">
+                                        <label for="dashAccessKey">Access key</label>
+                                        <input id="dashAccessKey" name="ApiAccessKey" type="password" autocomplete="off" />
+                                    </div>
+                                    <div class="field">
+                                        <label for="dashSecretKey">Secret key</label>
+                                        <input id="dashSecretKey" name="ApiSecretKey" type="password" autocomplete="off" />
+                                    </div>
+                                </div>
+                                <p class="field-hint">Leave both keys blank to skip Secrets Manager. Filling both stores them for this company.</p>
+                            </section>
                         </div>
-                        <div class="field">
-                            <label for="dashDbName">Name</label>
-                            <input id="dashDbName" name="Db.DisplayName" required placeholder="Headquarters" />
-                        </div>
-                        <div class="field">
-                            <label for="dashDbRole">Role</label>
-                            <select id="dashDbRole" name="Db.DbRole">
-                                <option>MASTER</option>
-                                <option>SUB</option>
-                            </select>
-                        </div>
-                        <div class="field-row">
-                            <div class="field">
-                                <label for="dashDbHost">Host</label>
-                                <input id="dashDbHost" name="Db.FbHost" required value="localhost" />
-                            </div>
-                            <div class="field">
-                                <label for="dashDbPort">Port</label>
-                                <input id="dashDbPort" name="Db.FbPort" value="3050" />
-                            </div>
-                        </div>
-                        <div class="field">
-                            <label for="dashDbPath">Database path</label>
-                            <div class="path-input">
-                                <input id="dashDbPath" name="Db.FbPath" required placeholder="C:/SQLAccount/Company.FDB" data-db-path data-find-page="/Databases/Create" />
-                                <button type="button" class="path-pin" data-db-path-pin aria-label="Choose database file" title="Choose database file">
-                                    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z"/></svg>
-                                </button>
-                                <input type="file" data-db-path-file accept=".fdb,.gdb" hidden />
-                            </div>
-                            <p class="field-hint" data-db-path-hint>Use the pin to choose the company .FDB.</p>
-                        </div>
-                        <div class="field-row">
-                            <div class="field">
-                                <label for="dashDbUser">User</label>
-                                <input id="dashDbUser" name="Db.FbUser" value="SYSDBA" />
-                            </div>
-                            <div class="field">
-                                <label for="dashDbKey">Master key reference</label>
-                                <input id="dashDbKey" name="Db.FbCredRef" type="password" autocomplete="off" value="masterkey" required />
-                            </div>
-                        </div>
-                        <div class="field-row">
-                            <div class="field">
-                                <label for="dashAccessKey">Access key</label>
-                                <input id="dashAccessKey" name="ApiAccessKey" type="password" autocomplete="off" />
-                            </div>
-                            <div class="field">
-                                <label for="dashSecretKey">Secret key</label>
-                                <input id="dashSecretKey" name="ApiSecretKey" type="password" autocomplete="off" />
-                            </div>
-                        </div>
-                        <p class="field-hint">Leave both keys blank to skip Secrets Manager. Filling both stores them for this company.</p>
                     </div>
                     <div class="accounts-modal-actions">
                         <button type="button" class="btn btn-ghost" data-add-database-close>Cancel</button>
