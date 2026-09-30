@@ -105,25 +105,48 @@
         @if (Model.IsAdmin && masters.Count > 0 && subs.Count > 0)
         {
             <div id="add-link" class="inset-form" @(showForm ? null : "hidden")>
-                <p class="muted lede">Choose a Master and a different Sub. A company cannot be linked to itself.</p>
+                <p class="muted lede">Choose a Master and one or more Subs. A company cannot be linked to itself.</p>
                 <form method="post" asp-page-handler="AddLink" class="form-stack">
                     <div>
                         <label>Master</label>
-                        <select asp-for="MasterDbId">
+                        <select asp-for="MasterDbId" id="linkMaster">
                             @foreach (var d in masters) { <option value="@d.DbId">@d.DisplayName (@d.DbRole)</option> }
                         </select>
                     </div>
                     <div>
                         <label>Sub</label>
-                        <select asp-for="SubDbId">
-                            @foreach (var d in subs) { <option value="@d.DbId">@d.DisplayName (@d.DbRole)</option> }
-                        </select>
+                        <div class="sub-multi">
+                            @foreach (var d in subs)
+                            {
+                                var selected = Model.SubDbIds.Contains(d.DbId);
+                                <label class="sub-multi-row">
+                                    <input type="checkbox" name="SubDbIds" value="@d.DbId" @(selected ? "checked" : null) />
+                                    <span>@d.DisplayName (@d.DbRole)</span>
+                                </label>
+                            }
+                        </div>
                     </div>
                     <div class="form-actions">
-                        <button class="btn" type="submit">Save link</button>
+                        <button class="btn" type="submit">Save links</button>
                         <button type="button" class="btn secondary" data-reveal-hide="#add-link">Cancel</button>
                     </div>
                 </form>
+                <script>
+                    (function () {
+                        const master = document.getElementById("linkMaster");
+                        if (!master) return;
+                        function syncSubs() {
+                            document.querySelectorAll(".sub-multi-row").forEach((row) => {
+                                const box = row.querySelector("input");
+                                const same = box && box.value === master.value;
+                                row.hidden = !!same;
+                                if (box && same) box.checked = false;
+                            });
+                        }
+                        master.addEventListener("change", syncSubs);
+                        syncSubs();
+                    })();
+                </script>
             </div>
         }
     </div>

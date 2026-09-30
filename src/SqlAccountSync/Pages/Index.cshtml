@@ -23,7 +23,18 @@
         <div class="card">
             <div class="card-head">
                 <h3>Databases</h3>
-                <a asp-page="/Databases/Index">View</a>
+                <details class="kebab">
+                    <summary aria-label="Actions">
+                        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="5" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="19" r="1.6" fill="currentColor"/></svg>
+                    </summary>
+                    <div class="kebab-menu">
+                        <a asp-page="/Databases/Index">View</a>
+                        @if (Model.IsAdmin)
+                        {
+                            <a asp-page="/Databases/Edit">Add database</a>
+                        }
+                    </div>
+                </details>
             </div>
             @if (!Model.CentralConfigured)
             {
@@ -35,13 +46,19 @@
             }
             else
             {
+                <div class="db-role-filter" role="tablist" aria-label="Filter databases">
+                    <button type="button" class="active" data-db-filter="all">All</button>
+                    <button type="button" data-db-filter="master">Master Database</button>
+                    <button type="button" data-db-filter="sub">Sub Database</button>
+                </div>
+                <p class="empty" data-db-filter-empty hidden>No databases in this filter.</p>
                 <div class="table-wrap">
                     <table>
                         <thead><tr><th>Company</th><th>Role</th><th>Status</th><th>Last sync</th></tr></thead>
                         <tbody>
                         @foreach (var d in Model.Databases)
                         {
-                            <tr>
+                            <tr data-db-role="@d.DbRole">
                                 <td><a asp-page="/Databases/Details" asp-route-id="@d.DbId">@d.DisplayName</a></td>
                                 <td><span class="badge badge-@(d.DbRole.ToLowerInvariant())">@d.DbRole</span></td>
                                 <td><span class="badge badge-@(d.ConnStatus == "ONLINE" ? "online" : "offline")">@d.ConnStatus</span></td>
@@ -51,6 +68,29 @@
                         </tbody>
                     </table>
                 </div>
+                <script>
+                    function filterDashboardDatabases(kind) {
+                        const rows = document.querySelectorAll("[data-db-role]");
+                        let visible = 0;
+                        rows.forEach((row) => {
+                            const role = (row.getAttribute("data-db-role") || "").toUpperCase();
+                            const show = kind === "all"
+                                || (kind === "master" && (role === "MASTER" || role === "BOTH"))
+                                || (kind === "sub" && (role === "SUB" || role === "BOTH"));
+                            row.hidden = !show;
+                            if (show) visible += 1;
+                        });
+                        const empty = document.querySelector("[data-db-filter-empty]");
+                        if (empty) empty.hidden = visible > 0;
+                    }
+                    document.querySelectorAll("[data-db-filter]").forEach((btn) => {
+                        btn.addEventListener("click", () => {
+                            document.querySelectorAll("[data-db-filter]").forEach((el) => el.classList.remove("active"));
+                            btn.classList.add("active");
+                            filterDashboardDatabases(btn.getAttribute("data-db-filter") || "all");
+                        });
+                    });
+                </script>
             }
         </div>
 
@@ -94,6 +134,8 @@
         </div>
         }
 
+        @if (Model.IsAdmin)
+        {
         <div class="card">
             <div class="card-head">
                 <h3>Users</h3>
@@ -122,6 +164,7 @@
                 </div>
             }
         </div>
+        }
     </div>
 
     <div class="map-layout-right">

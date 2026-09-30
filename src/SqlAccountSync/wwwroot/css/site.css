@@ -123,6 +123,9 @@ code {
   padding: 16px 8px 20px;
   border-top: 1px solid rgba(255,255,255,.08);
 }
+.nav-footer > a:not(.nav-logout) {
+  margin-bottom: 8px;
+}
 .nav-logout {
   text-align: center;
   font-weight: 600;
@@ -228,6 +231,35 @@ code {
 .entity-tabs a:last-child { border-right: 0; }
 .entity-tabs a:hover { color: var(--ice-heading); text-decoration: none; background: var(--ice-surface-alt); }
 .entity-tabs a.active {
+  color: var(--ice-heading);
+  background: var(--ice-accent-soft);
+  box-shadow: inset 0 -2px 0 var(--ice-accent);
+}
+.db-role-filter {
+  display: flex;
+  margin: 0 0 14px;
+  border: 1px solid var(--ice-border-soft);
+  background: var(--ice-surface);
+  border-radius: var(--ice-radius);
+  overflow-x: auto;
+}
+.db-role-filter button {
+  flex: 1 1 0;
+  margin: 0;
+  border: 0;
+  border-right: 1px solid var(--ice-border-soft);
+  background: transparent;
+  color: var(--ice-text-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  padding: 10px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.db-role-filter button:last-child { border-right: 0; }
+.db-role-filter button:hover { color: var(--ice-heading); background: var(--ice-surface-alt); }
+.db-role-filter button.active {
   color: var(--ice-heading);
   background: var(--ice-accent-soft);
   box-shadow: inset 0 -2px 0 var(--ice-accent);
@@ -1301,6 +1333,26 @@ code {
   padding-top: 16px;
   border-top: 1px solid var(--ice-border-soft);
 }
+.sub-multi {
+  display: grid;
+  gap: 4px;
+  max-height: 180px;
+  overflow: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--ice-border);
+  border-radius: var(--ice-radius);
+  background: var(--ice-surface);
+}
+.sub-multi-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+}
 .table-wrap {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -2250,9 +2302,8 @@ input:focus, select:focus, textarea:focus {
   display: block;
   max-width: none;
 }
-.users-form-card,
-.users-list-card {
-  margin-bottom: 0;
+.users-card-head {
+  justify-content: flex-end;
 }
 .users-form-lede {
   margin: -4px 0 14px;

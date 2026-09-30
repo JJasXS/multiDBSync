@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SqlAccountSync.Authorization;
 using SqlAccountSync.Models;
@@ -6,6 +7,7 @@ using SqlAccountSync.Services.Auth;
 
 namespace SqlAccountSync.Pages.Users;
 
+[Authorize(Policy = PolicyNames.Admin)]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public class IndexModel : SyncPageModel
 {

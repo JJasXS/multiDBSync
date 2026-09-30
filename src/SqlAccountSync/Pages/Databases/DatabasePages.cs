@@ -26,7 +26,7 @@ public class IndexModel : SyncPageModel
     public List<DatabaseLink> Links { get; set; } = [];
     public string Tab { get; set; } = "databases";
     [BindProperty] public int MasterDbId { get; set; }
-    [BindProperty] public int SubDbId { get; set; }
+    [BindProperty] public List<int> SubDbIds { get; set; } = [];
     public string Message { get; set; } = "";
     public bool Error { get; set; }
     public bool ShowAddForm { get; set; }
@@ -42,21 +42,54 @@ public class IndexModel : SyncPageModel
     {
         if (!IsAdmin) return Forbid();
         Tab = "relationships";
+        var ids = ChosenSubIds();
+        if (ids.Count == 0)
+            return await LinkFailedAsync("Choose at least one Sub that is not the Master.");
+
+        var added = await AddFreshLinksAsync(ids);
+        if (added == 0)
+            return await LinkFailedAsync("Those Master/Sub relationships already exist.");
+
+        await _audit.WriteAsync(new AuditEntry { UserEmail = CurrentEmail, Action = "USER CREATED DBLINK", Result = "SUCCESS" });
+        return RedirectToPage(new { tab = "relationships" });
+    }
+
+    private List<int> ChosenSubIds() =>
+        SubDbIds.Where(id => id > 0 && id != MasterDbId).Distinct().ToList();
+
+    private async Task<int> AddFreshLinksAsync(List<int> ids)
+    {
+        var existing = (await _registry.ListLinksAsync())
+            .Where(l => l.MasterDbId == MasterDbId)
+            .Select(l => l.SubDbId)
+            .ToHashSet();
+        var added = 0;
+        foreach (var subId in ids.Where(id => !existing.Contains(id)))
+            added += await TryAddLinkAsync(subId);
+        return added;
+    }
+
+    private async Task<int> TryAddLinkAsync(int subId)
+    {
         try
         {
-            await _registry.AddLinkAsync(MasterDbId, SubDbId, CurrentEmail);
-            await _audit.WriteAsync(new AuditEntry { UserEmail = CurrentEmail, Action = "USER CREATED DBLINK", Result = "SUCCESS" });
-            return RedirectToPage(new { tab = "relationships" });
+            await _registry.AddLinkAsync(MasterDbId, subId, CurrentEmail);
+            return 1;
         }
-        catch (InvalidOperationException ex)
+        catch (InvalidOperationException ex) when (ex.Message.Contains("already exists", StringComparison.OrdinalIgnoreCase))
         {
-            Error = true;
-            ShowAddForm = true;
-            Message = ex.Message;
-            Databases = await _registry.ListAsync(includeInactive: IsAdmin);
-            Links = await _registry.ListLinksAsync();
-            return Page();
+            return 0;
         }
+    }
+
+    private async Task<IActionResult> LinkFailedAsync(string message)
+    {
+        Error = true;
+        ShowAddForm = true;
+        Message = message;
+        Databases = await _registry.ListAsync(includeInactive: IsAdmin);
+        Links = await _registry.ListLinksAsync();
+        return Page();
     }
 }
 
@@ -107,6 +140,7 @@ public class EditModel : SyncPageModel
             var existing = await _registry.GetAsync(id.Value);
             if (existing is null) return RedirectToPage("Index");
             Db = existing;
+            Db.DbRole = MasterOrSub(Db.DbRole);
         }
         else
         {
@@ -123,6 +157,11 @@ public class EditModel : SyncPageModel
         return Page();
     }
 
+    private static string MasterOrSub(string? role) =>
+        string.Equals(role?.Trim(), DatabaseRoles.Sub, StringComparison.OrdinalIgnoreCase)
+            ? DatabaseRoles.Sub
+            : DatabaseRoles.Master;
+
     public IActionResult OnGetFind(string? name)
     {
         if (!IsAdmin) return Forbid();
@@ -132,6 +171,7 @@ public class EditModel : SyncPageModel
     public async Task<IActionResult> OnPostAsync()
     {
         if (!IsAdmin) return Forbid();
+        Db.DbRole = MasterOrSub(Db.DbRole);
         Db.CompanyName = (Db.DisplayName ?? "").Trim();
         Db.ApiBaseUrl = DefaultApiBaseUrl;
         Db.ApiCredRef = SqlApiCredRefConvention.ForStorage(Db.ApiCredRef);
