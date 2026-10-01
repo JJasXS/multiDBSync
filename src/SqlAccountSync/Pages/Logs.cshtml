@@ -2,204 +2,122 @@
 @model SqlAccountSync.Pages.LogsModel
 @{
     ViewData["Title"] = "Logs";
+    var showActions = Model.CanOperate || Model.CanManage || Model.Rows.Any(r => !string.IsNullOrWhiteSpace(r.LinkUrl));
+    var columns = showActions ? 5 : 4;
 }
-
-<div class="logs-page">
-    <details class="card txn-history-dropdown" id="history-transaction-logs">
-        <summary class="txn-history-summary">
-            <span class="txn-history-title">History Transaction Logs</span>
-            <span class="count-pill" aria-label="@Model.Transactions.Count records">@Model.Transactions.Count</span>
-        </summary>
-        <div class="txn-history-body">
-            @if (Model.Transactions.Count == 0)
-            {
-                <p class="empty">No intercompany transactions yet.</p>
-            }
-            else
-            {
-                <div class="table-wrap push-jobs-table-wrap">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Type</th>
-                                <th>Source → Destination</th>
-                                <th>Status</th>
-                                @if (Model.CanOperate)
-                                {
-                                    <th class="col-actions"></th>
-                                }
-                            </tr>
-                        </thead>
-                        <tbody>
-                        @foreach (var t in Model.Transactions)
-                        {
-                            var srcLabel = $"{t.SourceName} {t.SrcDocType} {t.SrcDocNo}".Trim();
-                            var dstLabel = $"{t.DestName} {t.DstDocType} {t.DstDocNo}".Trim();
-                            var routeTitle = $"{srcLabel} → {dstLabel}";
-                            <tr>
-                                <td><a asp-page="/Transactions/Details" asp-route-id="@t.TxnPk">@t.TxnId</a></td>
-                                <td>@SyncDisplayNames.TxnType(t.TxnTypeCode)</td>
-                                <td>
-                                    <span class="route-cell cell-truncate" title="@routeTitle">
-                                        <span class="route-src">@srcLabel</span>
-                                        <span class="route-arrow" aria-hidden="true">→</span>
-                                        <span class="route-dst">@dstLabel</span>
-                                    </span>
-                                </td>
-                                <td><span class="badge badge-@(t.Status.ToLowerInvariant())">@t.Status</span></td>
-                                @if (Model.CanOperate)
-                                {
-                                    <td class="col-actions">
-                                        @if (t.Status is not "COMPLETED")
-                                        {
-                                            <form method="post" asp-page-handler="Retry" asp-route-txnPk="@t.TxnPk"><button class="btn small" type="submit">Retry</button></form>
-                                        }
-                                    </td>
-                                }
-                            </tr>
-                        }
-                        </tbody>
-                    </table>
-                </div>
-            }
+<div class="card logs-page">
+    <div class="logs-filters" role="tablist" aria-label="Log type">
+        <button type="button" class="logs-filter is-active" data-log-filter="all">All <span class="count-pill">@Model.Rows.Count</span></button>
+        <button type="button" class="logs-filter" data-log-filter="transaction">Transactions <span class="count-pill">@Model.Transactions.Count</span></button>
+        <button type="button" class="logs-filter" data-log-filter="audit">Audit <span class="count-pill">@Model.Audits.Count</span></button>
+        <button type="button" class="logs-filter" data-log-filter="error">Errors <span class="count-pill">@Model.Errors.Count</span></button>
+    </div>
+    <section class="push-panel logs-panel">
+        <div class="push-panel-head">
+            <div>
+                <h3>Logs</h3>
+                <p class="push-panel-count" data-log-count>@Model.Rows.Count records</p>
+            </div>
+            <div class="push-panel-search">
+                <label class="sr-only" for="logSearch">Search logs</label>
+                <input id="logSearch" type="search" placeholder="Search logs..." autocomplete="off" spellcheck="false" />
+            </div>
         </div>
-    </details>
-
-    <details class="card txn-history-dropdown" id="audit-logs">
-        <summary class="txn-history-summary">
-            <span class="txn-history-title">Audit Logs</span>
-            <span class="count-pill" aria-label="@Model.Audits.Count records">@Model.Audits.Count</span>
-        </summary>
-        <div class="txn-history-body">
-            @if (Model.Audits.Count == 0)
-            {
-                <p class="empty">No audit logs yet.</p>
-            }
-            else
-            {
-                <div class="table-wrap push-jobs-table-wrap">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>When</th>
-                                <th>User</th>
-                                <th>Action</th>
-                                <th>Entity</th>
-                                <th>Record</th>
-                                <th>Result</th>
-                                @if (Model.CanOperate)
-                                {
-                                    <th class="col-actions"></th>
-                                }
-                            </tr>
-                        </thead>
-                        <tbody>
-                        @foreach (var row in Model.Audits)
+        <div class="push-panel-table-wrap">
+            <table class="push-panel-table" id="logsTable">
+                <thead>
+                    <tr>
+                        <th>When</th>
+                        <th>Kind</th>
+                        <th>Detail</th>
+                        <th>Status</th>
+                        @if (showActions)
                         {
-                            var a = row.Entry;
-                            var badge = SyncDisplayNames.AuditResultBadgeClass(row.DisplayResult);
-                            var hideJobLink = !Model.CanOperate && row.LinkLabel == "View job";
-                            <tr>
-                                <td>@a.AtUtc.ToString("yyyy-MM-dd HH:mm")</td>
-                                <td>@a.UserEmail</td>
-                                <td>@SyncDisplayNames.AuditAction(a.Action)</td>
-                                <td>@(string.IsNullOrWhiteSpace(a.Entity) ? "—" : SyncDisplayNames.TxnType(a.Entity))</td>
-                                <td>
-                                    @if (!hideJobLink && !string.IsNullOrWhiteSpace(row.LinkUrl))
+                            <th class="col-actions"></th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                @if (Model.Rows.Count == 0)
+                {
+                    <tr>
+                        <td colspan="@columns" class="empty">No logs yet.</td>
+                    </tr>
+                }
+                else
+                {
+                    @foreach (var row in Model.Rows)
+                    {
+                        <tr data-log-row data-log-kind="@row.Kind" data-log-text="@($"{row.KindLabel} {row.Detail} {row.Status}")">
+                            <td>@row.At.ToString("yyyy-MM-dd HH:mm")</td>
+                            <td>@row.KindLabel</td>
+                            <td><span class="cell-truncate" title="@row.Detail">@row.Detail</span></td>
+                            <td><span class="badge @row.BadgeClass" title="@row.StatusTitle">@row.Status</span></td>
+                            @if (showActions)
+                            {
+                                <td class="col-actions">
+                                    @if (!string.IsNullOrWhiteSpace(row.LinkUrl))
                                     {
-                                        <a href="@row.LinkUrl">@a.RecordId</a>
+                                        <a class="btn small secondary" href="@row.LinkUrl">@(string.IsNullOrWhiteSpace(row.LinkLabel) ? "Open" : row.LinkLabel)</a>
                                     }
-                                    else
+                                    @if (row.RetryTxnPk is int txnPk)
                                     {
-                                        @a.RecordId
+                                        <form method="post" asp-page-handler="Retry" asp-route-txnPk="@txnPk"><button class="btn small" type="submit">Retry</button></form>
+                                    }
+                                    @if (row.ResolveErrorId is int errorId)
+                                    {
+                                        <form method="post" asp-page-handler="ResolveError" asp-route-id="@errorId"><button class="btn small secondary" type="submit">Resolve</button></form>
                                     }
                                 </td>
-                                <td>
-                                    <span class="badge @badge" title="@row.StatusDetail">@row.DisplayResult</span>
-                                </td>
-                                @if (Model.CanOperate)
-                                {
-                                    <td class="col-actions">
-                                        @if (!string.IsNullOrWhiteSpace(row.LinkUrl))
-                                        {
-                                            <a class="btn small secondary" href="@row.LinkUrl">@row.LinkLabel</a>
-                                        }
-                                    </td>
-                                }
-                            </tr>
-                        }
-                        </tbody>
-                    </table>
-                </div>
-            }
+                            }
+                        </tr>
+                    }
+                    <tr id="logSearchEmpty" hidden>
+                        <td colspan="@columns" class="empty">No logs match that filter.</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
         </div>
-    </details>
-
-    <details class="card txn-history-dropdown" id="error-logs">
-        <summary class="txn-history-summary">
-            <span class="txn-history-title">Error Logs</span>
-            <span class="count-pill" aria-label="@Model.Errors.Count records">@Model.Errors.Count</span>
-        </summary>
-        <div class="txn-history-body">
-            <p class="muted txn-history-note">Stack traces are stored for administrators and are not shown here.</p>
-            @if (Model.Errors.Count == 0)
-            {
-                <p class="empty">No error logs yet.</p>
-            }
-            else
-            {
-                <div class="table-wrap push-jobs-table-wrap">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>When</th>
-                                <th>Type</th>
-                                <th>Message</th>
-                                <th>Resolved</th>
-                                @if (Model.CanManage)
-                                {
-                                    <th class="col-actions"></th>
-                                }
-                            </tr>
-                        </thead>
-                        <tbody>
-                        @foreach (var e in Model.Errors)
-                        {
-                            <tr>
-                                <td>@e.AtUtc.ToString("yyyy-MM-dd HH:mm")</td>
-                                <td>@e.ErrorType</td>
-                                <td><span class="cell-truncate" title="@e.UserMessage">@e.UserMessage</span></td>
-                                <td>@(e.Resolved ? "Yes" : "No")</td>
-                                @if (Model.CanManage)
-                                {
-                                    <td class="col-actions">
-                                        @if (!e.Resolved)
-                                        {
-                                            <form method="post" asp-page-handler="ResolveError" asp-route-id="@e.ErrorId">
-                                                <button class="btn small secondary" type="submit">Resolve</button>
-                                            </form>
-                                        }
-                                    </td>
-                                }
-                            </tr>
-                        }
-                        </tbody>
-                    </table>
-                </div>
-            }
-        </div>
-    </details>
+    </section>
 </div>
-
 <script>
 (() => {
-  var id = (location.hash || '').replace(/^#/, '');
-  if (!id) return;
-  var el = document.getElementById(id);
-  if (el && el.tagName === 'DETAILS') {
-    el.open = true;
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
+  const search = document.getElementById('logSearch');
+  const emptyRow = document.getElementById('logSearchEmpty');
+  const count = document.querySelector('[data-log-count]');
+  const filters = Array.from(document.querySelectorAll('[data-log-filter]'));
+  let kind = 'all';
+  const rows = () => Array.from(document.querySelectorAll('#logsTable tbody tr[data-log-row]'));
+  const apply = () => {
+    const q = (search?.value || '').trim().toLowerCase();
+    let visible = 0;
+    rows().forEach((tr) => {
+      const rowKind = tr.getAttribute('data-log-kind') || '';
+      const text = (tr.getAttribute('data-log-text') || '').toLowerCase();
+      const show = (kind === 'all' || rowKind === kind) && (!q || text.includes(q));
+      tr.hidden = !show;
+      if (show) visible++;
+    });
+    if (emptyRow) emptyRow.hidden = visible > 0 || rows().length === 0;
+    if (count) count.textContent = `${visible} record${visible === 1 ? '' : 's'}`;
+  };
+  filters.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      kind = btn.getAttribute('data-log-filter') || 'all';
+      filters.forEach((item) => item.classList.toggle('is-active', item === btn));
+      apply();
+    });
+  });
+  search?.addEventListener('input', apply);
+  search?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== 'Escape') return;
+    e.preventDefault();
+    if (e.key === 'Escape') search.value = '';
+    apply();
+  });
+  const hashKind = { 'error-logs': 'error', 'audit-logs': 'audit', 'history-transaction-logs': 'transaction' };
+  const hashed = hashKind[(location.hash || '').replace(/^#/, '')];
+  if (hashed) document.querySelector(`[data-log-filter="${hashed}"]`)?.click();
 })();
 </script>

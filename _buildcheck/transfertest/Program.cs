@@ -17,6 +17,7 @@ using SqlAccountSync.Models;
 using SqlAccountSync.Options;
 using SqlAccountSync.Services.Audit;
 using SqlAccountSync.Services.Databases;
+using SqlAccountSync.Services.Items;
 using SqlAccountSync.Services.Mapping;
 using SqlAccountSync.Services.Queue;
 using SqlAccountSync.Services.Secrets;
@@ -760,7 +761,9 @@ static IHost BuildHost(string root)
     builder.Services.AddSingleton<CompanyConnectionFactory>();
     builder.Services.AddScoped<IDatabaseRegistry, DatabaseRegistry>();
     builder.Services.AddScoped<ISqlAccountReadAdapter, FirebirdReadAdapter>();
+    builder.Services.AddScoped<IItemPrerequisiteService, ItemPrerequisiteService>();
     builder.Services.AddScoped<ISqlAccountWriteAdapter>(sp => sp.GetRequiredService<SqlAccountApiWriteAdapter>());
+    builder.Services.AddScoped<ITransferMasterEnsure, TransferMasterEnsure>();
     builder.Services.AddScoped<IMappingService, MappingService>();
     builder.Services.AddScoped<IValidationService, ValidationService>();
     builder.Services.AddScoped<IJobQueue, JobQueue>();

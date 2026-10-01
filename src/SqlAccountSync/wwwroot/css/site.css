@@ -1754,9 +1754,70 @@ code {
   white-space: nowrap;
 }
 .logs-page {
-  display: grid;
-  gap: 12px;
   margin-bottom: 16px;
+  padding: 12px;
+}
+.logs-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.logs-filter {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--ice-border-soft);
+  background: var(--ice-surface-alt);
+  color: var(--ice-heading);
+  border-radius: 999px;
+  padding: 6px 10px 6px 12px;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.logs-filter.is-active {
+  background: var(--ice-accent-soft);
+  border-color: #c9dff0;
+}
+.logs-filter .count-pill {
+  min-width: 1.5rem;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ice-surface);
+}
+.logs-page .logs-panel {
+  display: flex;
+  flex-direction: column;
+  height: min(680px, max(240px, calc(100dvh - 220px)));
+  overflow: hidden;
+  border: 1px solid var(--ice-border-soft);
+  border-radius: var(--ice-radius);
+  background: var(--ice-surface);
+}
+.logs-page .logs-panel > .push-panel-table-wrap {
+  display: block;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+.logs-page .push-panel-head {
+  border-bottom: 1px solid var(--ice-border-soft);
+  background: var(--ice-surface-muted);
+}
+.logs-page .push-panel-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--ice-surface-muted);
+}
+.logs-page .col-actions form {
+  display: inline;
+  margin: 0;
 }
 .txn-layout {
   display: grid;
