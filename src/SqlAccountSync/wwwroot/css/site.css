@@ -1440,6 +1440,41 @@ code {
   gap: 8px;
   margin-top: 10px;
 }
+.accounts-sync .push-panel,
+.txn-form-card .push-panel {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  height: min(680px, max(240px, calc(100dvh - 300px)));
+  border: 1px solid var(--ice-border-soft);
+  border-radius: var(--ice-radius);
+  background: var(--ice-surface);
+  overflow: hidden;
+}
+.accounts-sync .push-panel > .push-panel-table-wrap,
+.txn-form-card .push-panel > .push-panel-table-wrap {
+  display: block;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.accounts-sync .push-panel-table thead th,
+.txn-form-card .push-panel-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--ice-surface-muted);
+}
+.txn-form-card .push-panel-head {
+  border-bottom: 1px solid var(--ice-border-soft);
+  background: var(--ice-surface-muted);
+}
 .sync-jobs-section {
   margin-top: 16px;
   padding-top: 16px;
@@ -2698,7 +2733,9 @@ input:focus, select:focus, textarea:focus {
     gap: 16px;
   }
   .multi-push .push-layout { grid-template-columns: 1fr; }
-  .multi-push .push-panel { height: min(420px, 70vh); }
+  .multi-push .push-panel,
+  .accounts-sync .push-panel,
+  .txn-form-card .push-panel { height: min(420px, 70vh); }
   .multi-push .push-panel-head { flex-wrap: wrap; }
   .multi-push .push-panel-search {
     max-width: none;

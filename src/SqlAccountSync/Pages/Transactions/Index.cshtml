@@ -64,10 +64,11 @@
                 <div id="txnQtyOverrideFields"></div>
 
                 <div class="push-layout">
-                    <div class="push-panel-table-wrap">
+                    <section class="push-panel">
                         <div class="push-panel-head">
                             <h3>Documents</h3>
                         </div>
+                        <div class="push-panel-table-wrap">
                         <table class="push-panel-table">
                             <thead>
                                 <tr>
@@ -128,12 +129,14 @@
                                 }
                             </tbody>
                         </table>
-                    </div>
+                        </div>
+                    </section>
 
                     <div class="push-flow-bridge" aria-hidden="true">
                         <span class="push-flow-arrow">→</span>
                     </div>
 
+                    <section class="push-panel">
                     <div class="push-panel-table-wrap">
                         <table class="push-panel-table">
                             <thead>
@@ -179,6 +182,7 @@
                             </tbody>
                         </table>
                     </div>
+                    </section>
                 </div>
 
                 @if (Model.CanOperate)
