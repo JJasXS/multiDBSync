@@ -1377,8 +1377,10 @@ code {
 }
 .multi-push .push-panel {
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+  height: min(680px, max(240px, calc(100dvh - 300px)));
   border: 1px solid var(--ice-border-soft);
   border-radius: var(--ice-radius);
   background: var(--ice-surface);
@@ -1407,9 +1409,21 @@ code {
   background: var(--ice-surface);
 }
 .multi-push .push-panel-table-wrap {
+  display: block;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
   border: 0;
   border-radius: 0;
-  min-height: 220px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.multi-push .push-panel-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--ice-surface-muted);
 }
 .multi-push .push-panel-table thead th,
 .multi-push .push-panel-table tbody td {
@@ -2684,6 +2698,7 @@ input:focus, select:focus, textarea:focus {
     gap: 16px;
   }
   .multi-push .push-layout { grid-template-columns: 1fr; }
+  .multi-push .push-panel { height: min(420px, 70vh); }
   .multi-push .push-panel-head { flex-wrap: wrap; }
   .multi-push .push-panel-search {
     max-width: none;
