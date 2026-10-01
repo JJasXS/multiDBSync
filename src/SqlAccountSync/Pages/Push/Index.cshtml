@@ -5,7 +5,10 @@
     var entities = PushableEntityCodes.Push;
     var isAccount = Model.IsAccountEntity;
     var recordsTitle = isAccount ? "Accounts" : Model.EntityCode == EntityCodes.Supplier ? "Suppliers" : "Customers";
-    var codeColumns = 2 + (Model.CanOperate ? 1 : 0) + (isAccount && Model.CanOperate ? 1 : 0);
+    var partyColumns = isAccount ? 0 : 4;
+    var codeColumns = 2 + partyColumns + (Model.CanOperate ? 1 : 0) + (isAccount && Model.CanOperate ? 1 : 0);
+    string PartyField(MasterRecord row, string key) =>
+        row.Fields.TryGetValue(key, out var value) ? value : "";
     var selectedRecordCount = Model.Records.Count(r => Model.SelectedCodes.Contains(r.Code, StringComparer.OrdinalIgnoreCase));
     var selectedDbCount = Model.TargetSubs.Count(s => Model.SelectedSubDbIds.Contains(s.DbId));
 }
@@ -62,8 +65,8 @@
                             <p class="push-panel-count" data-push-record-count>@Model.Records.Count records · @selectedRecordCount selected</p>
                         </div>
                         <div class="push-panel-search">
-                            <label class="sr-only" for="pushCodeSearch">Search code or description</label>
-                            <input id="pushCodeSearch" type="search" placeholder="Search code or description..."
+                            <label class="sr-only" for="pushCodeSearch">@(isAccount ? "Search code or description" : "Search code, name, phone, or email")</label>
+                            <input id="pushCodeSearch" type="search" placeholder="@(isAccount ? "Search code or description..." : "Search code, name, phone, or email...")"
                                    autocomplete="off" spellcheck="false" />
                         </div>
                     </div>
@@ -81,6 +84,13 @@
                                     }
                                     <th>Code</th>
                                     <th>Description</th>
+                                    @if (!isAccount)
+                                    {
+                                        <th>Phone</th>
+                                        <th>Email</th>
+                                        <th>Attention</th>
+                                        <th>Area</th>
+                                    }
                                     @if (isAccount && Model.CanOperate)
                                     {
                                         <th class="col-actions">Actions</th>
@@ -102,7 +112,11 @@
                                     var selected = Model.SelectedCodes.Contains(r.Code, StringComparer.OrdinalIgnoreCase);
                                     var indent = r.Fields.TryGetValue("indent", out var ind) ? ind : "";
                                     var desc = string.IsNullOrEmpty(indent) ? r.Description : indent + r.Description;
-                                    <tr data-push-code="@r.Code" data-push-desc="@r.Description">
+                                    var phone = PartyField(r, "phone");
+                                    var email = PartyField(r, "email");
+                                    var attention = PartyField(r, "attention");
+                                    var area = PartyField(r, "area");
+                                    <tr data-push-code="@r.Code" data-push-desc="@r.Description" data-push-extra="@($"{phone} {email} {attention} {area}")">
                                         @if (Model.CanOperate)
                                         {
                                             <td class="col-check">
@@ -112,6 +126,13 @@
                                         }
                                         <td class="code-cell">@r.Code</td>
                                         <td><span class="cell-truncate" title="@r.Description">@desc</span></td>
+                                        @if (!isAccount)
+                                        {
+                                            <td class="push-party-col" title="@phone">@phone</td>
+                                            <td class="push-party-col" title="@email">@email</td>
+                                            <td class="push-party-col" title="@attention">@attention</td>
+                                            <td class="push-party-col" title="@area">@area</td>
+                                        }
                                         @if (isAccount && Model.CanOperate)
                                         {
                                             <td class="col-actions">
@@ -299,7 +320,8 @@
     rows().forEach((tr) => {
       const code = (tr.getAttribute('data-push-code') || '').toLowerCase();
       const desc = (tr.getAttribute('data-push-desc') || '').toLowerCase();
-      const show = !q || code.includes(q) || desc.includes(q);
+      const extra = (tr.getAttribute('data-push-extra') || '').toLowerCase();
+      const show = !q || code.includes(q) || desc.includes(q) || extra.includes(q);
       tr.hidden = !show;
       if (show) visible++;
     });

@@ -1559,6 +1559,12 @@ code {
 .multi-push .push-panel-table tbody tr:has(input:checked) td {
   background: var(--ice-accent-soft);
 }
+.multi-push .push-party-col {
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .multi-push .push-actions {
   display: flex;
   justify-content: flex-end;

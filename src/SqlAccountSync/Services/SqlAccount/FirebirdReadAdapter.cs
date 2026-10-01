@@ -443,9 +443,11 @@ ORDER BY CODE";
                     return [];
                 var cols = await Columns(conn, tx, table, cancellationToken).ConfigureAwait(false);
                 var nameCol = cols.FirstOrDefault(c => c is "COMPANYNAME" or "DESCRIPTION" or "NAME") ?? "CODE";
-                var sql = $@"
-SELECT FIRST 500 TRIM(CODE) AS CODE, TRIM(COALESCE({nameCol}, CODE, '')) AS DESCRIPTION
-FROM {table} ORDER BY CODE";
+                var branchTable = await ResolveBranchTable(conn, tx, entityCode, cancellationToken).ConfigureAwait(false);
+                var branchCols = branchTable is null
+                    ? []
+                    : await Columns(conn, tx, branchTable, cancellationToken).ConfigureAwait(false);
+                var sql = PartyListSql(table, nameCol, cols, branchTable, branchCols);
                 SqlGuard.EnsureSelectOnly(sql);
                 await using var cmd = conn.CreateCommand();
                 cmd.Transaction = tx;
@@ -453,18 +455,7 @@ FROM {table} ORDER BY CODE";
                 await using var r = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                 var list = new List<MasterRecord>();
                 while (await r.ReadAsync(cancellationToken).ConfigureAwait(false))
-                {
-                    list.Add(new MasterRecord
-                    {
-                        Code = Convert.ToString(r["CODE"])?.Trim() ?? "",
-                        Description = Convert.ToString(r["DESCRIPTION"])?.Trim() ?? "",
-                        Key = Convert.ToString(r["CODE"])?.Trim() ?? "",
-                        Fields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-                        {
-                            ["partyType"] = entityCode.ToUpperInvariant()
-                        }
-                    });
-                }
+                    list.Add(ReadPartyRow(r, entityCode));
                 return list;
             }, cancellationToken).ConfigureAwait(false);
         }
@@ -473,6 +464,106 @@ FROM {table} ORDER BY CODE";
             _logger.LogWarning(ex, "Party list query failed for {Db} {Entity}", db.DbCode, entityCode);
             return [];
         }
+    }
+
+    private static string PartyListSql(
+        string table, string nameCol, IReadOnlyCollection<string> headerCols,
+        string? branchTable, IReadOnlyCollection<string> branchCols)
+    {
+        var areaCol = FirstCol(headerCols, "AREA");
+        var canJoin = branchTable is not null
+            && FirstCol(branchCols, "CODE") is not null
+            && FirstCol(branchCols, "DTLKEY") is not null;
+        var phoneCol = canJoin ? FirstCol(branchCols, "PHONE1", "PHONE", "TEL") : null;
+        var mobileCol = canJoin ? FirstCol(branchCols, "MOBILE") : null;
+        var emailCol = canJoin ? FirstCol(branchCols, "EMAIL") : null;
+        var attentionCol = canJoin ? FirstCol(branchCols, "ATTENTION") : null;
+        var join = canJoin ? BranchJoin(branchTable!, FirstCol(branchCols, "BRANCHTYPE") is not null) : "";
+        return $@"
+SELECT FIRST 500
+  TRIM(p.CODE) AS CODE,
+  TRIM(COALESCE(p.{nameCol}, p.CODE, '')) AS DESCRIPTION,
+  {TextCol(areaCol is null ? null : $"p.{areaCol}", "AREA")},
+  {PhoneSql(phoneCol, mobileCol)},
+  {TextCol(emailCol is null ? null : $"b.{emailCol}", "EMAIL")},
+  {TextCol(attentionCol is null ? null : $"b.{attentionCol}", "ATTENTION")}
+FROM {table} p
+{join}
+ORDER BY p.CODE";
+    }
+
+    private static string BranchJoin(string branchTable, bool preferBilling)
+    {
+        var order = preferBilling
+            ? "CASE WHEN TRIM(br.BRANCHTYPE) = 'B' THEN 0 ELSE 1 END, br.DTLKEY"
+            : "br.DTLKEY";
+        return $@"LEFT JOIN {branchTable} b ON b.DTLKEY = (
+  SELECT FIRST 1 br.DTLKEY FROM {branchTable} br
+  WHERE br.CODE = p.CODE
+  ORDER BY {order})";
+    }
+
+    private static string PhoneSql(string? phoneCol, string? mobileCol)
+    {
+        if (phoneCol is not null && mobileCol is not null)
+            return $"TRIM(COALESCE(NULLIF(TRIM(COALESCE(CAST(b.{phoneCol} AS VARCHAR(80)), '')), ''), CAST(b.{mobileCol} AS VARCHAR(80)), '')) AS PHONE";
+        if (phoneCol is not null)
+            return TextCol($"b.{phoneCol}", "PHONE");
+        if (mobileCol is not null)
+            return TextCol($"b.{mobileCol}", "PHONE");
+        return "CAST('' AS VARCHAR(1)) AS PHONE";
+    }
+
+    private static string TextCol(string? expr, string alias) =>
+        expr is null
+            ? $"CAST('' AS VARCHAR(1)) AS {alias}"
+            : $"TRIM(COALESCE(CAST({expr} AS VARCHAR(200)), '')) AS {alias}";
+
+    private static string? FirstCol(IReadOnlyCollection<string> cols, params string[] names) =>
+        names.FirstOrDefault(n => cols.Contains(n, StringComparer.OrdinalIgnoreCase));
+
+    private static MasterRecord ReadPartyRow(FbDataReader r, string entityCode)
+    {
+        var fields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["partyType"] = entityCode.ToUpperInvariant()
+        };
+        PutField(fields, r, "area", "AREA");
+        PutField(fields, r, "phone", "PHONE");
+        PutField(fields, r, "email", "EMAIL");
+        PutField(fields, r, "attention", "ATTENTION");
+        var code = Convert.ToString(r["CODE"])?.Trim() ?? "";
+        return new MasterRecord
+        {
+            Code = code,
+            Description = Convert.ToString(r["DESCRIPTION"])?.Trim() ?? "",
+            Key = code,
+            Fields = fields
+        };
+    }
+
+    private static void PutField(Dictionary<string, string> fields, FbDataReader r, string key, string col)
+    {
+        if (!HasCol(r, col))
+            return;
+        var value = Convert.ToString(r[col])?.Trim() ?? "";
+        if (value.Length == 0 || value.Trim('-').Length == 0)
+            return;
+        fields[key] = value;
+    }
+
+    private async Task<string?> ResolveBranchTable(
+        FbConnection conn, FbTransaction tx, string entityCode, CancellationToken ct)
+    {
+        var candidates = string.Equals(entityCode, EntityCodes.Customer, StringComparison.OrdinalIgnoreCase)
+            ? new[] { "AR_CUSTBRANCH", "AR_CUSTOMERBRANCH", "AR_BRANCH" }
+            : new[] { "AP_SUPPBRANCH", "AP_SUPPLIERBRANCH", "AP_BRANCH", "AP_VENDORBRANCH" };
+        foreach (var table in candidates)
+        {
+            if (await TableExistsConn(conn, tx, table, ct).ConfigureAwait(false))
+                return table;
+        }
+        return null;
     }
 
     private async Task<MasterRecord?> QueryPartyDetail(
@@ -825,19 +916,7 @@ FROM {table} ORDER BY CODE";
         FbConnection conn, FbTransaction tx, string entityCode, string code,
         Dictionary<string, string> fields, CancellationToken ct)
     {
-        var candidates = string.Equals(entityCode, EntityCodes.Customer, StringComparison.OrdinalIgnoreCase)
-            ? new[] { "AR_CUSTBRANCH", "AR_CUSTOMERBRANCH", "AR_BRANCH" }
-            : new[] { "AP_SUPPBRANCH", "AP_SUPPLIERBRANCH", "AP_BRANCH", "AP_VENDORBRANCH" };
-
-        string? branchTable = null;
-        foreach (var t in candidates)
-        {
-            if (await TableExistsConn(conn, tx, t, ct).ConfigureAwait(false))
-            {
-                branchTable = t;
-                break;
-            }
-        }
+        var branchTable = await ResolveBranchTable(conn, tx, entityCode, ct).ConfigureAwait(false);
         if (branchTable is null)
             return;
 
