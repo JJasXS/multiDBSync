@@ -12,15 +12,6 @@
     var selectedRecordCount = Model.Records.Count(r => Model.SelectedCodes.Contains(r.Code, StringComparer.OrdinalIgnoreCase));
     var selectedDbCount = Model.TargetSubs.Count(s => Model.SelectedSubDbIds.Contains(s.DbId));
 }
-@section TopbarActions {
-    @if (isJobs && Model.CanOperate)
-    {
-        <button class="btn" type="submit" form="manualSyncForm" asp-page-handler="Enqueue"
-                data-confirm="Queue a live synchronization? Destination data may be created."
-                data-confirm-title="Confirm sync"
-                data-confirm-ok="Sync now">Sync now</button>
-    }
-}
 
 @if (Model.FlashToast is not null)
 {
@@ -402,85 +393,152 @@
 }
 else
 {
-    @if (Model.CanOperate)
-    {
-    <form id="manualSyncForm" method="post" class="manual-sync-form">
-        <input type="hidden" name="Tab" value="jobs" />
-        <div class="form-grid manual-sync-fields">
-            <div>
-                <label>Master</label>
-                <select asp-for="MasterDbId">@foreach (var d in Model.Databases) { <option value="@d.DbId">@d.DisplayName</option> }</select>
-            </div>
-            <div>
-                <label>Sub</label>
-                <select asp-for="SubDbId">@foreach (var d in Model.Databases) { <option value="@d.DbId">@d.DisplayName</option> }</select>
-            </div>
-            <div>
-                <label>Entity</label>
-                <select asp-for="JobEntityCode">
-                    <option value="CUSTOMER">CUSTOMER</option>
-                    <option value="SUPPLIER">SUPPLIER</option>
-                    <option value="ACCOUNT">ACCOUNT</option>
-                </select>
-            </div>
-            <div><label>Code</label><input asp-for="MasterCode" /></div>
-        </div>
-    </form>
-    }
-    <partial name="_DryRunToast" model="Model.DryRun" />
-    <div class="sync-jobs-section">
-        <div class="table-wrap push-jobs-table-wrap">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Job</th>
-                        <th>Kind</th>
-                        <th>Status</th>
-                        <th>Attempts</th>
-                        <th class="col-job-error">Error</th>
-                        @if (Model.CanOperate)
-                        {
-                            <th class="col-actions"></th>
-                        }
-                    </tr>
-                </thead>
-                <tbody>
-                @foreach (var j in Model.Jobs)
-                {
-                    <tr id="job-@j.JobId">
-                        <td>@j.JobId</td>
-                        <td>@SyncDisplayNames.JobKind(j.JobKind, j.DryRun)</td>
-                        <td><span class="badge badge-@(j.Status.ToLowerInvariant())">@j.Status</span></td>
-                        <td>@j.Attempts / @j.MaxAttempts</td>
-                        <td class="col-job-error"><span class="job-error-text">@j.ErrorMessage</span></td>
-                        @if (Model.CanOperate)
-                        {
-                            <td class="col-actions">
-                                @if (j.Status is "PROCESSING")
+    var jobColumns = Model.CanOperate ? 6 : 5;
+    <div class="push-workspace multi-push">
+        @if (Model.CanOperate)
+        {
+            <form id="manualSyncForm" method="post" class="push-source-form">
+                <input type="hidden" name="Tab" value="jobs" />
+                <div class="route-fields push-route-fields jobs-route-fields">
+                    <div class="route-field">
+                        <label for="MasterDbId">Source</label>
+                        <select asp-for="MasterDbId">@foreach (var d in Model.Databases) { <option value="@d.DbId">@d.DisplayName</option> }</select>
+                    </div>
+                    <span class="route-arrow push-route-arrow" aria-hidden="true">→</span>
+                    <div class="route-field">
+                        <label for="SubDbId">Target</label>
+                        <select asp-for="SubDbId">@foreach (var d in Model.Databases) { <option value="@d.DbId">@d.DisplayName</option> }</select>
+                    </div>
+                    <div class="route-field">
+                        <label for="JobEntityCode">Entity</label>
+                        <select asp-for="JobEntityCode">
+                            <option value="CUSTOMER">CUSTOMER</option>
+                            <option value="SUPPLIER">SUPPLIER</option>
+                            <option value="ACCOUNT">ACCOUNT</option>
+                        </select>
+                    </div>
+                    <div class="route-field">
+                        <label for="MasterCode">Code</label>
+                        <input asp-for="MasterCode" placeholder="Code" />
+                    </div>
+                </div>
+            </form>
+        }
+        <partial name="_DryRunToast" model="Model.DryRun" />
+        <div class="push-layout jobs-layout">
+            <section class="push-panel">
+                <div class="push-panel-head">
+                    <div>
+                        <h3>Jobs</h3>
+                        <p class="push-panel-count" data-job-count>@Model.Jobs.Count jobs</p>
+                    </div>
+                    <div class="push-panel-search">
+                        <label class="sr-only" for="jobSearch">Search jobs</label>
+                        <input id="jobSearch" type="search" placeholder="Search job, status, or error..." autocomplete="off" spellcheck="false" />
+                    </div>
+                </div>
+                <div class="push-panel-table-wrap push-jobs-table-wrap">
+                    <table class="push-panel-table" id="jobsTable">
+                        <thead>
+                            <tr>
+                                <th>Job</th>
+                                <th>Kind</th>
+                                <th>Status</th>
+                                <th>Attempts</th>
+                                <th class="col-job-error">Error</th>
+                                @if (Model.CanOperate)
                                 {
-                                    <form method="post" asp-page-handler="Unlock" asp-route-jobId="@j.JobId" style="display:inline">
-                                        <input type="hidden" name="Tab" value="jobs" />
-                                        <button class="btn small secondary" type="submit" data-confirm="Unlock this stuck PROCESSING job so the worker can retry it?">Unlock</button>
-                                    </form>
-                                    <form method="post" asp-page-handler="Cancel" asp-route-jobId="@j.JobId" style="display:inline">
-                                        <input type="hidden" name="Tab" value="jobs" />
-                                        <button class="btn small secondary" type="submit" data-confirm="Cancel this PROCESSING job?">Cancel</button>
-                                    </form>
+                                    <th class="col-actions"></th>
                                 }
-                                else if (j.Status is "PENDING" or "RETRYING" or "FAILED")
-                                {
-                                    <form method="post" asp-page-handler="Cancel" asp-route-jobId="@j.JobId">
-                                        <input type="hidden" name="Tab" value="jobs" />
-                                        <button class="btn small secondary" type="submit">Cancel</button>
-                                    </form>
-                                }
-                            </td>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        @if (Model.Jobs.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="@jobColumns" class="empty">No jobs.</td>
+                            </tr>
                         }
-                    </tr>
-                }
-                </tbody>
-            </table>
+                        else
+                        {
+                            @foreach (var j in Model.Jobs)
+                            {
+                                var kind = SyncDisplayNames.JobKind(j.JobKind, j.DryRun);
+                                <tr id="job-@j.JobId" data-job-row data-job-text="@($"{j.JobId} {kind} {j.Status} {j.ErrorMessage}")">
+                                    <td>@j.JobId</td>
+                                    <td>@kind</td>
+                                    <td><span class="badge badge-@(j.Status.ToLowerInvariant())">@j.Status</span></td>
+                                    <td>@j.Attempts / @j.MaxAttempts</td>
+                                    <td class="col-job-error"><span class="job-error-text">@j.ErrorMessage</span></td>
+                                    @if (Model.CanOperate)
+                                    {
+                                        <td class="col-actions">
+                                            @if (j.Status is "PROCESSING")
+                                            {
+                                                <form method="post" asp-page-handler="Unlock" asp-route-jobId="@j.JobId" style="display:inline">
+                                                    <input type="hidden" name="Tab" value="jobs" />
+                                                    <button class="btn small secondary" type="submit" data-confirm="Unlock this stuck PROCESSING job so the worker can retry it?">Unlock</button>
+                                                </form>
+                                                <form method="post" asp-page-handler="Cancel" asp-route-jobId="@j.JobId" style="display:inline">
+                                                    <input type="hidden" name="Tab" value="jobs" />
+                                                    <button class="btn small secondary" type="submit" data-confirm="Cancel this PROCESSING job?">Cancel</button>
+                                                </form>
+                                            }
+                                            else if (j.Status is "PENDING" or "RETRYING" or "FAILED")
+                                            {
+                                                <form method="post" asp-page-handler="Cancel" asp-route-jobId="@j.JobId">
+                                                    <input type="hidden" name="Tab" value="jobs" />
+                                                    <button class="btn small secondary" type="submit">Cancel</button>
+                                                </form>
+                                            }
+                                        </td>
+                                    }
+                                </tr>
+                            }
+                            <tr id="jobSearchEmpty" hidden>
+                                <td colspan="@jobColumns" class="empty">No jobs match that search.</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            </section>
         </div>
+        @if (Model.CanOperate)
+        {
+            <div class="push-actions">
+                <button class="btn" type="submit" form="manualSyncForm" asp-page-handler="Enqueue"
+                        data-confirm="Queue a live synchronization? Destination data may be created."
+                        data-confirm-title="Confirm sync"
+                        data-confirm-ok="Sync now">Sync now</button>
+            </div>
+        }
     </div>
+<script>
+(() => {
+  const search = document.getElementById('jobSearch');
+  const emptyRow = document.getElementById('jobSearchEmpty');
+  const count = document.querySelector('[data-job-count]');
+  const rows = () => Array.from(document.querySelectorAll('#jobsTable tbody tr[data-job-row]'));
+  const apply = () => {
+    const q = (search?.value || '').trim().toLowerCase();
+    let visible = 0;
+    rows().forEach((tr) => {
+      const show = !q || (tr.getAttribute('data-job-text') || '').toLowerCase().includes(q);
+      tr.hidden = !show;
+      if (show) visible++;
+    });
+    if (emptyRow) emptyRow.hidden = visible > 0 || rows().length === 0;
+    if (count) count.textContent = `${visible} job${visible === 1 ? '' : 's'}`;
+  };
+  search?.addEventListener('input', apply);
+  search?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== 'Escape') return;
+    e.preventDefault();
+    if (e.key === 'Escape') search.value = '';
+    apply();
+  });
+})();
+</script>
 }
 </div>

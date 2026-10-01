@@ -388,7 +388,11 @@ public class EditModel : SyncPageModel
         var id = await _registry.SaveAsync(Db, CurrentEmail);
         await SaveApiKeysAsync(id);
         await WriteDatabaseAuditAsync(wasNew, id);
-        return FromDashboard ? RedirectToPage("/Index") : RedirectToPage("Details", new { id });
+        if (FromDashboard)
+            return RedirectToPage("/Index");
+        if (FromList)
+            return RedirectToPage("/Databases/Index");
+        return RedirectToPage("Details", new { id });
     }
 
     private static string DatabaseSaveError(Exception ex)
@@ -404,12 +408,29 @@ public class EditModel : SyncPageModel
     private bool FromDashboard =>
         string.Equals(ReturnTo, "dashboard", StringComparison.OrdinalIgnoreCase);
 
+    private bool FromDetails =>
+        string.Equals(ReturnTo, "details", StringComparison.OrdinalIgnoreCase);
+
+    private bool FromList =>
+        string.Equals(ReturnTo, "list", StringComparison.OrdinalIgnoreCase);
+
     private IActionResult DbFailed(string message)
     {
         if (FromDashboard)
         {
             TempData["DbError"] = message;
             return RedirectToPage("/Index");
+        }
+        if (FromList && Db.DbId > 0)
+        {
+            TempData["DbError"] = message;
+            TempData["DbEditId"] = Db.DbId;
+            return RedirectToPage("/Databases/Index");
+        }
+        if (FromDetails && Db.DbId > 0)
+        {
+            TempData["DbError"] = message;
+            return RedirectToPage("Details", new { id = Db.DbId });
         }
         Message = message;
         PrepareForm();

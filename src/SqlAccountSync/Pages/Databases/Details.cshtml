@@ -41,7 +41,7 @@
                 </form>
                 @if (Model.IsAdmin)
                 {
-                    <a asp-page="Edit" asp-route-id="@d.DbId">Edit</a>
+                    <button type="button" id="openEditDatabase">Edit</button>
                 }
                 <a asp-page="/Transactions/Index">Document transfer</a>
                 <a asp-page="/Logs">View logs</a>
@@ -66,3 +66,123 @@
         <div><dt>Last sync</dt><dd>@(d.LastSyncOk?.ToString("yyyy-MM-dd HH:mm") ?? "—")</dd></div>
     </dl>
 </div>
+@if (Model.IsAdmin)
+{
+    var dbError = TempData["DbError"] as string;
+    var roleIsSub = string.Equals(d.DbRole, DatabaseRoles.Sub, StringComparison.OrdinalIgnoreCase);
+    <dialog id="editDatabaseDialog" class="accounts-modal db-create-modal" aria-labelledby="editDatabaseTitle">
+        <form method="post" asp-page="Edit" asp-route-id="@d.DbId" class="accounts-modal-form">
+            <input type="hidden" name="ReturnTo" value="details" />
+            <input type="hidden" name="Db.DbId" value="@d.DbId" />
+            <input type="hidden" name="Db.FbCharset" value="@d.FbCharset" />
+            <input type="hidden" name="Db.FbDialect" value="@d.FbDialect" />
+            <input type="hidden" name="Db.ApiBaseUrl" value="https://api.sql.my" />
+            <input type="hidden" name="Db.ApiCredRef" value="@d.ApiCredRef" />
+            <input type="hidden" name="Db.Environment" value="@d.Environment" />
+            <input type="hidden" name="Db.Notes" value="@d.Notes" />
+            <div class="accounts-modal-head">
+                <h3 id="editDatabaseTitle">Edit database</h3>
+                <button type="button" class="accounts-modal-close" data-edit-database-close aria-label="Close">&times;</button>
+            </div>
+            <div class="accounts-modal-body">
+                @if (!string.IsNullOrWhiteSpace(dbError))
+                {
+                    <div class="flash flash-err" data-db-error>@dbError</div>
+                }
+                <div class="db-create-layout">
+                    <section class="db-create-sql db-create-panel">
+                        <h4>SQL connection</h4>
+                        <div class="field-row">
+                            <div class="field">
+                                <label for="editDbHost">Host</label>
+                                <input id="editDbHost" name="Db.FbHost" required value="@d.FbHost" />
+                            </div>
+                            <div class="field">
+                                <label for="editDbPort">Port</label>
+                                <input id="editDbPort" name="Db.FbPort" value="@d.FbPort" />
+                            </div>
+                        </div>
+                        <div class="field">
+                            <label for="editDbPath">Database path</label>
+                            <div class="path-input">
+                                <input id="editDbPath" name="Db.FbPath" required value="@d.FbPath" data-db-path data-find-page="/Databases/Edit/@d.DbId" />
+                                <button type="button" class="path-pin" data-db-path-pin aria-label="Choose database file" title="Choose database file">
+                                    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z"/></svg>
+                                </button>
+                                <input type="file" data-db-path-file accept=".fdb,.gdb" hidden />
+                            </div>
+                            <p class="field-hint" data-db-path-hint>Use the pin to choose the company .FDB.</p>
+                        </div>
+                        <div class="field-row">
+                            <div class="field">
+                                <label for="editDbUser">User</label>
+                                <input id="editDbUser" name="Db.FbUser" value="@d.FbUser" />
+                            </div>
+                            <div class="field">
+                                <label for="editDbKey">Master key reference</label>
+                                <input id="editDbKey" name="Db.FbCredRef" type="password" autocomplete="off" value="@d.FbCredRef" required />
+                            </div>
+                        </div>
+                    </section>
+                    <div class="db-create-side db-create-panel">
+                        <h4>Company</h4>
+                        <div class="field">
+                            <label for="editDbCode">Code</label>
+                            <input id="editDbCode" name="Db.DbCode" required value="@d.DbCode" />
+                        </div>
+                        <div class="field">
+                            <label for="editDbName">Name</label>
+                            <input id="editDbName" name="Db.DisplayName" required value="@d.DisplayName" />
+                        </div>
+                        <div class="field">
+                            <span class="field-caption" id="editDbRole">Role</span>
+                            <div class="role-radios" role="radiogroup" aria-labelledby="editDbRole">
+                                <label class="role-choice"><input type="radio" name="Db.DbRole" value="MASTER" @(roleIsSub ? null : "checked") /> Master</label>
+                                <label class="role-choice"><input type="radio" name="Db.DbRole" value="SUB" @(roleIsSub ? "checked" : null) /> Sub</label>
+                            </div>
+                        </div>
+                        <h4 class="db-create-subhead">SQL API</h4>
+                        <div class="field">
+                            <label for="editAccessKey">Access key</label>
+                            <input id="editAccessKey" name="ApiAccessKey" type="password" autocomplete="off" />
+                        </div>
+                        <div class="field">
+                            <label for="editSecretKey">Secret key</label>
+                            <input id="editSecretKey" name="ApiSecretKey" type="password" autocomplete="off" />
+                        </div>
+                        <p class="field-hint">Leave both blank to keep the current secret. Filling both stores them for this company.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="accounts-modal-actions">
+                <button type="button" class="btn btn-ghost" data-edit-database-close>Cancel</button>
+                <button class="btn" type="submit">Save</button>
+            </div>
+        </form>
+    </dialog>
+    <dialog id="dbPathMatches" class="accounts-modal db-path-modal" aria-labelledby="dbPathMatchesTitle">
+        <div class="accounts-modal-form">
+            <div class="accounts-modal-head">
+                <h3 id="dbPathMatchesTitle">Choose a path</h3>
+                <button type="button" class="accounts-modal-close" data-db-path-close aria-label="Close">&times;</button>
+            </div>
+            <div class="accounts-modal-body">
+                <p class="field-hint">More than one file has that name. Pick the path to use.</p>
+                <ul class="db-path-list" data-db-path-matches></ul>
+            </div>
+        </div>
+    </dialog>
+    <script src="~/js/db-path-browse.js" asp-append-version="true"></script>
+    <script>
+        function openEditDatabase() {
+            document.getElementById("openEditDatabase")?.closest("details.kebab")?.removeAttribute("open");
+            const dialog = document.getElementById("editDatabaseDialog");
+            if (dialog && typeof dialog.showModal === "function" && !dialog.open) dialog.showModal();
+        }
+        document.getElementById("openEditDatabase")?.addEventListener("click", openEditDatabase);
+        document.querySelectorAll("[data-edit-database-close]").forEach((btn) => {
+            btn.addEventListener("click", () => document.getElementById("editDatabaseDialog")?.close());
+        });
+        if (document.querySelector("[data-db-error]")) openEditDatabase();
+    </script>
+}

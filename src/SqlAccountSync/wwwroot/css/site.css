@@ -1032,8 +1032,9 @@ code {
   margin: 0;
 }
 .db-row-delete {
-  width: 44px;
+  width: 72px;
   text-align: right;
+  white-space: nowrap;
 }
 .visually-hidden {
   position: absolute;
@@ -1499,6 +1500,12 @@ code {
 .multi-push .push-layout {
   grid-template-columns: minmax(0, 7fr) minmax(0, 3fr);
   gap: 12px;
+}
+.multi-push .jobs-layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+.multi-push .jobs-route-fields {
+  grid-template-columns: minmax(0, 1.2fr) auto minmax(0, 1.2fr) minmax(140px, 0.7fr) minmax(120px, 0.6fr);
 }
 .multi-push .push-panel {
   min-width: 0;
@@ -2863,7 +2870,8 @@ input:focus, select:focus, textarea:focus {
     grid-template-columns: 1fr;
     gap: 16px;
   }
-  .multi-push .push-layout { grid-template-columns: 1fr; }
+  .multi-push .push-layout,
+  .multi-push .jobs-route-fields { grid-template-columns: 1fr; }
   .multi-push .push-panel,
   .accounts-sync .push-panel,
   .txn-form-card .push-panel { height: min(420px, 70vh); }
