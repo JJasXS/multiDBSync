@@ -25,6 +25,7 @@ public interface ITransactionEngine
     Task<SyncTransaction?> GetAsync(int txnPk, CancellationToken cancellationToken = default);
     Task<SyncTransaction?> GetByTxnIdAsync(string txnId, CancellationToken cancellationToken = default);
     Task<List<SyncTransaction>> ListAsync(int take = 200, CancellationToken cancellationToken = default);
+    Task<List<SyncTransaction>> ListPageAsync(DateTime? before, string? beforeKind, int beforeId, int take, CancellationToken cancellationToken = default);
     Task<List<TxnEvent>> TimelineAsync(int txnPk, CancellationToken cancellationToken = default);
     Task<List<(string Code, string Name, string Src, string Dst, string DstPath)>> ListTypesAsync(CancellationToken cancellationToken = default);
 }
@@ -522,6 +523,32 @@ FROM SYNC_TXN T
 JOIN SYNC_DATABASE S ON S.DBID=T.SOURCEDBID
 JOIN SYNC_DATABASE D ON D.DBID=T.DESTDBID
 ORDER BY T.TXNPK DESC", MapTxn, cancellationToken: cancellationToken);
+    }
+
+    public Task<List<SyncTransaction>> ListPageAsync(
+        DateTime? before, string? beforeKind, int beforeId, int take, CancellationToken cancellationToken = default)
+    {
+        if (!_db.IsConfigured)
+            return Task.FromResult(new List<SyncTransaction>());
+        var limit = Math.Clamp(take, 1, 500);
+        return _db.QueryAsync($@"
+SELECT FIRST {limit} * FROM (
+    SELECT T.*, S.DISPLAYNAME AS SOURCENAME, D.DISPLAYNAME AS DESTNAME,
+        CASE WHEN T.UPDATEDAT IS NOT NULL AND EXTRACT(YEAR FROM T.UPDATEDAT) > 2000 THEN T.UPDATEDAT ELSE T.CREATEDAT END AS LOGAT
+    FROM SYNC_TXN T
+    JOIN SYNC_DATABASE S ON S.DBID=T.SOURCEDBID
+    JOIN SYNC_DATABASE D ON D.DBID=T.DESTDBID
+) X
+WHERE @HASCURSOR = 0
+   OR LOGAT < @CURSORAT
+   OR (LOGAT = @CURSORAT AND @CURSORKIND = 'transaction' AND TXNPK < @CURSORID)
+ORDER BY LOGAT DESC, TXNPK DESC", MapTxn, new
+        {
+            HASCURSOR = before.HasValue ? 1 : 0,
+            CURSORAT = before ?? DateTime.MinValue,
+            CURSORKIND = beforeKind ?? "",
+            CURSORID = beforeId
+        }, cancellationToken);
     }
 
     public Task<List<TxnEvent>> TimelineAsync(int txnPk, CancellationToken cancellationToken = default) =>

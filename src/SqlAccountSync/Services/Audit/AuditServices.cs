@@ -10,6 +10,7 @@ public interface IAuditService
     Task WriteAsync(AuditEntry entry, CancellationToken cancellationToken = default);
     Task<List<AuditEntry>> ListAsync(int take = 200, CancellationToken cancellationToken = default);
     Task<List<AuditListItem>> ListDetailedAsync(int take = 200, CancellationToken cancellationToken = default);
+    Task<List<AuditListItem>> ListDetailedPageAsync(DateTime? before, string? beforeKind, int beforeId, int take, CancellationToken cancellationToken = default);
 }
 
 public sealed class AuditService : IAuditService
@@ -62,13 +63,23 @@ VALUES (@AUDITID, CURRENT_TIMESTAMP, @USEREMAIL, @ACTION, @DBID, @ENTITY, @RECOR
         return _db.QueryAsync(ListSql(take), Map, cancellationToken: cancellationToken);
     }
 
-    public async Task<List<AuditListItem>> ListDetailedAsync(int take = 200, CancellationToken cancellationToken = default)
+    public Task<List<AuditListItem>> ListDetailedAsync(int take = 200, CancellationToken cancellationToken = default) =>
+        ListDetailedPageAsync(null, null, 0, take, cancellationToken);
+
+    public async Task<List<AuditListItem>> ListDetailedPageAsync(
+        DateTime? before, string? beforeKind, int beforeId, int take, CancellationToken cancellationToken = default)
     {
         if (!_db.IsConfigured)
             return [];
 
         var limit = Math.Clamp(take, 1, 500);
-        var entries = await _db.QueryAsync(ListSql(limit), Map, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var entries = await _db.QueryAsync(ListPageSql(limit), Map, new
+        {
+            HASCURSOR = before.HasValue ? 1 : 0,
+            CURSORAT = before ?? DateTime.MinValue,
+            CURSORKIND = beforeKind ?? "",
+            CURSORID = beforeId
+        }, cancellationToken).ConfigureAwait(false);
         var jobs = await LoadRecentJobsAsync(Math.Min(limit * 3, 500), cancellationToken).ConfigureAwait(false);
         jobs.AddRange(await LoadMissingJobsAsync(entries, jobs, cancellationToken).ConfigureAwait(false));
         var txns = await _db.QueryAsync($@"
@@ -93,6 +104,15 @@ FROM SYNC_TXN ORDER BY TXNPK DESC", MapTxn, cancellationToken: cancellationToken
 SELECT FIRST {Math.Clamp(take, 1, 500)}
     AUDITID, ATUTC, USEREMAIL, ACTION, DBID, ENTITY, RECORDID, RESULT, IPADDR, SESSIONID, REQUESTID
 FROM SYNC_AUDIT ORDER BY AUDITID DESC";
+
+    private static string ListPageSql(int take) => $@"
+SELECT FIRST {Math.Clamp(take, 1, 500)}
+    AUDITID, ATUTC, USEREMAIL, ACTION, DBID, ENTITY, RECORDID, RESULT, IPADDR, SESSIONID, REQUESTID
+FROM SYNC_AUDIT
+WHERE @HASCURSOR = 0
+   OR ATUTC < @CURSORAT
+   OR (ATUTC = @CURSORAT AND @CURSORKIND = 'audit' AND AUDITID < @CURSORID)
+ORDER BY ATUTC DESC, AUDITID DESC";
 
     private static AuditListItem ResolveItem(
         AuditEntry entry,
@@ -338,6 +358,7 @@ public interface IErrorLogService
 {
     Task<int> WriteAsync(ErrorEntry entry, CancellationToken cancellationToken = default);
     Task<List<ErrorEntry>> ListAsync(bool unresolvedOnly = false, int take = 200, CancellationToken cancellationToken = default);
+    Task<List<ErrorEntry>> ListPageAsync(DateTime? before, string? beforeKind, int beforeId, int take, CancellationToken cancellationToken = default);
     Task ResolveAsync(int errorId, CancellationToken cancellationToken = default);
 }
 
@@ -387,6 +408,26 @@ VALUES (@ERRORID, CURRENT_TIMESTAMP, @TXNPK, @DBID, @ERRORTYPE, @USERMESSAGE, @S
             return Task.FromResult(new List<ErrorEntry>());
         var where = unresolvedOnly ? "WHERE RESOLVED = 0" : "";
         return _db.QueryAsync($"SELECT FIRST {Math.Clamp(take, 1, 500)} * FROM SYNC_ERROR {where} ORDER BY ERRORID DESC", Map, cancellationToken: cancellationToken);
+    }
+
+    public Task<List<ErrorEntry>> ListPageAsync(
+        DateTime? before, string? beforeKind, int beforeId, int take, CancellationToken cancellationToken = default)
+    {
+        if (!_db.IsConfigured)
+            return Task.FromResult(new List<ErrorEntry>());
+        var limit = Math.Clamp(take, 1, 500);
+        return _db.QueryAsync($@"
+SELECT FIRST {limit} * FROM SYNC_ERROR
+WHERE @HASCURSOR = 0
+   OR ATUTC < @CURSORAT
+   OR (ATUTC = @CURSORAT AND @CURSORKIND = 'error' AND ERRORID < @CURSORID)
+ORDER BY ATUTC DESC, ERRORID DESC", Map, new
+        {
+            HASCURSOR = before.HasValue ? 1 : 0,
+            CURSORAT = before ?? DateTime.MinValue,
+            CURSORKIND = beforeKind ?? "",
+            CURSORID = beforeId
+        }, cancellationToken);
     }
 
     public Task ResolveAsync(int errorId, CancellationToken cancellationToken = default) =>

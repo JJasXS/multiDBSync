@@ -2,15 +2,18 @@
 @model SqlAccountSync.Pages.LogsModel
 @{
     ViewData["Title"] = "Logs";
-    var showActions = Model.CanOperate || Model.CanManage || Model.Rows.Any(r => !string.IsNullOrWhiteSpace(r.LinkUrl));
+    var showActions = Model.ShowActions;
     var columns = showActions ? 5 : 4;
+    var txnCount = Model.Rows.Count(r => r.Kind == "transaction");
+    var auditCount = Model.Rows.Count(r => r.Kind == "audit");
+    var errorCount = Model.Rows.Count(r => r.Kind == "error");
 }
 <div class="card logs-page">
     <div class="logs-filters" role="tablist" aria-label="Log type">
         <button type="button" class="logs-filter is-active" data-log-filter="all">All <span class="count-pill">@Model.Rows.Count</span></button>
-        <button type="button" class="logs-filter" data-log-filter="transaction">Transactions <span class="count-pill">@Model.Transactions.Count</span></button>
-        <button type="button" class="logs-filter" data-log-filter="audit">Audit <span class="count-pill">@Model.Audits.Count</span></button>
-        <button type="button" class="logs-filter" data-log-filter="error">Errors <span class="count-pill">@Model.Errors.Count</span></button>
+        <button type="button" class="logs-filter" data-log-filter="transaction">Transactions <span class="count-pill">@txnCount</span></button>
+        <button type="button" class="logs-filter" data-log-filter="audit">Audit <span class="count-pill">@auditCount</span></button>
+        <button type="button" class="logs-filter" data-log-filter="error">Errors <span class="count-pill">@errorCount</span></button>
     </div>
     <section class="push-panel logs-panel">
         <div class="push-panel-head">
@@ -23,7 +26,7 @@
                 <input id="logSearch" type="search" placeholder="Search logs..." autocomplete="off" spellcheck="false" />
             </div>
         </div>
-        <div class="push-panel-table-wrap">
+        <div class="push-panel-table-wrap" data-log-more="@(Model.HasMore ? "1" : "0")" data-log-actions="@(showActions ? "1" : "0")">
             <table class="push-panel-table" id="logsTable">
                 <thead>
                     <tr>
@@ -37,45 +40,23 @@
                         }
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="logRows">
                 @if (Model.Rows.Count == 0)
                 {
-                    <tr>
+                    <tr data-log-empty>
                         <td colspan="@columns" class="empty">No logs yet.</td>
                     </tr>
                 }
                 else
                 {
-                    @foreach (var row in Model.Rows)
-                    {
-                        <tr data-log-row data-log-kind="@row.Kind" data-log-text="@($"{row.KindLabel} {row.Detail} {row.Status}")">
-                            <td>@row.At.ToString("yyyy-MM-dd HH:mm")</td>
-                            <td>@row.KindLabel</td>
-                            <td><span class="cell-truncate" title="@row.Detail">@row.Detail</span></td>
-                            <td><span class="badge @row.BadgeClass" title="@row.StatusTitle">@row.Status</span></td>
-                            @if (showActions)
-                            {
-                                <td class="col-actions">
-                                    @if (!string.IsNullOrWhiteSpace(row.LinkUrl))
-                                    {
-                                        <a class="btn small secondary" href="@row.LinkUrl">@(string.IsNullOrWhiteSpace(row.LinkLabel) ? "Open" : row.LinkLabel)</a>
-                                    }
-                                    @if (row.RetryTxnPk is int txnPk)
-                                    {
-                                        <form method="post" asp-page-handler="Retry" asp-route-txnPk="@txnPk"><button class="btn small" type="submit">Retry</button></form>
-                                    }
-                                    @if (row.ResolveErrorId is int errorId)
-                                    {
-                                        <form method="post" asp-page-handler="ResolveError" asp-route-id="@errorId"><button class="btn small secondary" type="submit">Resolve</button></form>
-                                    }
-                                </td>
-                            }
-                        </tr>
-                    }
+                    <partial name="_LogRows" model="new SqlAccountSync.Pages.LogTableBody { Rows = Model.Rows, ShowActions = showActions }" />
+                }
                     <tr id="logSearchEmpty" hidden>
                         <td colspan="@columns" class="empty">No logs match that filter.</td>
                     </tr>
-                }
+                    <tr id="logLoading" hidden>
+                        <td colspan="@columns" class="empty">Loading more...</td>
+                    </tr>
                 </tbody>
             </table>
         </div>
@@ -85,28 +66,101 @@
 (() => {
   const search = document.getElementById('logSearch');
   const emptyRow = document.getElementById('logSearchEmpty');
+  const loadingRow = document.getElementById('logLoading');
+  const body = document.getElementById('logRows');
+  const scroller = document.querySelector('.logs-page .push-panel-table-wrap');
   const count = document.querySelector('[data-log-count]');
   const filters = Array.from(document.querySelectorAll('[data-log-filter]'));
+  const pills = Object.fromEntries(filters.map((btn) => [btn.getAttribute('data-log-filter'), btn.querySelector('.count-pill')]));
   let kind = 'all';
-  const rows = () => Array.from(document.querySelectorAll('#logsTable tbody tr[data-log-row]'));
+  let hasMore = scroller?.getAttribute('data-log-more') === '1';
+  let loading = false;
+  let generation = 0;
+  const showActions = scroller?.getAttribute('data-log-actions') === '1' ? '1' : '0';
+  const rows = () => Array.from(document.querySelectorAll('#logRows tr[data-log-row]'));
   const apply = () => {
     const q = (search?.value || '').trim().toLowerCase();
+    const counts = { all: 0, transaction: 0, audit: 0, error: 0 };
     let visible = 0;
     rows().forEach((tr) => {
       const rowKind = tr.getAttribute('data-log-kind') || '';
       const text = (tr.getAttribute('data-log-text') || '').toLowerCase();
-      const show = (kind === 'all' || rowKind === kind) && (!q || text.includes(q));
+      const kindOk = kind === 'all' || rowKind === kind;
+      const show = kindOk && (!q || text.includes(q));
       tr.hidden = !show;
+      if (counts[rowKind] !== undefined) counts[rowKind]++;
+      counts.all++;
       if (show) visible++;
     });
     if (emptyRow) emptyRow.hidden = visible > 0 || rows().length === 0;
     if (count) count.textContent = `${visible} record${visible === 1 ? '' : 's'}`;
+    Object.entries(pills).forEach(([key, pill]) => { if (pill) pill.textContent = String(counts[key] || 0); });
+  };
+  const cursorFrom = (tr) => ({
+    before: tr?.getAttribute('data-log-at') || '',
+    beforeKind: tr?.getAttribute('data-log-kind') || '',
+    beforeId: tr?.getAttribute('data-log-id') || '0'
+  });
+  const loadMore = async (reset) => {
+    if ((loading && !reset) || (!hasMore && !reset)) return 0;
+    const gen = reset ? ++generation : generation;
+    loading = true;
+    if (loadingRow) loadingRow.hidden = false;
+    const last = rows().at(-1);
+    const cursor = reset ? { before: '', beforeKind: '', beforeId: '0' } : cursorFrom(last);
+    if (reset) {
+      rows().forEach((tr) => tr.remove());
+      document.querySelector('[data-log-empty]')?.remove();
+      hasMore = true;
+    }
+    const url = new URL(location.pathname, location.origin);
+    url.searchParams.set('handler', 'More');
+    url.searchParams.set('kind', kind);
+    url.searchParams.set('actions', showActions);
+    if (cursor.before) {
+      url.searchParams.set('before', cursor.before);
+      url.searchParams.set('beforeKind', cursor.beforeKind);
+      url.searchParams.set('beforeId', cursor.beforeId);
+    }
+    let added = 0;
+    try {
+      const res = await fetch(url, { headers: { 'X-Requested-With': 'fetch' } });
+      if (gen !== generation) return 0;
+      hasMore = res.headers.get('X-Has-More') === '1';
+      const html = (await res.text()).trim();
+      if (html && loadingRow) loadingRow.insertAdjacentHTML('beforebegin', html);
+      added = html ? 1 : 0;
+      if (!html) hasMore = false;
+    } catch {
+      hasMore = false;
+    } finally {
+      if (gen === generation) {
+        loading = false;
+        if (loadingRow) loadingRow.hidden = true;
+        apply();
+      }
+    }
+    return added;
+  };
+  const fill = async () => {
+    let guard = 0;
+    while (hasMore && scroller && scroller.scrollHeight <= scroller.clientHeight + 8 && guard < 8) {
+      guard++;
+      const added = await loadMore(false);
+      if (!added) break;
+    }
   };
   filters.forEach((btn) => {
     btn.addEventListener('click', () => {
-      kind = btn.getAttribute('data-log-filter') || 'all';
+      const next = btn.getAttribute('data-log-filter') || 'all';
+      if (next === kind && rows().length > 0) {
+        filters.forEach((item) => item.classList.toggle('is-active', item === btn));
+        apply();
+        return;
+      }
+      kind = next;
       filters.forEach((item) => item.classList.toggle('is-active', item === btn));
-      apply();
+      loadMore(true).then(fill);
     });
   });
   search?.addEventListener('input', apply);
@@ -116,8 +170,13 @@
     if (e.key === 'Escape') search.value = '';
     apply();
   });
+  scroller?.addEventListener('scroll', () => {
+    if (scroller.scrollTop + scroller.clientHeight < scroller.scrollHeight - 48) return;
+    loadMore(false).then(fill);
+  });
   const hashKind = { 'error-logs': 'error', 'audit-logs': 'audit', 'history-transaction-logs': 'transaction' };
   const hashed = hashKind[(location.hash || '').replace(/^#/, '')];
   if (hashed) document.querySelector(`[data-log-filter="${hashed}"]`)?.click();
+  else fill();
 })();
 </script>

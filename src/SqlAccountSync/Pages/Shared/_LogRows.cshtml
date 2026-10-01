@@ -1,0 +1,28 @@
+@model SqlAccountSync.Pages.LogTableBody
+@foreach (var row in Model.Rows)
+{
+    var at = row.At.ToString("o", System.Globalization.CultureInfo.InvariantCulture);
+    <tr data-log-row data-log-kind="@row.Kind" data-log-id="@row.SourceId" data-log-at="@at" data-log-text="@($"{row.KindLabel} {row.Detail} {row.Status}")">
+        <td>@row.At.ToString("yyyy-MM-dd HH:mm")</td>
+        <td>@row.KindLabel</td>
+        <td><span class="cell-truncate" title="@row.Detail">@row.Detail</span></td>
+        <td><span class="badge @row.BadgeClass" title="@row.StatusTitle">@row.Status</span></td>
+        @if (Model.ShowActions)
+        {
+            <td class="col-actions">
+                @if (!string.IsNullOrWhiteSpace(row.LinkUrl))
+                {
+                    <a class="btn small secondary" href="@row.LinkUrl">@(string.IsNullOrWhiteSpace(row.LinkLabel) ? "Open" : row.LinkLabel)</a>
+                }
+                @if (row.RetryTxnPk is int txnPk)
+                {
+                    <form method="post" asp-page="/Logs" asp-page-handler="Retry" asp-route-txnPk="@txnPk"><button class="btn small" type="submit">Retry</button></form>
+                }
+                @if (row.ResolveErrorId is int errorId)
+                {
+                    <form method="post" asp-page="/Logs" asp-page-handler="ResolveError" asp-route-id="@errorId"><button class="btn small secondary" type="submit">Resolve</button></form>
+                }
+            </td>
+        }
+    </tr>
+}
