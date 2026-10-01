@@ -12,25 +12,17 @@
 
     <div class="panel-grid two partner-create-grid">
         <section class="card partner-form-card">
-            <div class="card-head partner-form-head">
-                <div>
-                    <h3>Create @Model.EntityTitle.ToLowerInvariant()</h3>
-                    <p class="partner-form-lede">Fill company details — code updates as you type the name.</p>
-                </div>
-            </div>
-
             @if (!Model.CanOperate)
             {
                 <p class="empty">Admin access is required to create suppliers' customers.</p>
             }
             else
             {
-                <form id="createPartnerForm" method="post" asp-page-handler="Create" class="form-stack partner-form">
+                <form id="createPartnerForm" method="post" asp-page-handler="Create" class="partner-form">
                     <input type="hidden" name="Tab" value="partners" />
                     <input type="hidden" asp-for="EntityCode" />
 
-                    <div class="field-group">
-                        <div class="field-group-label">Company</div>
+                    <div class="partner-db-row">
                         <div class="partner-field">
                             <label for="DbId">Database</label>
                             <select asp-for="DbId" id="DbId"
@@ -46,11 +38,8 @@
                             <div class="partner-push-banner">
                                 <label class="check-label" for="PushToSubs">
                                     <input asp-for="PushToSubs" id="PushToSubs" type="checkbox" />
-                                    <span>Also create on sub companies</span>
+                                    <span>Also create on @string.Join(", ", Model.SubTargets.Select(s => s.DisplayName))</span>
                                 </label>
-                                <p class="field-hint">
-                                    Pushes to <strong>@string.Join(", ", Model.SubTargets.Select(s => s.DisplayName))</strong> after create.
-                                </p>
                                 @if (Model.SubTargetsMissingApi.Count > 0)
                                 {
                                     <p class="field-hint warn">
@@ -60,43 +49,43 @@
                                 }
                             </div>
                         }
+                    </div>
+
+                    <div class="partner-main-row">
                         <div class="partner-field">
                             <label for="CompanyName">Company name</label>
                             <input asp-for="CompanyName" id="CompanyName" required maxlength="100" autofocus
                                    placeholder="e.g. John Trading Sdn Bhd" />
                         </div>
-                        <div class="field-pair equal">
-                            <div class="partner-field">
-                                <label for="Code">Code <span class="label-badge">auto</span></label>
-                                <input asp-for="Code" id="Code" required maxlength="10" readonly
-                                       class="input-readonly code-preview"
-                                       pattern="[A-Za-z0-9\-]+"
-                                       title="From company name first letter + next number in that series"
-                                       data-control="@(Model.EntityCode == "SUPPLIER" ? "400" : "300")"
-                                       data-existing-codes='@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Existing.Select(r => r.Code).ToList()))'
-                                       placeholder="@(Model.EntityCode == "SUPPLIER" ? "400-X0001" : "300-X0001")" />
-                                <p class="field-hint">First letter of company name + next free number.</p>
-                            </div>
-                            <div class="partner-field">
-                                <label for="CreditTerm">Credit term</label>
-                                <select asp-for="CreditTerm" id="CreditTerm">
-                                    @if (Model.CreditTerms.Count == 0)
+                        <div class="partner-field">
+                            <label for="Code">Code <span class="label-badge">auto</span></label>
+                            <input asp-for="Code" id="Code" required maxlength="10" readonly
+                                   class="input-readonly code-preview"
+                                   pattern="[A-Za-z0-9\-]+"
+                                   title="First letter of the company name plus the next free number"
+                                   data-control="@(Model.EntityCode == "SUPPLIER" ? "400" : "300")"
+                                   data-existing-codes='@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Existing.Select(r => r.Code).ToList()))'
+                                   placeholder="@(Model.EntityCode == "SUPPLIER" ? "400-X0001" : "300-X0001")" />
+                        </div>
+                        <div class="partner-field">
+                            <label for="CreditTerm">Credit term</label>
+                            <select asp-for="CreditTerm" id="CreditTerm">
+                                @if (Model.CreditTerms.Count == 0)
+                                {
+                                    <option value="30 Days">30 Days</option>
+                                }
+                                else
+                                {
+                                    @foreach (var term in Model.CreditTerms)
                                     {
-                                        <option value="30 Days">30 Days</option>
+                                        <option value="@term.Code">@term.Code - @term.Description</option>
                                     }
-                                    else
-                                    {
-                                        @foreach (var term in Model.CreditTerms)
-                                        {
-                                            <option value="@term.Code">@term.Code - @term.Description</option>
-                                        }
-                                    }
-                                </select>
-                            </div>
+                                }
+                            </select>
                         </div>
                     </div>
 
-                    <div class="field-group">
+                    <div class="partner-optional">
                         <div class="field-group-label">Address <span class="field-group-optional">optional</span></div>
                         <div class="address-stack" role="group" aria-label="Address lines">
                             <input asp-for="Address1" id="Address1" maxlength="40" placeholder="Line 1" aria-label="Address line 1" />
@@ -106,21 +95,12 @@
                         </div>
                     </div>
 
-                    <div class="field-group">
+                    <div class="partner-optional">
                         <div class="field-group-label">Contact <span class="field-group-optional">optional</span></div>
-                        <div class="field-pair equal">
-                            <div class="partner-field">
-                                <label for="Phone1">Phone</label>
-                                <input asp-for="Phone1" id="Phone1" maxlength="25" placeholder="Optional" />
-                            </div>
-                            <div class="partner-field">
-                                <label for="Email">Email</label>
-                                <input asp-for="Email" id="Email" maxlength="80" type="email" placeholder="Optional" />
-                            </div>
-                        </div>
-                        <div class="partner-field">
-                            <label for="Remark">Remark</label>
-                            <input asp-for="Remark" id="Remark" maxlength="80" placeholder="Optional note" />
+                        <div class="partner-contact-row">
+                            <input asp-for="Phone1" id="Phone1" maxlength="25" placeholder="Phone" aria-label="Phone" />
+                            <input asp-for="Email" id="Email" maxlength="80" type="email" placeholder="Email" aria-label="Email" />
+                            <input asp-for="Remark" id="Remark" maxlength="80" placeholder="Remark" aria-label="Remark" />
                         </div>
                     </div>
                 </form>
