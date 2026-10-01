@@ -1366,6 +1366,66 @@ code {
 .sync-page-card .push-workspace {
   padding-top: 12px;
 }
+.multi-push .push-source-form { margin: 0 0 10px; }
+.multi-push .push-route-fields {
+  padding: 6px 10px;
+  gap: 8px 12px;
+}
+.multi-push .push-layout {
+  grid-template-columns: minmax(0, 7fr) minmax(0, 3fr);
+  gap: 12px;
+}
+.multi-push .push-panel {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--ice-border-soft);
+  border-radius: var(--ice-radius);
+  background: var(--ice-surface);
+  overflow: hidden;
+}
+.multi-push .push-panel-head {
+  padding: 8px 12px;
+  gap: 8px 12px;
+  border-bottom: 1px solid var(--ice-border-soft);
+  background: var(--ice-surface-muted);
+}
+.multi-push .push-panel-head h3 { font-size: 13px; }
+.multi-push .push-panel-count {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--ice-text-muted);
+  font-weight: 500;
+}
+.multi-push .push-panel-search {
+  flex: 1 1 180px;
+  max-width: 280px;
+  margin-left: auto;
+}
+.multi-push .push-panel-search input[type="search"] {
+  width: 100%;
+  background: var(--ice-surface);
+}
+.multi-push .push-panel-table-wrap {
+  border: 0;
+  border-radius: 0;
+  min-height: 220px;
+}
+.multi-push .push-panel-table thead th,
+.multi-push .push-panel-table tbody td {
+  padding: 6px 10px;
+  border-right: 0;
+}
+.multi-push .push-panel-table tbody tr:has(input:checked) td {
+  background: var(--ice-accent-soft);
+}
+.multi-push .push-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
 .sync-jobs-section {
   margin-top: 16px;
   padding-top: 16px;
@@ -2623,6 +2683,14 @@ input:focus, select:focus, textarea:focus {
     grid-template-columns: 1fr;
     gap: 16px;
   }
+  .multi-push .push-layout { grid-template-columns: 1fr; }
+  .multi-push .push-panel-head { flex-wrap: wrap; }
+  .multi-push .push-panel-search {
+    max-width: none;
+    margin-left: 0;
+    flex-basis: 100%;
+  }
+  .multi-push .push-actions { flex-wrap: wrap; }
   .push-flow-bridge { display: none; }
   .txn-layout { grid-template-columns: 1fr; }
   .form-grid { grid-template-columns: 1fr; }

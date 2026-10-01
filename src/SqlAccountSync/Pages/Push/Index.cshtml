@@ -4,17 +4,13 @@
     ViewData["Title"] = "Synchronization";
     var entities = PushableEntityCodes.Push;
     var isJobs = Model.IsJobsTab;
-    var sectionLabel = isJobs ? "Manual push" : "Auto push";
+    var sectionLabel = isJobs ? "Manual push" : "Multi Push";
     var sectionHint = isJobs ? "One row at a time" : "Multiple rows";
+    var recordsTitle = Model.EntityCode == EntityCodes.Supplier ? "Suppliers" : "Customers";
+    var selectedRecordCount = Model.Records.Count(r => Model.SelectedCodes.Contains(r.Code, StringComparer.OrdinalIgnoreCase));
+    var selectedDbCount = Model.TargetSubs.Count(s => Model.SelectedSubDbIds.Contains(s.DbId));
 }
 @section TopbarActions {
-    @if (!isJobs && Model.CanOperate)
-    {
-        <button class="btn" type="submit" form="pushForm"
-                data-confirm="Push selected records to the selected target databases?"
-                data-confirm-title="Confirm push"
-                data-confirm-ok="Push">Push</button>
-    }
     @if (isJobs && Model.CanOperate)
     {
         <button class="btn" type="submit" form="manualSyncForm" asp-page-handler="Enqueue"
@@ -30,19 +26,11 @@
 }
 
 <div class="card sync-page-card">
-    <div class="card-head master-section-head @(!isJobs ? "master-section-head--with-search" : null)">
+    <div class="card-head master-section-head">
         <div class="master-section-current">
             <span class="master-section-label">@sectionLabel</span>
             <span class="master-section-hint">@sectionHint</span>
         </div>
-        @if (!isJobs)
-        {
-            <div class="master-section-search accounts-search-field">
-                <label class="sr-only" for="pushCodeSearch">Search code</label>
-                <input id="pushCodeSearch" type="search" placeholder="Filter by code…"
-                       autocomplete="off" spellcheck="false" />
-            </div>
-        }
         <div class="master-section-menu" data-master-menu>
             <button type="button"
                     class="master-section-dots"
@@ -61,7 +49,7 @@
                    role="menuitem"
                    asp-page="/Push/Index" asp-route-tab="push"
                    aria-current="@(!isJobs ? "page" : null)">
-                    <span class="master-section-option-title">Auto push</span>
+                    <span class="master-section-option-title">Multi Push</span>
                     <span class="master-section-option-desc">Multiple rows</span>
                 </a>
                 <a class="master-section-option @(isJobs ? "is-active" : "")"
@@ -77,7 +65,7 @@
 
 @if (!isJobs)
 {
-    <div class="push-workspace">
+    <div class="push-workspace multi-push">
         <form method="get" class="push-source-form">
             <input type="hidden" name="tab" value="push" />
             <div class="route-fields push-route-fields">
@@ -109,7 +97,19 @@
             <input type="hidden" asp-for="EntityCode" />
 
             <div class="push-layout">
-                <div class="push-panel-table-wrap" id="pushCodesPanel">
+                <section class="push-panel" id="pushCodesPanel">
+                    <div class="push-panel-head">
+                        <div>
+                            <h3>@recordsTitle</h3>
+                            <p class="push-panel-count" data-push-record-count>@Model.Records.Count records · @selectedRecordCount selected</p>
+                        </div>
+                        <div class="push-panel-search">
+                            <label class="sr-only" for="pushCodeSearch">Search code or description</label>
+                            <input id="pushCodeSearch" type="search" placeholder="Search code or description..."
+                                   autocomplete="off" spellcheck="false" />
+                        </div>
+                    </div>
+                    <div class="push-panel-table-wrap">
                     <table class="push-panel-table" id="pushCodesTable">
                         <thead>
                             @if (Model.Records.Count > 0)
@@ -140,7 +140,7 @@
                                     var selected = Model.SelectedCodes.Contains(r.Code, StringComparer.OrdinalIgnoreCase);
                                     var indent = r.Fields.TryGetValue("indent", out var ind) ? ind : "";
                                     var desc = string.IsNullOrEmpty(indent) ? r.Description : indent + r.Description;
-                                    <tr data-push-code="@r.Code">
+                                    <tr data-push-code="@r.Code" data-push-desc="@r.Description">
                                         @if (Model.CanOperate)
                                         {
                                             <td class="col-check">
@@ -153,18 +153,22 @@
                                     </tr>
                                 }
                                 <tr id="pushCodeSearchEmpty" class="accounts-search-empty" hidden>
-                                    <td colspan="@(Model.CanOperate ? 3 : 2)" class="empty">No records match that code.</td>
+                                    <td colspan="@(Model.CanOperate ? 3 : 2)" class="empty">No records match that search.</td>
                                 </tr>
                             }
                         </tbody>
                     </table>
-                </div>
+                    </div>
+                </section>
 
-                <div class="push-flow-bridge" aria-hidden="true">
-                    <span class="push-flow-arrow">→</span>
-                </div>
-
-                <div class="push-panel-table-wrap">
+                <section class="push-panel">
+                    <div class="push-panel-head">
+                        <div>
+                            <h3>Target databases</h3>
+                            <p class="push-panel-count" data-push-db-count data-push-db-total="@Model.TargetSubs.Count">@Model.TargetSubs.Count databases · @selectedDbCount selected</p>
+                        </div>
+                    </div>
+                    <div class="push-panel-table-wrap">
                     <table class="push-panel-table">
                         <thead>
                             @if (Model.TargetSubs.Count > 0)
@@ -211,8 +215,19 @@
                             }
                         </tbody>
                     </table>
-                </div>
+                    </div>
+                </section>
             </div>
+            @if (Model.CanOperate)
+            {
+                <div class="push-actions">
+                    <button type="button" class="btn btn-ghost" data-push-clear>Clear selection</button>
+                    <button class="btn" type="submit" data-push-submit
+                            data-confirm="Push selected records to the selected target databases?"
+                            data-confirm-title="Confirm push"
+                            data-confirm-ok="Push">@(selectedRecordCount > 0 ? $"Push {selectedRecordCount} record{(selectedRecordCount == 1 ? "" : "s")} →" : "Push selected →")</button>
+                </div>
+            }
         </form>
     </div>
 
@@ -220,32 +235,50 @@
 (() => {
   const search = document.getElementById('pushCodeSearch');
   const emptyRow = document.getElementById('pushCodeSearchEmpty');
-  if (!search) return;
+  const form = document.getElementById('pushForm');
+  const recordCount = document.querySelector('[data-push-record-count]');
+  const dbCount = document.querySelector('[data-push-db-count]');
+  const submit = document.querySelector('[data-push-submit]');
+  if (!form) return;
 
   const rows = () => Array.from(document.querySelectorAll('#pushCodesTable tbody tr[data-push-code]'));
+  const checkedCount = (group) => form.querySelectorAll(`input[data-check-group="${group}"]:checked`).length;
+  const word = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+  const refresh = (visible) => {
+    const records = checkedCount('master-codes');
+    const dbs = checkedCount('sub-dbs');
+    const dbTotal = Number(dbCount?.getAttribute('data-push-db-total') || 0);
+    if (recordCount) recordCount.textContent = `${word(visible, 'record', 'records')} · ${records} selected`;
+    if (dbCount) dbCount.textContent = `${word(dbTotal, 'database', 'databases')} · ${dbs} selected`;
+    if (submit) submit.textContent = records > 0 ? `Push ${word(records, 'record', 'records')} →` : 'Push selected →';
+  };
   const apply = () => {
-    const q = (search.value || '').trim().toLowerCase();
+    const q = (search?.value || '').trim().toLowerCase();
     let visible = 0;
-    rows().forEach(tr => {
+    rows().forEach((tr) => {
       const code = (tr.getAttribute('data-push-code') || '').toLowerCase();
-      const show = !q || code.includes(q);
+      const desc = (tr.getAttribute('data-push-desc') || '').toLowerCase();
+      const show = !q || code.includes(q) || desc.includes(q);
       tr.hidden = !show;
       if (show) visible++;
     });
     if (emptyRow) emptyRow.hidden = visible > 0 || rows().length === 0;
+    refresh(visible);
   };
 
-  search.addEventListener('input', apply);
-  search.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      return;
-    }
-    if (e.key === 'Escape') {
-      search.value = '';
-      apply();
-    }
+  search?.addEventListener('input', apply);
+  search?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== 'Escape') return;
+    e.preventDefault();
+    if (e.key === 'Escape') search.value = '';
+    apply();
   });
+  form.addEventListener('change', apply);
+  document.querySelector('[data-push-clear]')?.addEventListener('click', () => {
+    form.querySelectorAll('input[type="checkbox"]').forEach((cb) => { cb.checked = false; });
+    apply();
+  });
+  apply();
 })();
 </script>
 }
