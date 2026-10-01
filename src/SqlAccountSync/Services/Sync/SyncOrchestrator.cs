@@ -32,7 +32,7 @@ public interface ISyncOrchestrator
 
 {
 
-    Task<(int JobId, string Message)> EnqueueMasterAsync(int sourceDbId, int destDbId, string entityCode, string masterCode, bool dryRun, string user, CancellationToken cancellationToken = default);
+    Task<(int JobId, string Message)> EnqueueMasterAsync(int sourceDbId, int destDbId, string entityCode, string masterCode, bool dryRun, string user, CancellationToken cancellationToken = default, bool reviveCancelled = true);
 
     Task<(int Queued, int Failed, List<string> Messages)> EnqueueMasterBatchAsync(
 
@@ -48,7 +48,9 @@ public interface ISyncOrchestrator
 
         string user,
 
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+
+        bool reviveCancelled = true);
 
     Task<(int JobId, string Message)> EnqueueMasterUpdateAsync(
         int sourceDbId, int destDbId, string entityCode, string masterCode, string user,
@@ -314,7 +316,7 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
 
     public async Task<(int JobId, string Message)> EnqueueMasterAsync(
 
-        int sourceDbId, int destDbId, string entityCode, string masterCode, bool dryRun, string user, CancellationToken cancellationToken = default)
+        int sourceDbId, int destDbId, string entityCode, string masterCode, bool dryRun, string user, CancellationToken cancellationToken = default, bool reviveCancelled = true)
 
     {
 
@@ -368,7 +370,7 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
 
             IdempotencyKey.ContentHash(payload + (dryRun ? "|DRY" : "")));
 
-        var jobId = await _queue.EnqueueAsync(new SyncJob
+        var enqueued = await _queue.EnqueueAsync(new SyncJob
 
         {
 
@@ -386,31 +388,29 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
 
             IdemKey = idem,
 
-            CreatedBy = user
+            CreatedBy = user,
 
-        }, cancellationToken).ConfigureAwait(false);
+            Priority = PartnerSyncRules.IsPartyEntity(entityCode) ? PartnerSyncRules.PartyPushPriority : 0
 
+        }, cancellationToken, reviveCancelled).ConfigureAwait(false);
 
+        var jobId = enqueued.JobId;
+        if (enqueued.LeftCancelled)
+            return (0, $"{masterCode} was stopped and was not queued again.");
 
-        await _audit.WriteAsync(new AuditEntry
-
+        if (enqueued.IsNew)
         {
-
-            UserEmail = user,
-
-            Action = dryRun ? "DRY_RUN_MASTER" : "ENQUEUE_MASTER",
-
-            DbId = sourceDbId,
-
-            Entity = entityCode,
-
-            RecordId = masterCode,
-
-            Result = "QUEUED",
-
-            RequestId = jobId.ToString(CultureInfo.InvariantCulture)
-
-        }, cancellationToken).ConfigureAwait(false);
+            await _audit.WriteAsync(new AuditEntry
+            {
+                UserEmail = user,
+                Action = dryRun ? "DRY_RUN_MASTER" : "ENQUEUE_MASTER",
+                DbId = sourceDbId,
+                Entity = entityCode,
+                RecordId = masterCode,
+                Result = "QUEUED",
+                RequestId = jobId.ToString(CultureInfo.InvariantCulture)
+            }, cancellationToken).ConfigureAwait(false);
+        }
 
         return (jobId, dryRun
             ? "Dry-run job queued."
@@ -434,7 +434,9 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
 
         string user,
 
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+
+        bool reviveCancelled = true)
 
     {
 
@@ -524,7 +526,7 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
 
             {
 
-                var (jobId, msg) = await EnqueueMasterAsync(sourceDbId, destId, entityCode, code, dryRun, user, cancellationToken)
+                var (jobId, msg) = await EnqueueMasterAsync(sourceDbId, destId, entityCode, code, dryRun, user, cancellationToken, reviveCancelled)
 
                     .ConfigureAwait(false);
 
@@ -590,7 +592,7 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
             source!.DbCode, dest!.DbCode, entityCode, destEntity, masterCode,
             IdempotencyKey.ContentHash(payload + "|UPD"));
 
-        var jobId = await _queue.EnqueueAsync(new SyncJob
+        var jobId = (await _queue.EnqueueAsync(new SyncJob
         {
             JobKind = "MASTER_UPDATE",
             SourceDbId = sourceDbId,
@@ -599,7 +601,7 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
             PayloadJson = payload,
             IdemKey = idem,
             CreatedBy = user
-        }, cancellationToken).ConfigureAwait(false);
+        }, cancellationToken).ConfigureAwait(false)).JobId;
 
         await _audit.WriteAsync(new AuditEntry
         {
@@ -643,7 +645,7 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
             source!.DbCode, dest!.DbCode, entityCode, EntityCodes.Account, code,
             IdempotencyKey.ContentHash(payload + "|DEL"));
 
-        var jobId = await _queue.EnqueueAsync(new SyncJob
+        var jobId = (await _queue.EnqueueAsync(new SyncJob
         {
             JobKind = "MASTER_DELETE",
             SourceDbId = sourceDbId,
@@ -652,7 +654,7 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
             PayloadJson = payload,
             IdemKey = idem,
             CreatedBy = user
-        }, cancellationToken).ConfigureAwait(false);
+        }, cancellationToken).ConfigureAwait(false)).JobId;
 
         await _audit.WriteAsync(new AuditEntry
         {

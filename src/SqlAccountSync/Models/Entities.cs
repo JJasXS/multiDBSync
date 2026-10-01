@@ -170,6 +170,7 @@ public sealed class AuditListItem
     public int? TxnPk { get; set; }
     public string? LinkUrl { get; set; }
     public string LinkLabel { get; set; } = "";
+    public string DestName { get; set; } = "";
 }
 
 public sealed class ErrorEntry

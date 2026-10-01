@@ -32,6 +32,8 @@ public static class PartnerSyncRules
         return srcRole is DatabaseRoles.Sub && dstRole is DatabaseRoles.Sub;
     }
 
+    public const int PartyPushPriority = 10;
+
     public static bool IsPartyEntity(string entityCode) =>
         string.Equals(entityCode, EntityCodes.Customer, StringComparison.OrdinalIgnoreCase)
         || string.Equals(entityCode, EntityCodes.Supplier, StringComparison.OrdinalIgnoreCase);

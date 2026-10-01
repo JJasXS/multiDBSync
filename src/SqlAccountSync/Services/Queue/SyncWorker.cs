@@ -36,6 +36,10 @@ public sealed class SyncWorker : BackgroundService
                 if (reclaimed > 0)
                     _logger.LogWarning("Reclaimed {Count} stale PROCESSING job(s) after lease expiry.", reclaimed);
 
+                var stopped = await queue.CancelUnstartedWaitingAsync(stoppingToken).ConfigureAwait(false);
+                if (stopped > 0)
+                    _logger.LogInformation("Stopped {Count} job(s) that waited longer than {Seconds}s.", stopped, _options.MaxQueueWaitSeconds);
+
                 var job = await queue.ClaimAsync(workerId, stoppingToken).ConfigureAwait(false);
                 if (job is null)
                 {

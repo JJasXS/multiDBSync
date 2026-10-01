@@ -93,7 +93,7 @@ public class JobQueueIntegrationTests
 
         var (queue, db) = factory.Value;
         var idem = "test-lease-" + Guid.NewGuid().ToString("N");
-        var jobId = await queue.EnqueueAsync(new SyncJob
+        var enqueued = await queue.EnqueueAsync(new SyncJob
         {
             JobKind = "TEST",
             SourceDbId = 0,
@@ -104,6 +104,7 @@ public class JobQueueIntegrationTests
             MaxAttempts = 5
         });
 
+        var jobId = enqueued.JobId;
         var claimed = await queue.ClaimAsync("test-worker-a");
         Assert.NotNull(claimed);
         Assert.Equal(jobId, claimed!.JobId);

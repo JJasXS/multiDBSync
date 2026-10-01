@@ -166,7 +166,8 @@ public sealed class AccountAutoPushService : IAccountAutoPushService
             ordered,
             dryRun: false,
             user: "system:account-auto-push",
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken,
+            reviveCancelled: false).ConfigureAwait(false);
 
         messages.Add($"{master.DbCode}→{dest.DbCode}: missing={ordered.Count}, queued={q}, failed={failed}");
         if (failed > 0)

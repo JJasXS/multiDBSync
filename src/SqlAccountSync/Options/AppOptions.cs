@@ -35,6 +35,11 @@ public sealed class SyncOptions
     /// Set 0 to disable. Default 60 (one minute).
     /// </summary>
     public int AccountAutoPushSeconds { get; set; } = 60;
+    /// <summary>
+    /// Cancel PENDING jobs that have never started after this many seconds.
+    /// Set 0 to disable. Default 120 (2 minutes).
+    /// </summary>
+    public int MaxQueueWaitSeconds { get; set; } = 120;
     /// <summary>When true, auto-push also PUTs accounts whose syncable fields differ on the sub.</summary>
     public bool AccountAutoUpdateEnabled { get; set; } = true;
     /// <summary>

@@ -95,7 +95,8 @@ public class LogsModel : SyncPageModel
     {
         var entry = row.Entry;
         var entity = string.IsNullOrWhiteSpace(entry.Entity) ? "" : SyncDisplayNames.TxnType(entry.Entity);
-        var parts = new[] { SyncDisplayNames.AuditAction(entry.Action), entity, entry.RecordId, entry.UserEmail }
+        var who = string.IsNullOrWhiteSpace(row.DestName) ? entry.UserEmail : row.DestName;
+        var parts = new[] { SyncDisplayNames.AuditAction(entry.Action), entity, entry.RecordId, who }
             .Where(p => !string.IsNullOrWhiteSpace(p));
         var hideJob = !CanOperate && row.LinkLabel == "View job";
         return new LogRow

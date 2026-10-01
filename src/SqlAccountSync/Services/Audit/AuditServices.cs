@@ -69,9 +69,8 @@ VALUES (@AUDITID, CURRENT_TIMESTAMP, @USEREMAIL, @ACTION, @DBID, @ENTITY, @RECOR
 
         var limit = Math.Clamp(take, 1, 500);
         var entries = await _db.QueryAsync(ListSql(limit), Map, cancellationToken: cancellationToken).ConfigureAwait(false);
-        var jobs = await _db.QueryAsync($@"
-SELECT FIRST {Math.Min(limit * 3, 500)} JOBID, JOBKIND, STATUS, ERRORMESSAGE, TXNPK, ENTITYCODE, CREATEDBY, CREATEDAT, PAYLOADJSON
-FROM SYNC_JOB ORDER BY JOBID DESC", MapJob, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var jobs = await LoadRecentJobsAsync(Math.Min(limit * 3, 500), cancellationToken).ConfigureAwait(false);
+        jobs.AddRange(await LoadMissingJobsAsync(entries, jobs, cancellationToken).ConfigureAwait(false));
         var txns = await _db.QueryAsync($@"
 SELECT FIRST {Math.Min(limit * 2, 300)} TXNPK, TXNID, STATUS, ERRORMESSAGE
 FROM SYNC_TXN ORDER BY TXNPK DESC", MapTxn, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -108,7 +107,10 @@ FROM SYNC_AUDIT ORDER BY AUDITID DESC";
         var txn = ResolveTxn(entry, txnById, txnByTxnId, job);
 
         if (job is not null)
+        {
             item.JobId = job.JobId;
+            item.DestName = job.DestName;
+        }
         if (txn is not null)
             item.TxnPk = txn.TxnPk;
 
@@ -246,6 +248,32 @@ FROM SYNC_AUDIT ORDER BY AUDITID DESC";
             || payload.Contains($"\"Code\":\"{code}\"", StringComparison.OrdinalIgnoreCase);
     }
 
+    private Task<List<AuditJobRow>> LoadRecentJobsAsync(int take, CancellationToken cancellationToken) =>
+        _db.QueryAsync(JobSelectSql($"SELECT FIRST {take}") + " ORDER BY j.JOBID DESC", MapJob, cancellationToken: cancellationToken);
+
+    private async Task<List<AuditJobRow>> LoadMissingJobsAsync(
+        List<AuditEntry> entries, List<AuditJobRow> loaded, CancellationToken cancellationToken)
+    {
+        var known = loaded.Select(j => j.JobId).ToHashSet();
+        var missing = entries
+            .Select(e => TryParseJobId(e.RequestId, out var id) ? id : 0)
+            .Where(id => id > 0 && !known.Contains(id))
+            .Distinct()
+            .ToList();
+        if (missing.Count == 0)
+            return [];
+
+        return await _db.QueryAsync(
+            JobSelectSql("SELECT") + $" WHERE j.JOBID IN ({string.Join(",", missing)})",
+            MapJob, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    private static string JobSelectSql(string select) => $@"
+{select} j.JOBID, j.JOBKIND, j.STATUS, j.ERRORMESSAGE, j.TXNPK, j.ENTITYCODE, j.CREATEDBY, j.CREATEDAT, j.PAYLOADJSON,
+       COALESCE(d.DISPLAYNAME, '') AS DESTNAME
+FROM SYNC_JOB j
+LEFT JOIN SYNC_DATABASE d ON d.DBID = j.DESTDBID";
+
     private sealed class AuditJobRow
     {
         public int JobId { get; set; }
@@ -257,6 +285,7 @@ FROM SYNC_AUDIT ORDER BY AUDITID DESC";
         public string CreatedBy { get; set; } = "";
         public DateTime CreatedAt { get; set; }
         public string PayloadJson { get; set; } = "";
+        public string DestName { get; set; } = "";
     }
 
     private sealed class AuditTxnRow
@@ -278,6 +307,7 @@ FROM SYNC_AUDIT ORDER BY AUDITID DESC";
         CreatedBy = CentralDb.Str(r, "CREATEDBY"),
         CreatedAt = CentralDb.TimeReq(r, "CREATEDAT"),
         PayloadJson = CentralDb.Str(r, "PAYLOADJSON"),
+        DestName = CentralDb.Str(r, "DESTNAME"),
     };
 
     private static AuditTxnRow MapTxn(FirebirdSql.Data.FirebirdClient.FbDataReader r) => new()

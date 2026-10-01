@@ -6,14 +6,18 @@ using SqlAccountSync.Options;
 
 namespace SqlAccountSync.Services.Queue;
 
+public readonly record struct JobEnqueueResult(int JobId, bool IsNew, bool LeftCancelled = false);
+
 public interface IJobQueue
 {
-    Task<int> EnqueueAsync(SyncJob job, CancellationToken cancellationToken = default);
+    Task<JobEnqueueResult> EnqueueAsync(SyncJob job, CancellationToken cancellationToken = default, bool reviveCancelled = true);
     Task<SyncJob?> ClaimAsync(string workerId, CancellationToken cancellationToken = default);
     Task CompleteAsync(int jobId, string status, string? error, CancellationToken cancellationToken = default);
     Task<List<SyncJob>> ListAsync(string? status = null, int take = 200, CancellationToken cancellationToken = default);
     Task<SyncJob?> GetAsync(int jobId, CancellationToken cancellationToken = default);
     Task CancelAsync(int jobId, CancellationToken cancellationToken = default);
+    /// <summary>Cancel PENDING jobs that have never started and have waited longer than MaxQueueWaitSeconds.</summary>
+    Task<int> CancelUnstartedWaitingAsync(CancellationToken cancellationToken = default);
     /// <summary>Reclaim PROCESSING jobs whose LOCKEDAT is older than the configured lease.</summary>
     Task<int> ReclaimStaleProcessingAsync(CancellationToken cancellationToken = default);
     /// <summary>Operator unlock: PROCESSING → RETRYING immediately.</summary>
@@ -40,61 +44,79 @@ public sealed class JobQueue : IJobQueue
         _options = options.Value;
     }
 
-    public async Task<int> EnqueueAsync(SyncJob job, CancellationToken cancellationToken = default)
+    public async Task<JobEnqueueResult> EnqueueAsync(
+        SyncJob job, CancellationToken cancellationToken = default, bool reviveCancelled = true)
     {
         var id = (int)await _db.NextIdAsync("GEN_SYNC_JOB", cancellationToken).ConfigureAwait(false);
         try
         {
-            await _db.ExecuteAsync(@"
-INSERT INTO SYNC_JOB (JOBID, JOBKIND, TXNPK, SOURCEDBID, DESTDBID, ENTITYCODE, PAYLOADJSON, STATUS, PRIORITY, ATTEMPTS, MAXATTEMPTS, NEXTRUNAT, DRYRUN, IDEMKEY, CREATEDAT, CREATEDBY)
-VALUES (@JOBID, @JOBKIND, @TXNPK, @SOURCEDBID, @DESTDBID, @ENTITYCODE, @PAYLOADJSON, 'PENDING', @PRIORITY, 0, @MAXATTEMPTS, CURRENT_TIMESTAMP, @DRYRUN, @IDEMKEY, CURRENT_TIMESTAMP, @CREATEDBY)",
-                new
-                {
-                    JOBID = id,
-                    JOBKIND = job.JobKind,
-                    TXNPK = (object?)job.TxnId ?? DBNull.Value,
-                    SOURCEDBID = job.SourceDbId,
-                    DESTDBID = job.DestDbId,
-                    ENTITYCODE = job.EntityCode,
-                    PAYLOADJSON = job.PayloadJson,
-                    PRIORITY = job.Priority,
-                    MAXATTEMPTS = job.MaxAttempts <= 0 ? _options.MaxAttempts : job.MaxAttempts,
-                    DRYRUN = job.DryRun ? 1 : 0,
-                    IDEMKEY = job.IdemKey,
-                    CREATEDBY = job.CreatedBy
-                }, cancellationToken).ConfigureAwait(false);
-            return id;
+            await InsertJobAsync(job, id, cancellationToken).ConfigureAwait(false);
+            return new JobEnqueueResult(id, true);
         }
         catch (FirebirdSql.Data.FirebirdClient.FbException ex) when (ex.Message.Contains("unique", StringComparison.OrdinalIgnoreCase))
         {
-            var existing = await _db.QuerySingleAsync(
-                "SELECT FIRST 1 * FROM SYNC_JOB WHERE IDEMKEY=@IDEMKEY",
-                Map, new { IDEMKEY = job.IdemKey }, cancellationToken).ConfigureAwait(false);
-            if (existing is null)
-                return id;
-
-            // Allow a fresh attempt after a permanent failure / cancel (same payload idem key).
-            if (existing.Status is JobStatuses.Failed or JobStatuses.Cancelled)
-            {
-                await _db.ExecuteAsync(@"
-UPDATE SYNC_JOB SET STATUS='PENDING', ATTEMPTS=0, ERRORMESSAGE='', LOCKEDBY=NULL, LOCKEDAT=NULL,
-NEXTRUNAT=CURRENT_TIMESTAMP, PAYLOADJSON=@PAYLOADJSON, CREATEDBY=@CREATEDBY
-WHERE JOBID=@JOBID",
-                    new { PAYLOADJSON = job.PayloadJson, CREATEDBY = job.CreatedBy, JOBID = existing.JobId },
-                    cancellationToken).ConfigureAwait(false);
-            }
-            else if (existing.Status is JobStatuses.Retrying)
-            {
-                // Auto-push / re-enqueue: don't wait for exponential backoff — retry with current code path.
-                await _db.ExecuteAsync(@"
-UPDATE SYNC_JOB SET NEXTRUNAT=CURRENT_TIMESTAMP, PAYLOADJSON=@PAYLOADJSON
-WHERE JOBID=@JOBID AND STATUS='RETRYING'",
-                    new { PAYLOADJSON = job.PayloadJson, JOBID = existing.JobId },
-                    cancellationToken).ConfigureAwait(false);
-            }
-            return existing.JobId;
+            return await ReuseExistingJobAsync(job, id, reviveCancelled, cancellationToken).ConfigureAwait(false);
         }
     }
+
+    private Task InsertJobAsync(SyncJob job, int id, CancellationToken cancellationToken) =>
+        _db.ExecuteAsync(@"
+INSERT INTO SYNC_JOB (JOBID, JOBKIND, TXNPK, SOURCEDBID, DESTDBID, ENTITYCODE, PAYLOADJSON, STATUS, PRIORITY, ATTEMPTS, MAXATTEMPTS, NEXTRUNAT, DRYRUN, IDEMKEY, CREATEDAT, CREATEDBY)
+VALUES (@JOBID, @JOBKIND, @TXNPK, @SOURCEDBID, @DESTDBID, @ENTITYCODE, @PAYLOADJSON, 'PENDING', @PRIORITY, 0, @MAXATTEMPTS, CURRENT_TIMESTAMP, @DRYRUN, @IDEMKEY, CURRENT_TIMESTAMP, @CREATEDBY)",
+            new
+            {
+                JOBID = id,
+                JOBKIND = job.JobKind,
+                TXNPK = (object?)job.TxnId ?? DBNull.Value,
+                SOURCEDBID = job.SourceDbId,
+                DESTDBID = job.DestDbId,
+                ENTITYCODE = job.EntityCode,
+                PAYLOADJSON = job.PayloadJson,
+                PRIORITY = job.Priority,
+                MAXATTEMPTS = job.MaxAttempts <= 0 ? _options.MaxAttempts : job.MaxAttempts,
+                DRYRUN = job.DryRun ? 1 : 0,
+                IDEMKEY = job.IdemKey,
+                CREATEDBY = job.CreatedBy
+            }, cancellationToken);
+
+    private async Task<JobEnqueueResult> ReuseExistingJobAsync(
+        SyncJob job, int unusedId, bool reviveCancelled, CancellationToken cancellationToken)
+    {
+        var existing = await _db.QuerySingleAsync(
+            "SELECT FIRST 1 * FROM SYNC_JOB WHERE IDEMKEY=@IDEMKEY",
+            Map, new { IDEMKEY = job.IdemKey }, cancellationToken).ConfigureAwait(false);
+        if (existing is null)
+            return new JobEnqueueResult(unusedId, false);
+
+        if (existing.Status is JobStatuses.Cancelled && !reviveCancelled)
+            return new JobEnqueueResult(existing.JobId, false, true);
+
+        if (existing.Status is JobStatuses.Failed or JobStatuses.Cancelled)
+        {
+            await ResetFailedJobAsync(job, existing.JobId, cancellationToken).ConfigureAwait(false);
+            return new JobEnqueueResult(existing.JobId, true);
+        }
+
+        if (existing.Status is JobStatuses.Retrying)
+            await BumpRetryJobAsync(job, existing.JobId, cancellationToken).ConfigureAwait(false);
+
+        return new JobEnqueueResult(existing.JobId, false);
+    }
+
+    private Task ResetFailedJobAsync(SyncJob job, int jobId, CancellationToken cancellationToken) =>
+        _db.ExecuteAsync(@"
+UPDATE SYNC_JOB SET STATUS='PENDING', ATTEMPTS=0, ERRORMESSAGE='', LOCKEDBY=NULL, LOCKEDAT=NULL,
+NEXTRUNAT=CURRENT_TIMESTAMP, CREATEDAT=CURRENT_TIMESTAMP, PAYLOADJSON=@PAYLOADJSON, CREATEDBY=@CREATEDBY, PRIORITY=@PRIORITY
+WHERE JOBID=@JOBID",
+            new { PAYLOADJSON = job.PayloadJson, CREATEDBY = job.CreatedBy, PRIORITY = job.Priority, JOBID = jobId },
+            cancellationToken);
+
+    private Task BumpRetryJobAsync(SyncJob job, int jobId, CancellationToken cancellationToken) =>
+        _db.ExecuteAsync(@"
+UPDATE SYNC_JOB SET NEXTRUNAT=CURRENT_TIMESTAMP, PAYLOADJSON=@PAYLOADJSON
+WHERE JOBID=@JOBID AND STATUS='RETRYING'",
+            new { PAYLOADJSON = job.PayloadJson, JOBID = jobId },
+            cancellationToken);
 
     public async Task<SyncJob?> ClaimAsync(string workerId, CancellationToken cancellationToken = default)
     {
@@ -156,6 +178,21 @@ WHERE JOBID=@JOBID",
 UPDATE SYNC_JOB SET STATUS='CANCELLED', LOCKEDBY=NULL, LOCKEDAT=NULL
 WHERE JOBID=@JOBID AND STATUS IN ('PENDING','RETRYING','FAILED','PROCESSING')",
             new { JOBID = jobId }, cancellationToken);
+
+    public async Task<int> CancelUnstartedWaitingAsync(CancellationToken cancellationToken = default)
+    {
+        var waitSeconds = _options.MaxQueueWaitSeconds;
+        if (!_db.IsConfigured || waitSeconds <= 0)
+            return 0;
+
+        return await _db.ExecuteAsync(@"
+UPDATE SYNC_JOB
+SET STATUS='CANCELLED', LOCKEDBY=NULL, LOCKEDAT=NULL,
+    ERRORMESSAGE='Stopped: waited more than 2 minutes.'
+WHERE STATUS='PENDING' AND ATTEMPTS=0
+  AND DATEDIFF(SECOND, CREATEDAT, CURRENT_TIMESTAMP) > @WAIT",
+            new { WAIT = waitSeconds }, cancellationToken).ConfigureAwait(false);
+    }
 
     public async Task<int> ReclaimStaleProcessingAsync(CancellationToken cancellationToken = default)
     {
