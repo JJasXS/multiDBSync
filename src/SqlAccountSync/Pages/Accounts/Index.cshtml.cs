@@ -86,13 +86,14 @@ public partial class IndexModel : SyncPageModel
 
     public string EntityTitle => PartnerMasterFactory.EntityTitle(EntityCode);
 
-    public async Task OnGetAsync()
+    public async Task<IActionResult> OnGetAsync()
     {
         Tab = NormalizeTab(Tab);
-        if (IsPartnersTab)
-            await LoadPartnersAsync();
-        else
-            await LoadAccountsAsync();
+        if (!IsPartnersTab)
+            return RedirectToPage("/Push/Index", new { tab = "push", EntityCode = EntityCodes.Account, SourceDbId });
+
+        await LoadPartnersAsync();
+        return Page();
     }
 
     private static string NormalizeTab(string? tab) =>

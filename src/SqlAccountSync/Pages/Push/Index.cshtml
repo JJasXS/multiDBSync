@@ -6,7 +6,9 @@
     var isJobs = Model.IsJobsTab;
     var sectionLabel = isJobs ? "Manual push" : "Multi Push";
     var sectionHint = isJobs ? "One row at a time" : "Multiple rows";
-    var recordsTitle = Model.EntityCode == EntityCodes.Supplier ? "Suppliers" : "Customers";
+    var isAccount = Model.IsAccountEntity;
+    var recordsTitle = isAccount ? "Accounts" : Model.EntityCode == EntityCodes.Supplier ? "Suppliers" : "Customers";
+    var codeColumns = 2 + (Model.CanOperate ? 1 : 0) + (isAccount && Model.CanOperate ? 1 : 0);
     var selectedRecordCount = Model.Records.Count(r => Model.SelectedCodes.Contains(r.Code, StringComparer.OrdinalIgnoreCase));
     var selectedDbCount = Model.TargetSubs.Count(s => Model.SelectedSubDbIds.Contains(s.DbId));
 }
@@ -70,7 +72,7 @@
             <input type="hidden" name="tab" value="push" />
             <div class="route-fields push-route-fields">
                 <div class="route-field">
-                    <label for="pushSourceDb">Source</label>
+                    <label for="pushSourceDb">@(isAccount ? "Master source" : "Source")</label>
                     <select id="pushSourceDb" name="SourceDbId" onchange="this.form.submit()">
                         @foreach (var d in Model.SourceDatabases)
                         {
@@ -123,6 +125,10 @@
                                     }
                                     <th>Code</th>
                                     <th>Description</th>
+                                    @if (isAccount && Model.CanOperate)
+                                    {
+                                        <th class="col-actions">Actions</th>
+                                    }
                                 </tr>
                             }
                         </thead>
@@ -130,7 +136,7 @@
                             @if (Model.Records.Count == 0)
                             {
                                 <tr>
-                                    <td colspan="@(Model.CanOperate ? 3 : 2)" class="empty">No records. Pick source and entity.</td>
+                                    <td colspan="@codeColumns" class="empty">No records. Pick source and entity.</td>
                                 </tr>
                             }
                             else
@@ -150,10 +156,32 @@
                                         }
                                         <td class="code-cell">@r.Code</td>
                                         <td><span class="cell-truncate" title="@r.Description">@desc</span></td>
+                                        @if (isAccount && Model.CanOperate)
+                                        {
+                                            <td class="col-actions">
+                                                <button type="button"
+                                                        class="accounts-icon-btn accounts-status-edit"
+                                                        title="Edit account"
+                                                        aria-label="Edit @r.Code"
+                                                        data-accounts-edit
+                                                        data-code="@r.Code"
+                                                        data-description="@r.Description"
+                                                        data-description2="@(r.Fields.TryGetValue("description2", out var description2) ? description2 : null)"
+                                                        data-acctype="@(r.Fields.TryGetValue("acctype", out var accType) ? accType : null)"
+                                                        data-specialacctype="@(r.Fields.TryGetValue("specialacctype", out var specialAccType) ? specialAccType : null)"
+                                                        data-tax="@(r.Fields.TryGetValue("tax", out var tax) ? tax : null)"
+                                                        data-cashflowtype="@(r.Fields.TryGetValue("cashflowtype", out var cashFlowType) ? cashFlowType : null)"
+                                                        data-sic="@(r.Fields.TryGetValue("sic", out var sic) ? sic : null)">
+                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                                        <path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
+                                                    </svg>
+                                                </button>
+                                            </td>
+                                        }
                                     </tr>
                                 }
                                 <tr id="pushCodeSearchEmpty" class="accounts-search-empty" hidden>
-                                    <td colspan="@(Model.CanOperate ? 3 : 2)" class="empty">No records match that search.</td>
+                                    <td colspan="@codeColumns" class="empty">No records match that search.</td>
                                 </tr>
                             }
                         </tbody>
@@ -229,6 +257,63 @@
                 </div>
             }
         </form>
+        @if (isAccount && Model.CanOperate)
+        {
+            <dialog id="accountsEditModal" class="accounts-modal">
+                <form method="post" asp-page-handler="SaveEdit" class="accounts-modal-form">
+                    <input type="hidden" name="Tab" value="push" />
+                    <input type="hidden" name="SourceDbId" value="@Model.SourceDbId" />
+                    <input type="hidden" name="EntityCode" value="ACCOUNT" />
+                    <div class="accounts-modal-head">
+                        <h3>Edit account</h3>
+                        <button type="button" class="accounts-modal-close" data-accounts-edit-close aria-label="Close">&times;</button>
+                    </div>
+                    <div class="accounts-modal-body">
+                        <div class="field">
+                            <label for="EditCode">Code</label>
+                            <input id="EditCode" name="EditCode" class="input-readonly" readonly />
+                        </div>
+                        <div class="field">
+                            <label for="EditDescription">Description</label>
+                            <input id="EditDescription" name="EditDescription" maxlength="200" required />
+                        </div>
+                        <div class="field">
+                            <label for="EditDescription2">Description 2</label>
+                            <input id="EditDescription2" name="EditDescription2" maxlength="200" />
+                        </div>
+                        <div class="field-row">
+                            <div class="field">
+                                <label for="EditAccType">Acc type</label>
+                                <input id="EditAccType" name="EditAccType" maxlength="20" />
+                            </div>
+                            <div class="field">
+                                <label for="EditSpecialAccType">Special acc type</label>
+                                <input id="EditSpecialAccType" name="EditSpecialAccType" maxlength="20" />
+                            </div>
+                        </div>
+                        <div class="field-row">
+                            <div class="field">
+                                <label for="EditTax">Tax</label>
+                                <input id="EditTax" name="EditTax" maxlength="40" />
+                            </div>
+                            <div class="field">
+                                <label for="EditCashFlowType">Cash flow type</label>
+                                <input id="EditCashFlowType" name="EditCashFlowType" type="number" />
+                            </div>
+                        </div>
+                        <div class="field">
+                            <label for="EditSic">SIC</label>
+                            <input id="EditSic" name="EditSic" maxlength="40" />
+                        </div>
+                        <p class="muted accounts-modal-hint">Saves on master via SQL Acc API, then queues updates to linked subs.</p>
+                    </div>
+                    <div class="accounts-modal-actions">
+                        <button type="button" class="btn btn-ghost" data-accounts-edit-close>Cancel</button>
+                        <button type="submit" class="btn">Save &amp; push update</button>
+                    </div>
+                </form>
+            </dialog>
+        }
     </div>
 
 <script>
@@ -281,6 +366,39 @@
   apply();
 })();
 </script>
+@if (isAccount && Model.CanOperate)
+{
+<script>
+(() => {
+  const modal = document.getElementById('accountsEditModal');
+  if (!modal) return;
+  const set = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.value = value ?? '';
+  };
+  document.querySelectorAll('[data-accounts-edit]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      set('EditCode', btn.getAttribute('data-code'));
+      set('EditDescription', btn.getAttribute('data-description'));
+      set('EditDescription2', btn.getAttribute('data-description2'));
+      set('EditAccType', btn.getAttribute('data-acctype'));
+      set('EditSpecialAccType', btn.getAttribute('data-specialacctype'));
+      set('EditTax', btn.getAttribute('data-tax'));
+      set('EditCashFlowType', btn.getAttribute('data-cashflowtype') || '0');
+      set('EditSic', btn.getAttribute('data-sic'));
+      if (typeof modal.showModal === 'function') modal.showModal();
+      else modal.setAttribute('open', '');
+    });
+  });
+  const close = () => {
+    if (typeof modal.close === 'function') modal.close();
+    else modal.removeAttribute('open');
+  };
+  document.querySelectorAll('[data-accounts-edit-close]').forEach(btn => btn.addEventListener('click', close));
+  modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+})();
+</script>
+}
 }
 else
 {
@@ -302,6 +420,7 @@ else
                 <select asp-for="JobEntityCode">
                     <option value="CUSTOMER">CUSTOMER</option>
                     <option value="SUPPLIER">SUPPLIER</option>
+                    <option value="ACCOUNT">ACCOUNT</option>
                 </select>
             </div>
             <div><label>Code</label><input asp-for="MasterCode" /></div>

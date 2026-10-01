@@ -60,10 +60,9 @@
                 </svg>
             </button>
             <div class="master-section-panel" role="menu" hidden data-master-menu-panel>
-                <a class="master-section-option @(!isPartners ? "is-active" : "")"
+                <a class="master-section-option"
                    role="menuitem"
-                   asp-page="/Accounts/Index" asp-route-tab="accounts" asp-route-SourceDbId="@Model.SourceDbId"
-                   aria-current="@(!isPartners ? "page" : null)">
+                   asp-page="/Push/Index" asp-route-tab="push" asp-route-EntityCode="ACCOUNT">
                     <span class="master-section-option-title">Accounts</span>
                     <span class="master-section-option-desc">Chart of accounts</span>
                 </a>

@@ -2,6 +2,7 @@ using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using SqlAccountSync.Helpers;
 using SqlAccountSync.Models;
+using SqlAccountSync.Services.Accounts;
 using SqlAccountSync.Services.Audit;
 using SqlAccountSync.Services.Databases;
 using SqlAccountSync.Services.Queue;
@@ -14,6 +15,7 @@ public class IndexModel : SyncPageModel
 {
     private readonly IDatabaseRegistry _registry;
     private readonly ISqlAccountReadAdapter _read;
+    private readonly ISqlAccountWriteAdapter _write;
     private readonly ISyncOrchestrator _sync;
     private readonly IJobQueue _jobs;
     private readonly IAuditService _audit;
@@ -21,12 +23,14 @@ public class IndexModel : SyncPageModel
     public IndexModel(
         IDatabaseRegistry registry,
         ISqlAccountReadAdapter read,
+        ISqlAccountWriteAdapter write,
         ISyncOrchestrator sync,
         IJobQueue jobs,
         IAuditService audit)
     {
         _registry = registry;
         _read = read;
+        _write = write;
         _sync = sync;
         _jobs = jobs;
         _audit = audit;
@@ -44,6 +48,15 @@ public class IndexModel : SyncPageModel
     [BindProperty] public string JobEntityCode { get; set; } = "CUSTOMER";
     [BindProperty] public string MasterCode { get; set; } = "";
 
+    [BindProperty] public string EditCode { get; set; } = "";
+    [BindProperty] public string EditDescription { get; set; } = "";
+    [BindProperty] public string EditDescription2 { get; set; } = "";
+    [BindProperty] public string EditAccType { get; set; } = "";
+    [BindProperty] public string EditSpecialAccType { get; set; } = "";
+    [BindProperty] public string EditTax { get; set; } = "";
+    [BindProperty] public int EditCashFlowType { get; set; }
+    [BindProperty] public string EditSic { get; set; } = "";
+
     public List<RegisteredDatabase> SourceDatabases { get; set; } = [];
     public List<RegisteredDatabase> TargetSubs { get; set; } = [];
     public List<MasterRecord> Records { get; set; } = [];
@@ -57,6 +70,9 @@ public class IndexModel : SyncPageModel
     public FlashToastModel? FlashToast { get; set; }
 
     public bool IsJobsTab => string.Equals(NormalizeTab(Tab), "jobs", StringComparison.OrdinalIgnoreCase);
+
+    public bool IsAccountEntity =>
+        string.Equals(EntityCode, EntityCodes.Account, StringComparison.OrdinalIgnoreCase);
 
     public async Task OnGetAsync(string? status)
     {
@@ -75,6 +91,8 @@ public class IndexModel : SyncPageModel
         if (!CanOperate) return Forbid();
         Tab = "push";
         EntityCode = NormalizeEntity(EntityCode);
+        if (await AccountSourceRejectedAsync())
+            return Page();
 
         var (queued, failed, messages) = await _sync.EnqueueMasterBatchAsync(
             SourceDbId,
@@ -113,11 +131,31 @@ public class IndexModel : SyncPageModel
         return Page();
     }
 
+    public async Task<IActionResult> OnPostSaveEditAsync()
+    {
+        if (!CanOperate) return Forbid();
+        Tab = "push";
+        EntityCode = EntityCodes.Account;
+        await LoadPushAsync();
+        if (SelectedSource is null || !SyncTargetResolver.IsMasterOrBoth(SelectedSource))
+        {
+            FlashToast = FlashToasts.Fail("Select a Master (or BOTH) database as the source.");
+            return Page();
+        }
+
+        FlashToast = await AccountChartEdit.SaveAsync(
+            _read, _write, _sync, SelectedSource, TargetSubs, EditInput(), CurrentEmail);
+        await LoadPushAsync();
+        return Page();
+    }
+
     public async Task<IActionResult> OnPostDryRunAsync()
     {
         if (!CanOperate) return Forbid();
         Tab = "jobs";
         JobEntityCode = NormalizeEntity(JobEntityCode);
+        if (await AccountJobSourceRejectedAsync())
+            return Page();
         DryRun = await _sync.DryRunMasterAsync(MasterDbId, SubDbId, JobEntityCode, MasterCode);
         await LoadJobsAsync(null);
         return Page();
@@ -128,6 +166,8 @@ public class IndexModel : SyncPageModel
         if (!CanOperate) return Forbid();
         Tab = "jobs";
         JobEntityCode = NormalizeEntity(JobEntityCode);
+        if (await AccountJobSourceRejectedAsync())
+            return Page();
         var (id, msg) = await _sync.EnqueueMasterAsync(MasterDbId, SubDbId, JobEntityCode, MasterCode, dryRun: false, CurrentEmail);
         await _audit.WriteAsync(new AuditEntry
         {
@@ -164,11 +204,8 @@ public class IndexModel : SyncPageModel
     {
         EntityCode = NormalizeEntity(EntityCode);
         var databases = await _registry.ListAsync();
-        SourceDatabases = databases.OrderBy(d => d.DisplayName).ToList();
-
-        if (SourceDbId == 0)
-            SourceDbId = SourceDatabases.FirstOrDefault(d => d.DbRole is "MASTER" or "BOTH")?.DbId
-                         ?? SourceDatabases.FirstOrDefault()?.DbId ?? 0;
+        SourceDatabases = ListSources(databases, EntityCode);
+        SourceDbId = PickSourceId(SourceDbId, SourceDatabases);
 
         SelectedSource = await _registry.GetAsync(SourceDbId);
         TargetSubs = await ResolveTargetsAsync(SourceDbId, databases);
@@ -230,8 +267,75 @@ public class IndexModel : SyncPageModel
                 return await _read.GetCustomersAsync(db);
             case "SUPPLIER":
                 return await _read.GetSuppliersAsync(db);
+            case "ACCOUNT":
+                return await LoadAccountsAsync(db);
             default:
                 return [];
         }
     }
+
+    private async Task<List<MasterRecord>> LoadAccountsAsync(RegisteredDatabase db)
+    {
+        try
+        {
+            return GlAccountMapper.ToMasterRecords(await _read.GetGlChartAsync(db));
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    private async Task<bool> AccountSourceRejectedAsync()
+    {
+        if (!IsAccountEntity)
+            return false;
+        var source = await _registry.GetAsync(SourceDbId);
+        if (SyncTargetResolver.IsMasterOrBoth(source))
+            return false;
+        FlashToast = FlashToasts.Fail("Select a Master (or BOTH) database as the source.");
+        await LoadPushAsync();
+        return true;
+    }
+
+    private async Task<bool> AccountJobSourceRejectedAsync()
+    {
+        if (!string.Equals(JobEntityCode, EntityCodes.Account, StringComparison.OrdinalIgnoreCase))
+            return false;
+        var source = await _registry.GetAsync(MasterDbId);
+        if (SyncTargetResolver.IsMasterOrBoth(source))
+            return false;
+        FlashToast = FlashToasts.Fail("Select a Master (or BOTH) database as the source.");
+        await LoadJobsAsync(null);
+        return true;
+    }
+
+    private static List<RegisteredDatabase> ListSources(IEnumerable<RegisteredDatabase> databases, string entity)
+    {
+        var ordered = databases.OrderBy(d => d.DisplayName, StringComparer.OrdinalIgnoreCase);
+        if (!string.Equals(entity, EntityCodes.Account, StringComparison.OrdinalIgnoreCase))
+            return ordered.ToList();
+        return ordered.Where(SyncTargetResolver.IsMasterOrBoth).ToList();
+    }
+
+    private static int PickSourceId(int current, List<RegisteredDatabase> sources)
+    {
+        if (current > 0 && sources.Any(d => d.DbId == current))
+            return current;
+        return sources.FirstOrDefault(SyncTargetResolver.IsMasterOrBoth)?.DbId
+            ?? sources.FirstOrDefault()?.DbId
+            ?? 0;
+    }
+
+    private AccountEditInput EditInput() => new()
+    {
+        Code = EditCode,
+        Description = EditDescription,
+        Description2 = EditDescription2,
+        AccType = EditAccType,
+        SpecialAccType = EditSpecialAccType,
+        Tax = EditTax,
+        CashFlowType = EditCashFlowType,
+        Sic = EditSic
+    };
 }

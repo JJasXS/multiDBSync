@@ -37,51 +37,8 @@ public partial class IndexModel
         if (SelectedSource is null)
             return AccountsPage(FlashToasts.Fail("Select a Master (or BOTH) database as the source."));
 
-        var code = (EditCode ?? "").Trim();
-        if (code.Length == 0)
-            return AccountsPage(FlashToasts.Fail("Account code is required."));
-
-        List<GlAccountRow> chart;
-        try
-        {
-            chart = await _read.GetGlChartAsync(SelectedSource);
-        }
-        catch (Exception ex)
-        {
-            return AccountsPage(FlashToasts.Fail($"Could not read master chart: {ex.Message}"));
-        }
-
-        var byKey = GlAccountComparer.IndexByDocKey(chart);
-        var row = chart.FirstOrDefault(a =>
-            string.Equals((a.Code ?? "").Trim(), code, StringComparison.OrdinalIgnoreCase));
-        if (row is null)
-            return AccountsPage(FlashToasts.Fail($"Account {code} was not found on master."));
-
-        var record = ApplyEditFields(GlAccountMapper.ToMasterRecord(row, byKey));
-        var parentCode = GlAccountMapper.ParentCodeOf(record);
-        var destParent = GlAccountMapper.ResolveDestParentDocKey(parentCode, chart);
-        var write = await _write.UpdateMasterAsync(
-            SelectedSource, EntityCodes.Account, record, $"UI-EDIT-{code}",
-            row.DocKey, destParent);
-        if (!write.Success)
-        {
-            await LoadAccountsAsync();
-            return AccountsPage(FlashToasts.Fail(write.Message));
-        }
-
-        var queued = 0;
-        var failed = 0;
-        var messages = new List<string> { $"Master {code} updated." };
-        foreach (var sub in TargetSubs.Where(PartnerAutoPushTargets.HasApiCredentials))
-        {
-            var (jobId, msg) = await _sync.EnqueueMasterUpdateAsync(
-                SourceDbId, sub.DbId, EntityCodes.Account, code, CurrentEmail);
-            FlashToasts.TallyJob(ref queued, ref failed, messages, jobId,
-                $"{code} → {sub.DisplayName} (job #{jobId})",
-                $"{code} → {sub.DisplayName}: {msg}");
-        }
-
-        FlashToast = FlashToasts.Queue(queued, failed, messages, "update");
+        FlashToast = await AccountChartEdit.SaveAsync(
+            _read, _write, _sync, SelectedSource, TargetSubs, EditInput(), CurrentEmail);
         await LoadAccountsAsync();
         return Page();
     }
@@ -180,17 +137,17 @@ public partial class IndexModel
             await _mapping.DisableAsync(map.MappingId, CurrentEmail);
     }
 
-    private MasterRecord ApplyEditFields(MasterRecord record)
+    private AccountEditInput EditInput() => new()
     {
-        record.Description = (EditDescription ?? "").Trim();
-        record.Fields[GlAccountMapper.FieldDescription2] = (EditDescription2 ?? "").Trim();
-        record.Fields[GlAccountMapper.FieldAccType] = (EditAccType ?? "").Trim();
-        record.Fields[GlAccountMapper.FieldSpecialAccType] = (EditSpecialAccType ?? "").Trim();
-        record.Fields[GlAccountMapper.FieldTax] = (EditTax ?? "").Trim();
-        record.Fields[GlAccountMapper.FieldCashFlowType] = EditCashFlowType.ToString();
-        record.Fields[GlAccountMapper.FieldSic] = (EditSic ?? "").Trim();
-        return record;
-    }
+        Code = EditCode,
+        Description = EditDescription,
+        Description2 = EditDescription2,
+        AccType = EditAccType,
+        SpecialAccType = EditSpecialAccType,
+        Tax = EditTax,
+        CashFlowType = EditCashFlowType,
+        Sic = EditSic
+    };
 
     private IActionResult AccountsPage(FlashToastModel toast)
     {
