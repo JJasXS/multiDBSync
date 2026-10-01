@@ -185,24 +185,43 @@
             </script>
         }
 
-        <div class="card">
+        <div class="card rel-card">
+            @{
+                DateTime? relLastChecked = null;
+                if (Model.CentralConfigured && Model.Links.Count > 0)
+                {
+                    var relIds = Model.Links.SelectMany(l => new[] { l.MasterDbId, l.SubDbId }).ToHashSet();
+                    var stamps = Model.Databases
+                        .Where(d => relIds.Contains(d.DbId) && d.LastConnOk is DateTime t && t.Year > 2000)
+                        .Select(d => d.LastConnOk!.Value)
+                        .ToList();
+                    if (stamps.Count > 0)
+                        relLastChecked = stamps.Max();
+                }
+            }
             <div class="card-head">
                 <h3>Relationships</h3>
-                @if (Model.IsAdmin)
-                {
-                    <details class="kebab">
-                        <summary aria-label="Actions">
-                            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="5" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="19" r="1.6" fill="currentColor"/></svg>
-                        </summary>
-                        <div class="kebab-menu">
-                            <button type="button" id="openAddRelationship">Add relationship</button>
-                            @if (Model.Links.Count > 0)
-                            {
-                                <button type="button" id="openEditRelationship">Edit relationship</button>
-                            }
-                        </div>
-                    </details>
-                }
+                <div class="rel-head-side">
+                    @if (relLastChecked is DateTime checkedAt)
+                    {
+                        <span class="rel-checked">Last checked: @checkedAt.ToString("yyyy-MM-dd HH:mm")</span>
+                    }
+                    @if (Model.IsAdmin)
+                    {
+                        <details class="kebab">
+                            <summary aria-label="Actions">
+                                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="5" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="19" r="1.6" fill="currentColor"/></svg>
+                            </summary>
+                            <div class="kebab-menu">
+                                <button type="button" id="openAddRelationship">Add relationship</button>
+                                @if (Model.Links.Count > 0)
+                                {
+                                    <button type="button" id="openEditRelationship">Edit relationship</button>
+                                }
+                            </div>
+                        </details>
+                    }
+                </div>
             </div>
             @if (!Model.CentralConfigured)
             {
@@ -215,29 +234,61 @@
             else
             {
                 var masters = Model.Databases.Where(d => d.DbRole is "MASTER" or "BOTH").ToList();
-                foreach (var m in masters)
+                <div class="rel-list">
+                @foreach (var m in masters)
                 {
                     var masterLinks = Model.Links.Where(l => l.MasterDbId == m.DbId).ToList();
                     if (masterLinks.Count == 0) continue;
-                    <div class="rel-master">
-                        <strong>@m.DisplayName</strong>
-                        <span class="badge badge-master">MASTER</span>
-                        <span class="badge badge-@(m.ConnStatus == "ONLINE" ? "online" : "offline")">@m.ConnStatus</span>
-                    </div>
-                    <div class="tree">
-                        @foreach (var link in masterLinks)
-                        {
-                            var sub = Model.Databases.FirstOrDefault(d => d.DbId == link.SubDbId);
-                            <div class="node">
-                                └── SUB @link.SubName
-                                @if (sub is not null)
-                                {
-                                    <span class="badge badge-@(sub.ConnStatus == "ONLINE" ? "online" : "offline")">@sub.ConnStatus</span>
-                                }
-                            </div>
-                        }
-                    </div>
+                    var onlineSubs = masterLinks.Count(l => Model.Databases.FirstOrDefault(d => d.DbId == l.SubDbId)?.ConnStatus == "ONLINE");
+                    var masterOnline = m.ConnStatus == "ONLINE";
+                    <section class="rel-group" data-rel-group>
+                        <button type="button" class="rel-master" data-rel-toggle aria-expanded="true">
+                            <svg class="rel-chevron" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            <svg class="rel-db-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+                            <span class="rel-name" title="@m.DisplayName">@m.DisplayName</span>
+                            <span class="rel-role">MASTER</span>
+                            <span class="rel-side">
+                                <span class="rel-status @(masterOnline ? "is-online" : "is-offline")">
+                                    <span class="rel-dot" aria-hidden="true"></span>
+                                    @(masterOnline ? "Online" : m.ConnStatus)
+                                </span>
+                                <span class="rel-summary">@onlineSubs / @masterLinks.Count Online</span>
+                            </span>
+                        </button>
+                        <div class="rel-subs">
+                            @foreach (var link in masterLinks)
+                            {
+                                var sub = Model.Databases.FirstOrDefault(d => d.DbId == link.SubDbId);
+                                var subOnline = sub?.ConnStatus == "ONLINE";
+                                <div class="rel-sub">
+                                    <svg class="rel-db-icon" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+                                    <span class="rel-role">SUB</span>
+                                    <span class="rel-name" title="@link.SubName">@link.SubName</span>
+                                    @if (sub is not null)
+                                    {
+                                        <span class="rel-status @(subOnline ? "is-online" : "is-offline")">
+                                            <span class="rel-dot" aria-hidden="true"></span>
+                                            @(subOnline ? "Online" : sub.ConnStatus)
+                                        </span>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </section>
                 }
+                </div>
+                <script>
+                    document.querySelectorAll("[data-rel-toggle]").forEach((btn) => {
+                        btn.addEventListener("click", () => {
+                            const group = btn.closest("[data-rel-group]");
+                            const subs = group?.querySelector(".rel-subs");
+                            const open = btn.getAttribute("aria-expanded") !== "false";
+                            btn.setAttribute("aria-expanded", open ? "false" : "true");
+                            group?.classList.toggle("is-collapsed", open);
+                            if (subs) subs.hidden = open;
+                        });
+                    });
+                </script>
             }
         </div>
 

@@ -2338,8 +2338,181 @@ input:focus, select:focus, textarea:focus {
   background: var(--ice-surface-alt);
 }
 .rel-edit-row form { margin: 0; }
-.rel-master { margin: 12px 0 4px; }
-.rel-master:first-child { margin-top: 0; }
+.rel-card .rel-head-side {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+  min-width: 0;
+}
+.rel-checked {
+  color: var(--ice-text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.rel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.rel-group { min-width: 0; }
+.rel-master {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--ice-border-soft);
+  border-radius: 8px;
+  background: var(--ice-surface-alt);
+  color: var(--ice-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.rel-master:hover {
+  background: var(--ice-surface-muted);
+  border-color: var(--ice-border);
+}
+.rel-master:focus-visible {
+  outline: 2px solid var(--ice-accent);
+  outline-offset: 2px;
+}
+.rel-chevron {
+  flex: 0 0 auto;
+  color: var(--ice-text-muted);
+  transition: transform .15s ease;
+}
+.rel-group.is-collapsed .rel-chevron { transform: rotate(-90deg); }
+.rel-db-icon {
+  flex: 0 0 auto;
+  color: var(--ice-accent);
+}
+.rel-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+  color: var(--ice-heading);
+}
+.rel-sub .rel-name { font-weight: 500; color: var(--ice-text); }
+.rel-role {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--ice-warn-soft);
+  color: #7a5618;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+.rel-side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+.rel-summary {
+  color: var(--ice-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.rel-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 5.6rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.rel-status.is-online {
+  color: #1f6b4a;
+  background: var(--ice-success-soft);
+}
+.rel-status.is-offline {
+  color: #a83248;
+  background: var(--ice-danger-soft);
+}
+.rel-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: 0 0 auto;
+}
+.rel-status.is-online .rel-dot {
+  animation: rel-dot-pulse 2.4s ease-out infinite;
+}
+@keyframes rel-dot-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(47, 158, 110, 0.45); }
+  70%, 100% { box-shadow: 0 0 0 5px rgba(47, 158, 110, 0); }
+}
+.rel-subs {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  margin: 2px 0 0 18px;
+  padding: 2px 0 2px 16px;
+}
+.rel-subs::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: -4px;
+  width: 1px;
+  height: 8px;
+  background: var(--ice-border);
+}
+.rel-sub {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 32px;
+  padding: 3px 8px 3px 10px;
+  border-radius: 6px;
+}
+.rel-sub:hover { background: var(--ice-surface-alt); }
+.rel-sub::before {
+  content: "";
+  position: absolute;
+  left: -16px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--ice-border);
+}
+.rel-sub:last-child::before { bottom: 50%; }
+.rel-sub::after {
+  content: "";
+  position: absolute;
+  left: -16px;
+  top: 50%;
+  width: 12px;
+  height: 1px;
+  background: var(--ice-border);
+}
+.rel-sub .rel-status { margin-left: auto; }
+@media (max-width: 640px) {
+  .rel-card .rel-head-side { flex-wrap: wrap; justify-content: flex-end; }
+  .rel-checked { white-space: normal; }
+  .rel-master, .rel-sub { flex-wrap: wrap; }
+  .rel-side, .rel-sub .rel-status { margin-left: 24px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rel-chevron { transition: none; }
+  .rel-status.is-online .rel-dot { animation: none; }
+}
 
 .login-shell {
   min-height: 100vh;
