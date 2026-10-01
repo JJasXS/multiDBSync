@@ -9,14 +9,10 @@
     var showSyncConfigUi = FeatureOptions.Value.ShowSyncConfigUi;
 }
 <div class="stats">
-    <div class="stat"><div class="n">@Model.Stats.TotalDatabases</div><div class="l">Databases</div></div>
-    <div class="stat"><div class="n">@Model.Stats.Online</div><div class="l">Online</div></div>
+    <div class="stat"><div class="n">@Model.Databases.Count</div><div class="l">Databases</div></div>
+    <div class="stat"><div class="n">@Model.Links.Count</div><div class="l">Relationships</div></div>
     <div class="stat"><div class="n">@Model.Stats.Offline</div><div class="l">Offline</div></div>
-    <div class="stat"><div class="n">@Model.Stats.Error</div><div class="l">Error</div></div>
-    <div class="stat"><div class="n">@Model.Stats.Pending</div><div class="l">Pending</div></div>
-    <div class="stat"><div class="n">@Model.Stats.Processing</div><div class="l">Processing</div></div>
-    <div class="stat"><div class="n">@Model.Stats.Failed</div><div class="l">Failed</div></div>
-    <div class="stat"><div class="n">@Model.Stats.CompletedToday</div><div class="l">Completed today</div></div>
+    <div class="stat"><div class="n">@Model.Users.Count</div><div class="l">Users</div></div>
 </div>
 <div class="map-layout">
     <div class="map-layout-left">
