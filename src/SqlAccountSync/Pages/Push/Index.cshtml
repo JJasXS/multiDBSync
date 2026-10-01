@@ -72,11 +72,11 @@
             <input type="hidden" name="tab" value="push" />
             <div class="route-fields push-route-fields">
                 <div class="route-field">
-                    <label for="pushSourceDb">@(isAccount ? "Master source" : "Source")</label>
+                    <label for="pushSourceDb">Source</label>
                     <select id="pushSourceDb" name="SourceDbId" onchange="this.form.submit()">
                         @foreach (var d in Model.SourceDatabases)
                         {
-                            <option value="@d.DbId" selected="@(d.DbId == Model.SourceDbId)">@d.DisplayName (@d.DbRole)</option>
+                            <option value="@d.DbId" selected="@(d.DbId == Model.SourceDbId)">@d.DisplayName</option>
                         }
                     </select>
                 </div>

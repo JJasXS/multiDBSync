@@ -3,7 +3,7 @@ namespace SqlAccountSync.Models;
 /// <summary>Entities exposed in Push / Mappings UI.</summary>
 public static class PushableEntityCodes
 {
-    /// <summary>Multi-row push (/push). ACCOUNT sources are limited to Master or BOTH.</summary>
+    /// <summary>Multi-row push (/push). Sources are Master or BOTH companies.</summary>
     public static readonly string[] Push = [EntityCodes.Customer, EntityCodes.Supplier, EntityCodes.Account];
 
     /// <summary>Mappings and other UIs that still list ACCOUNT.</summary>

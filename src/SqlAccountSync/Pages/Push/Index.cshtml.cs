@@ -204,7 +204,7 @@ public class IndexModel : SyncPageModel
     {
         EntityCode = NormalizeEntity(EntityCode);
         var databases = await _registry.ListAsync();
-        SourceDatabases = ListSources(databases, EntityCode);
+        SourceDatabases = ListSources(databases);
         SourceDbId = PickSourceId(SourceDbId, SourceDatabases);
 
         SelectedSource = await _registry.GetAsync(SourceDbId);
@@ -310,13 +310,11 @@ public class IndexModel : SyncPageModel
         return true;
     }
 
-    private static List<RegisteredDatabase> ListSources(IEnumerable<RegisteredDatabase> databases, string entity)
-    {
-        var ordered = databases.OrderBy(d => d.DisplayName, StringComparer.OrdinalIgnoreCase);
-        if (!string.Equals(entity, EntityCodes.Account, StringComparison.OrdinalIgnoreCase))
-            return ordered.ToList();
-        return ordered.Where(SyncTargetResolver.IsMasterOrBoth).ToList();
-    }
+    private static List<RegisteredDatabase> ListSources(IEnumerable<RegisteredDatabase> databases) =>
+        databases
+            .Where(SyncTargetResolver.IsMasterOrBoth)
+            .OrderBy(d => d.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
     private static int PickSourceId(int current, List<RegisteredDatabase> sources)
     {
