@@ -17,17 +17,20 @@ public class IndexModel : SyncPageModel
     private readonly IDatabaseRegistry _registry;
     private readonly IAuditService _audit;
     private readonly ITenantDatabaseBootstrap _tenants;
+    private readonly ISqlApiCredentialBundle _bundle;
     private readonly SyncOptions _sync;
 
     public IndexModel(
         IDatabaseRegistry registry,
         IAuditService audit,
         ITenantDatabaseBootstrap tenants,
+        ISqlApiCredentialBundle bundle,
         IOptions<SyncOptions> sync)
     {
         _registry = registry;
         _audit = audit;
         _tenants = tenants;
+        _bundle = bundle;
         _sync = sync.Value;
     }
 
@@ -54,6 +57,39 @@ public class IndexModel : SyncPageModel
 
         foreach (var dbId in await IdsToUpdateAsync(existing, active, scope))
             await SetOneAsync(dbId, active);
+        return RedirectToPage();
+    }
+
+    public async Task<IActionResult> OnPostDeleteAsync(int id)
+    {
+        if (!IsAdmin) return Forbid();
+        var existing = await _registry.GetAsync(id);
+        if (existing is null) return RedirectToPage();
+        if (!await _bundle.RemoveAsync((_sync.TenantCode ?? "").Trim(), existing.DbCode))
+        {
+            TempData["DbStatusError"] = "Could not remove the SQL API keys. The company was kept.";
+            return RedirectToPage();
+        }
+
+        try
+        {
+            await _registry.DeleteAsync(id);
+        }
+        catch (Exception)
+        {
+            TempData["DbStatusError"] = "Could not delete the company. Its SQL API keys were already removed.";
+            return RedirectToPage();
+        }
+
+        await _audit.WriteAsync(new AuditEntry
+        {
+            UserEmail = CurrentEmail,
+            Action = "USER DELETED DATABASE",
+            DbId = id,
+            Entity = "DATABASE",
+            RecordId = existing.DbCode,
+            Result = "SUCCESS"
+        });
         return RedirectToPage();
     }
 

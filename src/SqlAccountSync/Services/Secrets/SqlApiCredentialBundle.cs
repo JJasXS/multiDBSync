@@ -20,7 +20,7 @@ public interface ISqlApiCredentialBundle
         string secretKey,
         CancellationToken cancellationToken = default);
 
-    Task RemoveAsync(string tenantCode, string dbCode, CancellationToken cancellationToken = default);
+    Task<bool> RemoveAsync(string tenantCode, string dbCode, CancellationToken cancellationToken = default);
 
     Task MigrateLegacyAsync(string tenantCode, CancellationToken cancellationToken = default);
 }
@@ -99,31 +99,64 @@ public sealed class SqlApiCredentialBundle : ISqlApiCredentialBundle
         }
     }
 
-    public async Task RemoveAsync(string tenantCode, string dbCode, CancellationToken cancellationToken = default)
+    public async Task<bool> RemoveAsync(string tenantCode, string dbCode, CancellationToken cancellationToken = default)
     {
         var tenant = (tenantCode ?? "").Trim();
         var code = SqlApiCredRefConvention.SanitizeDbCode(dbCode);
         if (tenant.Length == 0 || code.Length == 0 || _sm is null)
-            return;
+            return true;
 
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var map = await ReadFreshAsync(tenant, cancellationToken).ConfigureAwait(false);
-            if (!map.Remove(code))
-                return;
-            await WriteMapAsync(tenant, map, cancellationToken).ConfigureAwait(false);
-            _cache.Set(CacheKey(tenant), map, CacheFor);
-            _logger.LogInformation("Removed SQL API keys for {Code} from {SecretId}", code, SqlApiCredRefConvention.BuildBundleSecretId(tenant));
+            return await RemoveNamedAsync(tenant, code, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Could not remove SQL API keys for {Code}.", code);
+            return false;
         }
         finally
         {
             _gate.Release();
         }
+    }
+
+    private async Task<bool> RemoveNamedAsync(string tenant, string code, CancellationToken cancellationToken)
+    {
+        JsonObject root;
+        try
+        {
+            root = await ReadRootAsync(tenant, cancellationToken).ConfigureAwait(false);
+        }
+        catch (ResourceNotFoundException)
+        {
+            return true;
+        }
+
+        if (root["databases"] is not JsonArray rows || !DropNamed(rows, code))
+            return true;
+
+        await StoreRootAsync(tenant, root, cancellationToken).ConfigureAwait(false);
+        _cache.Set(CacheKey(tenant), ParseDatabases(root), CacheFor);
+        _logger.LogInformation("Removed SQL API keys for {Code} from {SecretId}", code, SqlApiCredRefConvention.BuildBundleSecretId(tenant));
+        return true;
+    }
+
+    private static bool DropNamed(JsonArray rows, string code)
+    {
+        var removed = false;
+        for (var i = rows.Count - 1; i >= 0; i--)
+        {
+            if (rows[i] is not JsonObject obj)
+                continue;
+            var name = SqlApiCredRefConvention.SanitizeDbCode(Text(obj, "name"));
+            if (!name.Equals(code, StringComparison.OrdinalIgnoreCase))
+                continue;
+            rows.RemoveAt(i);
+            removed = true;
+        }
+        return removed;
     }
 
     public async Task MigrateLegacyAsync(string tenantCode, CancellationToken cancellationToken = default)
@@ -226,6 +259,11 @@ public sealed class SqlApiCredentialBundle : ISqlApiCredentialBundle
         }
 
         root["databases"] = ToDatabaseArray(map);
+        await StoreRootAsync(tenant, root, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task StoreRootAsync(string tenant, JsonObject root, CancellationToken cancellationToken)
+    {
         var payload = root.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
         var secretId = SqlApiCredRefConvention.BuildBundleSecretId(tenant);
         try

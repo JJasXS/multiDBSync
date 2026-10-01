@@ -12,6 +12,7 @@ public interface IDatabaseRegistry
     Task<RegisteredDatabase?> GetAsync(int dbId, CancellationToken cancellationToken = default);
     Task<int> SaveAsync(RegisteredDatabase db, string user, CancellationToken cancellationToken = default);
     Task DeactivateAsync(int dbId, string user, CancellationToken cancellationToken = default);
+    Task DeleteAsync(int dbId, CancellationToken cancellationToken = default);
     Task SetActiveAsync(int dbId, bool active, string user, CancellationToken cancellationToken = default);
     Task PointSqlApiCredRefsAtBundleAsync(string tenantCode, CancellationToken cancellationToken = default);
     Task UpdateStatusAsync(int dbId, string status, bool success, CancellationToken cancellationToken = default);
@@ -117,6 +118,30 @@ WHERE UPPER(APICREDREF) LIKE UPPER(@SM) || '%'
 
     public Task DeactivateAsync(int dbId, string user, CancellationToken cancellationToken = default) =>
         SetActiveAsync(dbId, false, user, cancellationToken);
+
+    public async Task DeleteAsync(int dbId, CancellationToken cancellationToken = default)
+    {
+        foreach (var sql in DeleteSql)
+            await _db.ExecuteAsync(sql, new { DBID = dbId }, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static readonly string[] DeleteSql =
+    [
+        """
+        DELETE FROM SYNC_RULE_SCOPE WHERE RULEID IN (
+            SELECT R.RULEID FROM SYNC_RULE R
+            JOIN SYNC_DBLINK L ON L.LINKID = R.LINKID
+            WHERE L.MASTERDBID = @DBID OR L.SUBDBID = @DBID)
+        """,
+        """
+        DELETE FROM SYNC_RULE WHERE LINKID IN (
+            SELECT LINKID FROM SYNC_DBLINK WHERE MASTERDBID = @DBID OR SUBDBID = @DBID)
+        """,
+        "DELETE FROM SYNC_DBLINK WHERE MASTERDBID = @DBID OR SUBDBID = @DBID",
+        "DELETE FROM SYNC_MAPPING WHERE MASTERDBID = @DBID OR SUBDBID = @DBID",
+        "DELETE FROM SYNC_USER_DBACL WHERE DBID = @DBID",
+        "DELETE FROM SYNC_DATABASE WHERE DBID = @DBID"
+    ];
 
     public Task SetActiveAsync(int dbId, bool active, string user, CancellationToken cancellationToken = default) =>
         _db.ExecuteAsync(

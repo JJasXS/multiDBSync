@@ -29,7 +29,15 @@
     {
         <div class="table-wrap">
             <table>
-                <thead><tr><th>Name</th><th>Role</th><th>Status</th><th>Last connection</th><th>Last sync</th></tr></thead>
+                <thead>
+                    <tr>
+                        <th>Name</th><th>Role</th><th>Status</th><th>Last connection</th><th>Last sync</th>
+                        @if (Model.IsAdmin)
+                        {
+                            <th class="db-row-delete"><span class="visually-hidden">Delete</span></th>
+                        }
+                    </tr>
+                </thead>
                 <tbody>
                 @foreach (var d in Model.Databases)
                 {
@@ -56,6 +64,25 @@
                         </td>
                         <td>@(d.LastConnOk?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
                         <td>@(d.LastSyncOk?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+                        @if (Model.IsAdmin)
+                        {
+                            <td class="db-row-delete">
+                                <form method="post" asp-page-handler="Delete" asp-route-id="@d.DbId" class="accounts-delete-form">
+                                    <button type="submit"
+                                            class="accounts-icon-btn accounts-status-delete"
+                                            title="Delete @d.DisplayName"
+                                            aria-label="Delete @d.DisplayName"
+                                            data-confirm="Delete @d.DisplayName? This removes the company and its SQL API keys. The database file stays on disk."
+                                            data-confirm-title="Delete company"
+                                            data-confirm-ok="Delete"
+                                            data-confirm-danger>
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                            <path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/>
+                                        </svg>
+                                    </button>
+                                </form>
+                            </td>
+                        }
                     </tr>
                 }
                 </tbody>
