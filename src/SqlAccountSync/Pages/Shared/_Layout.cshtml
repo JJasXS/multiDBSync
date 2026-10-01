@@ -41,11 +41,6 @@
         var current = ViewContext.RouteData.Values["page"]?.ToString() ?? "";
         return current is "/Push/Index" or "/Jobs/Index" ? "active" : "";
     }
-    string MasterDataNavClass()
-    {
-        var current = ViewContext.RouteData.Values["page"]?.ToString() ?? "";
-        return current is "/Accounts/Index" or "/Partners/Create" ? "active" : "";
-    }
     var showMappingsUi = FeatureOptions.Value.ShowMappingsUi;
     var showSyncConfigUi = FeatureOptions.Value.ShowSyncConfigUi;
 }
@@ -78,7 +73,6 @@
             }
             <div class="group">Operations</div>
             <a class="@SyncNavClass()" asp-page="/Push/Index">Synchronization</a>
-            <a class="@MasterDataNavClass()" asp-page="/Accounts/Index" asp-route-tab="partners">Master data</a>
             <a class="@DocumentsNavClass()" asp-page="/Transactions/Index">Document transfer</a>
             <a class="@LogsNavClass()" asp-page="/Logs">Logs</a>
             <div class="nav-footer">
