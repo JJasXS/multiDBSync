@@ -185,6 +185,9 @@ ORDER BY M.DISPLAYNAME, S.DISPLAYNAME", r => new DatabaseLink
     {
         if (masterId == subId)
             throw new InvalidOperationException("A database cannot be linked to itself. Choose a different Master and Sub.");
+        var existing = await ExistingLinkIdAsync(masterId, subId, cancellationToken).ConfigureAwait(false);
+        if (existing > 0)
+            return await ReactivateLinkAsync(existing, cancellationToken).ConfigureAwait(false);
         var id = (int)await _db.NextIdAsync("GEN_SYNC_DBLINK", cancellationToken).ConfigureAwait(false);
         try
         {
@@ -200,8 +203,35 @@ VALUES (@LINKID, @MASTERDBID, @SUBDBID, 1, CURRENT_TIMESTAMP, @USER)",
         return id;
     }
 
-    public Task DeactivateLinkAsync(int linkId, CancellationToken cancellationToken = default) =>
-        _db.ExecuteAsync("UPDATE SYNC_DBLINK SET ISACTIVE=0 WHERE LINKID=@LINKID", new { LINKID = linkId }, cancellationToken);
+    public async Task DeactivateLinkAsync(int linkId, CancellationToken cancellationToken = default)
+    {
+        await _db.ExecuteAsync(
+            "UPDATE SYNC_RULE SET ENABLED=0 WHERE LINKID=@LINKID",
+            new { LINKID = linkId },
+            cancellationToken).ConfigureAwait(false);
+        await _db.ExecuteAsync(
+            "UPDATE SYNC_DBLINK SET ISACTIVE=0 WHERE LINKID=@LINKID",
+            new { LINKID = linkId },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<int> ExistingLinkIdAsync(int masterId, int subId, CancellationToken cancellationToken)
+    {
+        var raw = await _db.ScalarAsync(
+            "SELECT LINKID FROM SYNC_DBLINK WHERE MASTERDBID=@MASTERDBID AND SUBDBID=@SUBDBID",
+            new { MASTERDBID = masterId, SUBDBID = subId },
+            cancellationToken).ConfigureAwait(false);
+        return raw is null or DBNull ? 0 : Convert.ToInt32(raw);
+    }
+
+    private async Task<int> ReactivateLinkAsync(int linkId, CancellationToken cancellationToken)
+    {
+        await _db.ExecuteAsync(
+            "UPDATE SYNC_DBLINK SET ISACTIVE=1 WHERE LINKID=@LINKID",
+            new { LINKID = linkId },
+            cancellationToken).ConfigureAwait(false);
+        return linkId;
+    }
 
     public async Task<DashboardStats> DashboardAsync(CancellationToken cancellationToken = default)
     {

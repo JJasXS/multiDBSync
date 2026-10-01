@@ -1,11 +1,8 @@
-using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using SqlAccountSync.Helpers;
 using SqlAccountSync.Models;
 using SqlAccountSync.Services.Accounts;
-using SqlAccountSync.Services.Audit;
 using SqlAccountSync.Services.Databases;
-using SqlAccountSync.Services.Queue;
 using SqlAccountSync.Services.SqlAccount;
 using SqlAccountSync.Services.Sync;
 
@@ -17,23 +14,17 @@ public class IndexModel : SyncPageModel
     private readonly ISqlAccountReadAdapter _read;
     private readonly ISqlAccountWriteAdapter _write;
     private readonly ISyncOrchestrator _sync;
-    private readonly IJobQueue _jobs;
-    private readonly IAuditService _audit;
 
     public IndexModel(
         IDatabaseRegistry registry,
         ISqlAccountReadAdapter read,
         ISqlAccountWriteAdapter write,
-        ISyncOrchestrator sync,
-        IJobQueue jobs,
-        IAuditService audit)
+        ISyncOrchestrator sync)
     {
         _registry = registry;
         _read = read;
         _write = write;
         _sync = sync;
-        _jobs = jobs;
-        _audit = audit;
     }
 
     [BindProperty(SupportsGet = true)] public string Tab { get; set; } = "push";
@@ -42,11 +33,6 @@ public class IndexModel : SyncPageModel
 
     [BindProperty] public List<string> SelectedCodes { get; set; } = [];
     [BindProperty] public List<int> SelectedSubDbIds { get; set; } = [];
-
-    [BindProperty] public int MasterDbId { get; set; }
-    [BindProperty] public int SubDbId { get; set; }
-    [BindProperty] public string JobEntityCode { get; set; } = "CUSTOMER";
-    [BindProperty] public string MasterCode { get; set; } = "";
 
     [BindProperty] public string EditCode { get; set; } = "";
     [BindProperty] public string EditDescription { get; set; } = "";
@@ -63,26 +49,14 @@ public class IndexModel : SyncPageModel
     public Dictionary<int, string> TargetEntityHints { get; set; } = new();
     public RegisteredDatabase? SelectedSource { get; set; }
 
-    public List<SyncJob> Jobs { get; set; } = [];
-    public List<RegisteredDatabase> Databases { get; set; } = [];
-    public DryRunResult? DryRun { get; set; }
-
     public FlashToastModel? FlashToast { get; set; }
-
-    public bool IsJobsTab => string.Equals(NormalizeTab(Tab), "jobs", StringComparison.OrdinalIgnoreCase);
 
     public bool IsAccountEntity =>
         string.Equals(EntityCode, EntityCodes.Account, StringComparison.OrdinalIgnoreCase);
 
-    public async Task OnGetAsync(string? status)
+    public async Task OnGetAsync()
     {
-        Tab = NormalizeTab(Tab);
-        if (IsJobsTab)
-        {
-            await LoadJobsAsync(status);
-            return;
-        }
-
+        Tab = "push";
         await LoadPushAsync();
     }
 
@@ -149,57 +123,6 @@ public class IndexModel : SyncPageModel
         return Page();
     }
 
-    public async Task<IActionResult> OnPostDryRunAsync()
-    {
-        if (!CanOperate) return Forbid();
-        Tab = "jobs";
-        JobEntityCode = NormalizeEntity(JobEntityCode);
-        if (await AccountJobSourceRejectedAsync())
-            return Page();
-        DryRun = await _sync.DryRunMasterAsync(MasterDbId, SubDbId, JobEntityCode, MasterCode);
-        await LoadJobsAsync(null);
-        return Page();
-    }
-
-    public async Task<IActionResult> OnPostEnqueueAsync()
-    {
-        if (!CanOperate) return Forbid();
-        Tab = "jobs";
-        JobEntityCode = NormalizeEntity(JobEntityCode);
-        if (await AccountJobSourceRejectedAsync())
-            return Page();
-        var (id, msg) = await _sync.EnqueueMasterAsync(MasterDbId, SubDbId, JobEntityCode, MasterCode, dryRun: false, CurrentEmail);
-        await _audit.WriteAsync(new AuditEntry
-        {
-            UserEmail = CurrentEmail,
-            Action = "USER EXECUTED SYNC",
-            RecordId = id.ToString(CultureInfo.InvariantCulture),
-            Result = "QUEUED",
-            RequestId = id.ToString(CultureInfo.InvariantCulture)
-        });
-        FlashToast = new FlashToastModel
-        {
-            Title = msg,
-            Ok = id > 0
-        };
-        await LoadJobsAsync(null);
-        return Page();
-    }
-
-    public async Task<IActionResult> OnPostCancelAsync(int jobId)
-    {
-        if (!CanOperate) return Forbid();
-        await _jobs.CancelAsync(jobId);
-        return RedirectToPage(new { tab = "jobs" });
-    }
-
-    public async Task<IActionResult> OnPostUnlockAsync(int jobId)
-    {
-        if (!CanOperate) return Forbid();
-        await _jobs.UnlockProcessingAsync(jobId);
-        return RedirectToPage(new { tab = "jobs" });
-    }
-
     private async Task LoadPushAsync()
     {
         EntityCode = NormalizeEntity(EntityCode);
@@ -215,12 +138,6 @@ public class IndexModel : SyncPageModel
             return;
 
         Records = await LoadRecordsAsync(SelectedSource, EntityCode);
-    }
-
-    private async Task LoadJobsAsync(string? status)
-    {
-        Jobs = await _jobs.ListAsync(status);
-        Databases = await _registry.ListAsync();
     }
 
     private async Task<List<RegisteredDatabase>> ResolveTargetsAsync(int sourceDbId, List<RegisteredDatabase> databases)
@@ -250,9 +167,6 @@ public class IndexModel : SyncPageModel
         }
         return hints;
     }
-
-    private static string NormalizeTab(string? tab) =>
-        string.Equals(tab, "jobs", StringComparison.OrdinalIgnoreCase) ? "jobs" : "push";
 
     private static string NormalizeEntity(string entity) =>
         PushableEntityCodes.NormalizePush(entity, EntityCodes.Customer);
@@ -295,18 +209,6 @@ public class IndexModel : SyncPageModel
             return false;
         FlashToast = FlashToasts.Fail("Select a Master (or BOTH) database as the source.");
         await LoadPushAsync();
-        return true;
-    }
-
-    private async Task<bool> AccountJobSourceRejectedAsync()
-    {
-        if (!string.Equals(JobEntityCode, EntityCodes.Account, StringComparison.OrdinalIgnoreCase))
-            return false;
-        var source = await _registry.GetAsync(MasterDbId);
-        if (SyncTargetResolver.IsMasterOrBoth(source))
-            return false;
-        FlashToast = FlashToasts.Fail("Select a Master (or BOTH) database as the source.");
-        await LoadJobsAsync(null);
         return true;
     }
 

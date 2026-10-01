@@ -189,6 +189,22 @@ public class LinkModel : SyncPageModel
         return FromDashboard ? RedirectToPage("/Index") : RedirectToPage("Index");
     }
 
+    public async Task<IActionResult> OnPostUnlinkAsync(int linkId)
+    {
+        if (!IsAdmin) return Forbid();
+        if (linkId <= 0)
+            return await LinkFailedAsync("Choose a relationship to unlink.");
+        await _registry.DeactivateLinkAsync(linkId);
+        await _audit.WriteAsync(new AuditEntry
+        {
+            UserEmail = CurrentEmail,
+            Action = "USER REMOVED DBLINK",
+            RecordId = linkId.ToString(),
+            Result = "SUCCESS"
+        });
+        return FromDashboard ? RedirectToPage("/Index") : RedirectToPage("Index");
+    }
+
     private bool FromDashboard =>
         string.Equals(ReturnTo, "dashboard", StringComparison.OrdinalIgnoreCase);
 

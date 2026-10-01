@@ -3,9 +3,6 @@
 @{
     ViewData["Title"] = "Synchronization";
     var entities = PushableEntityCodes.Push;
-    var isJobs = Model.IsJobsTab;
-    var sectionLabel = isJobs ? "Manual push" : "Multi Push";
-    var sectionHint = isJobs ? "One row at a time" : "Multiple rows";
     var isAccount = Model.IsAccountEntity;
     var recordsTitle = isAccount ? "Accounts" : Model.EntityCode == EntityCodes.Supplier ? "Suppliers" : "Customers";
     var codeColumns = 2 + (Model.CanOperate ? 1 : 0) + (isAccount && Model.CanOperate ? 1 : 0);
@@ -21,43 +18,11 @@
 <div class="card sync-page-card">
     <div class="card-head master-section-head">
         <div class="master-section-current">
-            <span class="master-section-label">@sectionLabel</span>
-            <span class="master-section-hint">@sectionHint</span>
-        </div>
-        <div class="master-section-menu" data-master-menu>
-            <button type="button"
-                    class="master-section-dots"
-                    aria-label="Switch synchronization mode"
-                    aria-haspopup="menu"
-                    aria-expanded="false"
-                    data-master-menu-toggle>
-                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-                    <circle cx="12" cy="5" r="1.7" fill="currentColor"/>
-                    <circle cx="12" cy="12" r="1.7" fill="currentColor"/>
-                    <circle cx="12" cy="19" r="1.7" fill="currentColor"/>
-                </svg>
-            </button>
-            <div class="master-section-panel" role="menu" hidden data-master-menu-panel>
-                <a class="master-section-option @(!isJobs ? "is-active" : "")"
-                   role="menuitem"
-                   asp-page="/Push/Index" asp-route-tab="push"
-                   aria-current="@(!isJobs ? "page" : null)">
-                    <span class="master-section-option-title">Multi Push</span>
-                    <span class="master-section-option-desc">Multiple rows</span>
-                </a>
-                <a class="master-section-option @(isJobs ? "is-active" : "")"
-                   role="menuitem"
-                   asp-page="/Push/Index" asp-route-tab="jobs"
-                   aria-current="@(isJobs ? "page" : null)">
-                    <span class="master-section-option-title">Manual push</span>
-                    <span class="master-section-option-desc">One row at a time</span>
-                </a>
-            </div>
+            <span class="master-section-label">Multi Push</span>
+            <span class="master-section-hint">Multiple rows</span>
         </div>
     </div>
 
-@if (!isJobs)
-{
     <div class="push-workspace multi-push">
         <form method="get" class="push-source-form">
             <input type="hidden" name="tab" value="push" />
@@ -387,157 +352,6 @@
   };
   document.querySelectorAll('[data-accounts-edit-close]').forEach(btn => btn.addEventListener('click', close));
   modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
-})();
-</script>
-}
-}
-else
-{
-    var jobColumns = Model.CanOperate ? 6 : 5;
-    <div class="push-workspace multi-push">
-        @if (Model.CanOperate)
-        {
-            <form id="manualSyncForm" method="post" class="push-source-form">
-                <input type="hidden" name="Tab" value="jobs" />
-                <div class="route-fields push-route-fields jobs-route-fields">
-                    <div class="route-field">
-                        <label for="MasterDbId">Source</label>
-                        <select asp-for="MasterDbId">@foreach (var d in Model.Databases) { <option value="@d.DbId">@d.DisplayName</option> }</select>
-                    </div>
-                    <span class="route-arrow push-route-arrow" aria-hidden="true">→</span>
-                    <div class="route-field">
-                        <label for="SubDbId">Target</label>
-                        <select asp-for="SubDbId">@foreach (var d in Model.Databases) { <option value="@d.DbId">@d.DisplayName</option> }</select>
-                    </div>
-                    <div class="route-field">
-                        <label for="JobEntityCode">Entity</label>
-                        <select asp-for="JobEntityCode">
-                            <option value="CUSTOMER">CUSTOMER</option>
-                            <option value="SUPPLIER">SUPPLIER</option>
-                            <option value="ACCOUNT">ACCOUNT</option>
-                        </select>
-                    </div>
-                    <div class="route-field">
-                        <label for="MasterCode">Code</label>
-                        <input asp-for="MasterCode" placeholder="Code" />
-                    </div>
-                </div>
-            </form>
-        }
-        <partial name="_DryRunToast" model="Model.DryRun" />
-        <div class="push-layout jobs-layout">
-            <section class="push-panel">
-                <div class="push-panel-head">
-                    <div>
-                        <h3>Jobs</h3>
-                        <p class="push-panel-count" data-job-count>@Model.Jobs.Count jobs</p>
-                    </div>
-                    <div class="push-panel-search">
-                        <label class="sr-only" for="jobSearch">Search jobs</label>
-                        <input id="jobSearch" type="search" placeholder="Search job, status, or error..." autocomplete="off" spellcheck="false" />
-                    </div>
-                </div>
-                <div class="push-panel-table-wrap push-jobs-table-wrap">
-                    <table class="push-panel-table" id="jobsTable">
-                        <thead>
-                            <tr>
-                                <th>Job</th>
-                                <th>Kind</th>
-                                <th>Status</th>
-                                <th>Attempts</th>
-                                <th class="col-job-error">Error</th>
-                                @if (Model.CanOperate)
-                                {
-                                    <th class="col-actions"></th>
-                                }
-                            </tr>
-                        </thead>
-                        <tbody>
-                        @if (Model.Jobs.Count == 0)
-                        {
-                            <tr>
-                                <td colspan="@jobColumns" class="empty">No jobs.</td>
-                            </tr>
-                        }
-                        else
-                        {
-                            @foreach (var j in Model.Jobs)
-                            {
-                                var kind = SyncDisplayNames.JobKind(j.JobKind, j.DryRun);
-                                <tr id="job-@j.JobId" data-job-row data-job-text="@($"{j.JobId} {kind} {j.Status} {j.ErrorMessage}")">
-                                    <td>@j.JobId</td>
-                                    <td>@kind</td>
-                                    <td><span class="badge badge-@(j.Status.ToLowerInvariant())">@j.Status</span></td>
-                                    <td>@j.Attempts / @j.MaxAttempts</td>
-                                    <td class="col-job-error"><span class="job-error-text">@j.ErrorMessage</span></td>
-                                    @if (Model.CanOperate)
-                                    {
-                                        <td class="col-actions">
-                                            @if (j.Status is "PROCESSING")
-                                            {
-                                                <form method="post" asp-page-handler="Unlock" asp-route-jobId="@j.JobId" style="display:inline">
-                                                    <input type="hidden" name="Tab" value="jobs" />
-                                                    <button class="btn small secondary" type="submit" data-confirm="Unlock this stuck PROCESSING job so the worker can retry it?">Unlock</button>
-                                                </form>
-                                                <form method="post" asp-page-handler="Cancel" asp-route-jobId="@j.JobId" style="display:inline">
-                                                    <input type="hidden" name="Tab" value="jobs" />
-                                                    <button class="btn small secondary" type="submit" data-confirm="Cancel this PROCESSING job?">Cancel</button>
-                                                </form>
-                                            }
-                                            else if (j.Status is "PENDING" or "RETRYING" or "FAILED")
-                                            {
-                                                <form method="post" asp-page-handler="Cancel" asp-route-jobId="@j.JobId">
-                                                    <input type="hidden" name="Tab" value="jobs" />
-                                                    <button class="btn small secondary" type="submit">Cancel</button>
-                                                </form>
-                                            }
-                                        </td>
-                                    }
-                                </tr>
-                            }
-                            <tr id="jobSearchEmpty" hidden>
-                                <td colspan="@jobColumns" class="empty">No jobs match that search.</td>
-                            </tr>
-                        }
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-        </div>
-        @if (Model.CanOperate)
-        {
-            <div class="push-actions">
-                <button class="btn" type="submit" form="manualSyncForm" asp-page-handler="Enqueue"
-                        data-confirm="Queue a live synchronization? Destination data may be created."
-                        data-confirm-title="Confirm sync"
-                        data-confirm-ok="Sync now">Sync now</button>
-            </div>
-        }
-    </div>
-<script>
-(() => {
-  const search = document.getElementById('jobSearch');
-  const emptyRow = document.getElementById('jobSearchEmpty');
-  const count = document.querySelector('[data-job-count]');
-  const rows = () => Array.from(document.querySelectorAll('#jobsTable tbody tr[data-job-row]'));
-  const apply = () => {
-    const q = (search?.value || '').trim().toLowerCase();
-    let visible = 0;
-    rows().forEach((tr) => {
-      const show = !q || (tr.getAttribute('data-job-text') || '').toLowerCase().includes(q);
-      tr.hidden = !show;
-      if (show) visible++;
-    });
-    if (emptyRow) emptyRow.hidden = visible > 0 || rows().length === 0;
-    if (count) count.textContent = `${visible} job${visible === 1 ? '' : 's'}`;
-  };
-  search?.addEventListener('input', apply);
-  search?.addEventListener('keydown', (e) => {
-    if (e.key !== 'Enter' && e.key !== 'Escape') return;
-    e.preventDefault();
-    if (e.key === 'Escape') search.value = '';
-    apply();
-  });
 })();
 </script>
 }

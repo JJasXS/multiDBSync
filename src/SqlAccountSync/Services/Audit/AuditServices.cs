@@ -114,7 +114,7 @@ FROM SYNC_AUDIT ORDER BY AUDITID DESC";
 
         item.DisplayResult = ResolveDisplayResult(entry, job, txn);
         item.StatusDetail = ResolveStatusDetail(entry, job, txn);
-        (item.LinkUrl, item.LinkLabel) = ResolveLink(entry, job, txn);
+        (item.LinkUrl, item.LinkLabel) = ResolveLink(txn);
         return item;
     }
 
@@ -210,21 +210,10 @@ FROM SYNC_AUDIT ORDER BY AUDITID DESC";
         return detail.Length <= 120 ? detail : detail[..117] + "...";
     }
 
-    private static (string? Url, string Label) ResolveLink(AuditEntry entry, AuditJobRow? job, AuditTxnRow? txn)
+    private static (string? Url, string Label) ResolveLink(AuditTxnRow? txn)
     {
         if (txn is not null)
             return ($"/Transactions/Details/{txn.TxnPk}", "View transaction");
-
-        if (job is not null)
-            return ($"/push?tab=jobs#job-{job.JobId}", "View job");
-
-        if (IsTxnAction(entry.Action) && txn is null)
-            return (null, "");
-
-        if (string.Equals(entry.Action, "USER EXECUTED SYNC", StringComparison.OrdinalIgnoreCase)
-            && TryParseJobId(entry.RecordId, out var jobId))
-            return ($"/push?tab=jobs#job-{jobId}", "View job");
-
         return (null, "");
     }
 

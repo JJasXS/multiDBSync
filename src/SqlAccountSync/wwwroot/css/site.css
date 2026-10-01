@@ -1501,12 +1501,6 @@ code {
   grid-template-columns: minmax(0, 7fr) minmax(0, 3fr);
   gap: 12px;
 }
-.multi-push .jobs-layout {
-  grid-template-columns: minmax(0, 1fr);
-}
-.multi-push .jobs-route-fields {
-  grid-template-columns: minmax(0, 1.2fr) auto minmax(0, 1.2fr) minmax(140px, 0.7fr) minmax(120px, 0.6fr);
-}
 .multi-push .push-panel {
   min-width: 0;
   min-height: 0;
@@ -2259,6 +2253,24 @@ input:focus, select:focus, textarea:focus {
   color: var(--ice-heading);
 }
 
+.rel-edit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: min(360px, 50vh);
+  overflow: auto;
+}
+.rel-edit-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--ice-border-soft);
+  border-radius: 8px;
+  background: var(--ice-surface-alt);
+}
+.rel-edit-row form { margin: 0; }
 .rel-master { margin: 12px 0 4px; }
 .rel-master:first-child { margin-top: 0; }
 
@@ -2870,8 +2882,7 @@ input:focus, select:focus, textarea:focus {
     grid-template-columns: 1fr;
     gap: 16px;
   }
-  .multi-push .push-layout,
-  .multi-push .jobs-route-fields { grid-template-columns: 1fr; }
+  .multi-push .push-layout { grid-template-columns: 1fr; }
   .multi-push .push-panel,
   .accounts-sync .push-panel,
   .txn-form-card .push-panel { height: min(420px, 70vh); }

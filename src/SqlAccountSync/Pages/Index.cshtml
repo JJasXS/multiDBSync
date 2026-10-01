@@ -196,6 +196,10 @@
                         </summary>
                         <div class="kebab-menu">
                             <button type="button" id="openAddRelationship">Add relationship</button>
+                            @if (Model.Links.Count > 0)
+                            {
+                                <button type="button" id="openEditRelationship">Edit relationship</button>
+                            }
                         </div>
                     </details>
                 }
@@ -330,6 +334,48 @@
                 })();
                 if (document.querySelector("[data-link-error]")) openAddRelationship();
             </script>
+            <dialog id="editRelationshipDialog" class="accounts-modal" aria-labelledby="editRelationshipTitle">
+                <div class="accounts-modal-form">
+                    <div class="accounts-modal-head">
+                        <h3 id="editRelationshipTitle">Edit relationship</h3>
+                        <button type="button" class="accounts-modal-close" data-edit-relationship-close aria-label="Close">&times;</button>
+                    </div>
+                    <div class="accounts-modal-body">
+                        <p class="field-hint">Unlink a Sub from its Master. The company stays registered.</p>
+                        <div class="rel-edit-list">
+                            @foreach (var link in Model.Links)
+                            {
+                                <div class="rel-edit-row">
+                                    <span>@link.MasterName → @link.SubName</span>
+                                    <form method="post" asp-page="/Databases/Link" asp-page-handler="Unlink">
+                                        <input type="hidden" name="ReturnTo" value="dashboard" />
+                                        <input type="hidden" name="linkId" value="@link.LinkId" />
+                                        <button class="btn small secondary" type="submit"
+                                                data-confirm="Unlink @link.SubName from @link.MasterName?"
+                                                data-confirm-title="Unlink relationship"
+                                                data-confirm-ok="Unlink"
+                                                data-confirm-danger>Unlink</button>
+                                    </form>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                    <div class="accounts-modal-actions">
+                        <button type="button" class="btn btn-ghost" data-edit-relationship-close>Close</button>
+                    </div>
+                </div>
+            </dialog>
+            <script>
+                function openEditRelationship() {
+                    document.getElementById("openEditRelationship")?.closest("details.kebab")?.removeAttribute("open");
+                    const dialog = document.getElementById("editRelationshipDialog");
+                    if (dialog && typeof dialog.showModal === "function" && !dialog.open) dialog.showModal();
+                }
+                document.getElementById("openEditRelationship")?.addEventListener("click", openEditRelationship);
+                document.querySelectorAll("[data-edit-relationship-close]").forEach((btn) => {
+                    btn.addEventListener("click", () => document.getElementById("editRelationshipDialog")?.close());
+                });
+            </script>
         }
 
         @if (showMappingsUi)
@@ -448,7 +494,6 @@
         <div class="card">
             <div class="card-head">
                 <h3>Synchronization jobs</h3>
-                <a asp-page="/Push/Index" asp-route-tab="jobs">View</a>
             </div>
             @if (!Model.CentralConfigured)
             {
