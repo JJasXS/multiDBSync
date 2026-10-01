@@ -1034,6 +1034,14 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
                 enriched.Fields[GlAccountMapper.FieldDestParent] = "0";
             }
 
+            var blocked = await ClearUnusedPartyAccountAsync(dest!, destEntity, enriched.Code, writer, job.DryRun, cancellationToken)
+                .ConfigureAwait(false);
+            if (blocked is not null)
+            {
+                await _queue.CompleteAsync(job.JobId, JobStatuses.Failed, blocked, cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
             write = await writer.CreateMasterAsync(dest!, destEntity, enriched, stamp, src, sourceEntity, cancellationToken).ConfigureAwait(false);
             if (!write.Success && !string.IsNullOrWhiteSpace(prereqDiagnosis))
                 write = new WriteResult { Success = false, Message = write.Message + " " + prereqDiagnosis };
@@ -1063,13 +1071,13 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
 
 
         if (!write.Success)
-
         {
-
-            await _queue.CompleteAsync(job.JobId, JobStatuses.Retrying, write.Message, cancellationToken);
-
+            var status = IsGlCodeConflict(write.Message) ? JobStatuses.Failed : JobStatuses.Retrying;
+            var message = IsGlCodeConflict(write.Message)
+                ? $"Account code {record.Code} already exists on the destination chart, so this {destEntity.ToLowerInvariant()} cannot be created with the same code."
+                : write.Message;
+            await _queue.CompleteAsync(job.JobId, status, message, cancellationToken);
             return;
-
         }
 
 
@@ -1364,6 +1372,31 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
     }
 
 
+
+    private async Task<string?> ClearUnusedPartyAccountAsync(
+        RegisteredDatabase dest, string destEntity, string code, ISqlAccountWriteAdapter writer, bool dryRun,
+        CancellationToken cancellationToken)
+    {
+        if (dryRun || !PartnerSyncRules.IsPartyEntity(destEntity))
+            return null;
+        var key = (code ?? "").Trim();
+        if (key.Length == 0)
+            return null;
+        if (await _read.MasterExistsByCodeAsync(dest, destEntity, key, cancellationToken).ConfigureAwait(false))
+            return null;
+        if (!await _read.MasterExistsByCodeAsync(dest, EntityCodes.Account, key, cancellationToken).ConfigureAwait(false))
+            return null;
+        if (await _read.GlAccountHasActivityAsync(dest, key, cancellationToken).ConfigureAwait(false))
+            return $"Account code {key} already exists on {dest.DisplayName} and has postings, so this {destEntity.ToLowerInvariant()} cannot use that code.";
+
+        var deleted = await writer.DeleteMasterAsync(dest, EntityCodes.Account, key, cancellationToken).ConfigureAwait(false);
+        return deleted.Success
+            ? null
+            : $"Account code {key} already exists on {dest.DisplayName} and could not be removed: {deleted.Message}";
+    }
+
+    private static bool IsGlCodeConflict(string? message) =>
+        (message ?? "").Contains("GL_ACC_CODE", StringComparison.OrdinalIgnoreCase);
 
     private static void Add(DryRunResult result, string name, ValidationResult v) =>
 

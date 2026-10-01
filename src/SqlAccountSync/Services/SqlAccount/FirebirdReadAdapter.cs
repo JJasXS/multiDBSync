@@ -25,6 +25,8 @@ public interface ISqlAccountReadAdapter
     Task<MasterRecord?> GetItemDetailAsync(RegisteredDatabase db, string code, CancellationToken cancellationToken = default);
     Task<bool> PartyExistsByStampAsync(RegisteredDatabase db, string entityCode, string txnStamp, CancellationToken cancellationToken = default);
     Task<bool> MasterExistsByCodeAsync(RegisteredDatabase db, string entityCode, string code, CancellationToken cancellationToken = default);
+    /// <summary>True when the GL account has postings or child accounts.</summary>
+    Task<bool> GlAccountHasActivityAsync(RegisteredDatabase db, string code, CancellationToken cancellationToken = default);
     Task<StockGroupRecord?> GetStockGroupAsync(RegisteredDatabase db, string code, CancellationToken cancellationToken = default);
     Task<DocumentHeader?> GetDocumentAsync(RegisteredDatabase db, string docType, string docKeyOrNo, CancellationToken cancellationToken = default);
     Task<List<DocumentListItem>> ListDocumentsAsync(RegisteredDatabase db, string docType, int take = 200, CancellationToken cancellationToken = default);
@@ -163,6 +165,51 @@ public sealed class FirebirdReadAdapter : ISqlAccountReadAdapter
             CentralDb.Bind(cmd, new Dictionary<string, object?> { ["C"] = key });
             return Convert.ToInt32(await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false)) > 0;
         }, fallback: false, cancellationToken);
+    }
+
+    public Task<bool> GlAccountHasActivityAsync(RegisteredDatabase db, string code, CancellationToken cancellationToken = default)
+    {
+        var key = (code ?? "").Trim();
+        if (key.Length == 0)
+            return Task.FromResult(false);
+        return WithReadTxOrFallback(db, (conn, tx) => GlAccountHasActivityAsync(conn, tx, key, cancellationToken), fallback: true, cancellationToken);
+    }
+
+    private static async Task<bool> GlAccountHasActivityAsync(
+        FbConnection conn, FbTransaction tx, string code, CancellationToken cancellationToken)
+    {
+        var table = await FirstExistingConn(conn, tx, ["GL_ACC", "GL_ACCOUNT", "ACCOUNT"], cancellationToken)
+            .ConfigureAwait(false);
+        if (table is null)
+            return false;
+        var dockey = await ScalarIntAsync(conn, tx,
+            $"SELECT DOCKEY FROM {table} WHERE UPPER(TRIM(CODE))=UPPER(@C)", code, cancellationToken).ConfigureAwait(false);
+        if (dockey is null)
+            return false;
+        var children = await ScalarIntAsync(conn, tx,
+            $"SELECT COUNT(*) FROM {table} WHERE PARENT=@D", dockey.Value, cancellationToken).ConfigureAwait(false);
+        if (children is > 0)
+            return true;
+        if (!await TableExistsConn(conn, tx, "GL_TRANS", cancellationToken).ConfigureAwait(false))
+            return false;
+        var posts = await ScalarIntAsync(conn, tx,
+            "SELECT COUNT(*) FROM GL_TRANS WHERE UPPER(TRIM(CODE))=UPPER(@C)", code, cancellationToken).ConfigureAwait(false);
+        return posts is > 0;
+    }
+
+    private static async Task<int?> ScalarIntAsync(
+        FbConnection conn, FbTransaction tx, string sql, object codeOrDockey, CancellationToken cancellationToken)
+    {
+        await using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = sql;
+        SqlGuard.EnsureSelectOnly(cmd.CommandText);
+        var param = sql.Contains("@D", StringComparison.Ordinal) ? "D" : "C";
+        CentralDb.Bind(cmd, new Dictionary<string, object?> { [param] = codeOrDockey });
+        var raw = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        if (raw is null or DBNull)
+            return null;
+        return Convert.ToInt32(raw);
     }
 
     public Task<StockGroupRecord?> GetStockGroupAsync(RegisteredDatabase db, string code, CancellationToken cancellationToken = default)

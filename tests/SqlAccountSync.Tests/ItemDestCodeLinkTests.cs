@@ -154,6 +154,9 @@ public class ItemDestCodeLinkTests
         public Task<bool> MasterExistsByCodeAsync(RegisteredDatabase db, string entityCode, string code, CancellationToken cancellationToken = default) =>
             Task.FromResult(harness.DestinationItemExists);
 
+        public Task<bool> GlAccountHasActivityAsync(RegisteredDatabase db, string code, CancellationToken cancellationToken = default) =>
+            Task.FromResult(false);
+
         public Task<MasterRecord?> GetItemDetailAsync(RegisteredDatabase db, string code, CancellationToken cancellationToken = default) =>
             Task.FromResult<MasterRecord?>(new MasterRecord { Code = code, Description = $"Item {code}" });
 
