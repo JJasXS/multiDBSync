@@ -16,6 +16,8 @@ public interface ITenantDatabaseBootstrap
 
     Task<int?> GetMaxDatabasesAsync(string tenantCode, CancellationToken cancellationToken = default);
 
+    Task<(bool ShowSynchronization, bool ShowDocumentTransfer)> GetMenuFlagsAsync(string tenantCode, CancellationToken cancellationToken = default);
+
     Task RefreshAsync(string tenantCode, CancellationToken cancellationToken = default);
 }
 
@@ -123,6 +125,23 @@ public sealed class TenantEmailBootstrap : ITenantEmailBootstrap, ITenantDatabas
         if (max is > 0)
             _cache.Set(cacheKey, max.Value, CacheFor);
         return max;
+    }
+
+    public async Task<(bool ShowSynchronization, bool ShowDocumentTransfer)> GetMenuFlagsAsync(
+        string tenantCode, CancellationToken cancellationToken = default)
+    {
+        var code = (tenantCode ?? "").Trim();
+        if (code.Length == 0)
+            return (true, true);
+
+        var raw = await FetchPayloadJsonAsync(code, cancellationToken).ConfigureAwait(false);
+        if (raw is null)
+            return (true, true);
+
+        using var doc = JsonDocument.Parse(raw);
+        return (
+            ReadFlag(doc.RootElement, "maxDatabasesShowSynchronizationUi", "ShowSynchronizationUi"),
+            ReadFlag(doc.RootElement, "maxDatabasesShowDocumentTransferUi", "ShowDocumentTransferUi"));
     }
 
     public async Task RefreshAsync(string tenantCode, CancellationToken cancellationToken = default)
@@ -258,6 +277,35 @@ public sealed class TenantEmailBootstrap : ITenantEmailBootstrap, ITenantDatabas
         if (TryScalar(map, "otpEnabled", out var otpText))
             o.OtpEnabled = otpText.Equals("true", StringComparison.OrdinalIgnoreCase) || otpText == "1";
         return o;
+    }
+
+    private static bool ReadFlag(JsonElement root, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (TryFindSection(root, name, 0, out var el))
+                return InterpretFlag(el);
+        }
+        return true;
+    }
+
+    private static bool InterpretFlag(JsonElement el)
+    {
+        if (el.ValueKind == JsonValueKind.False)
+            return false;
+        if (el.ValueKind == JsonValueKind.True)
+            return true;
+        if (el.ValueKind == JsonValueKind.String)
+        {
+            var text = (el.GetString() ?? "").Trim();
+            if (text.Equals("false", StringComparison.OrdinalIgnoreCase) || text == "0")
+                return false;
+            if (text.Equals("true", StringComparison.OrdinalIgnoreCase) || text == "1")
+                return true;
+        }
+        if (el.ValueKind == JsonValueKind.Object && TryProp(el, "BOOL", out var boxed))
+            return boxed.ValueKind != JsonValueKind.False;
+        return true;
     }
 
     private static int? ReadMaxDatabases(JsonElement root)

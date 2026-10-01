@@ -1,5 +1,6 @@
 @page "/accounts"
 @model SqlAccountSync.Pages.Accounts.IndexModel
+@inject SqlAccountSync.Services.Tenants.TenantMenuFlags MenuFlags
 @{
     ViewData["Title"] = "Master data";
     var isPartners = Model.IsPartnersTab;
@@ -60,12 +61,15 @@
                 </svg>
             </button>
             <div class="master-section-panel" role="menu" hidden data-master-menu-panel>
+                @if (MenuFlags.ShowSynchronization)
+                {
                 <a class="master-section-option"
                    role="menuitem"
                    asp-page="/Push/Index" asp-route-tab="push" asp-route-EntityCode="ACCOUNT">
                     <span class="master-section-option-title">Accounts</span>
                     <span class="master-section-option-desc">Chart of accounts</span>
                 </a>
+                }
                 <a class="master-section-option @(isPartners ? "is-active" : "")"
                    role="menuitem"
                    asp-page="/Accounts/Index" asp-route-tab="partners" asp-route-entityCode="@Model.EntityCode" asp-route-dbId="@Model.DbId"

@@ -10,6 +10,7 @@
 @using Microsoft.Extensions.Options
 @using SqlAccountSync.Options
 @inject IOptions<FeatureOptions> FeatureOptions
+@inject SqlAccountSync.Services.Tenants.TenantMenuFlags MenuFlags
 @{
     bool IsActive(string page, string? entity = null)
     {
@@ -72,8 +73,14 @@
                 }
             }
             <div class="group">Operations</div>
-            <a class="@SyncNavClass()" asp-page="/Push/Index">Synchronization</a>
-            <a class="@DocumentsNavClass()" asp-page="/Transactions/Index">Document transfer</a>
+            @if (MenuFlags.ShowSynchronization)
+            {
+                <a class="@SyncNavClass()" asp-page="/Push/Index">Synchronization</a>
+            }
+            @if (MenuFlags.ShowDocumentTransfer)
+            {
+                <a class="@DocumentsNavClass()" asp-page="/Transactions/Index">Document transfer</a>
+            }
             <a class="@LogsNavClass()" asp-page="/Logs">Logs</a>
             <div class="nav-footer">
                 @if (SqlAccountSync.Services.Auth.CurrentUser.IsAdmin(User))

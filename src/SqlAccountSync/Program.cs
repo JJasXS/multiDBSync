@@ -100,6 +100,7 @@ builder.Services.AddHttpClient<TenantEmailBootstrap>(client =>
 });
 builder.Services.AddTransient<ITenantEmailBootstrap>(sp => sp.GetRequiredService<TenantEmailBootstrap>());
 builder.Services.AddTransient<ITenantDatabaseBootstrap>(sp => sp.GetRequiredService<TenantEmailBootstrap>());
+builder.Services.AddSingleton<TenantMenuFlags>();
 builder.Services.AddSingleton<ISecretResolver, SecretResolver>();
 builder.Services.AddSingleton<ISqlApiCredentialBundle, SqlApiCredentialBundle>();
 builder.Services.AddSingleton<ISqlApiSecretProvisioner, SqlApiSecretProvisioner>();
@@ -189,6 +190,7 @@ app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseMiddleware<TenantMenuMiddleware>();
 app.MapGet("/health", async (IJobQueue queue) =>
 {
     var snap = await queue.GetHealthAsync();

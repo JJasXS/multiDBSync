@@ -11,16 +11,19 @@ public sealed class TenantConfigRefreshWorker : BackgroundService
     private readonly IServiceScopeFactory _scopes;
     private readonly IConfiguration _config;
     private readonly ILogger<TenantConfigRefreshWorker> _logger;
+    private readonly TenantMenuFlags _menu;
     private int _secretsMigrated;
 
     public TenantConfigRefreshWorker(
         IServiceScopeFactory scopes,
         IConfiguration config,
-        ILogger<TenantConfigRefreshWorker> logger)
+        ILogger<TenantConfigRefreshWorker> logger,
+        TenantMenuFlags menu)
     {
         _scopes = scopes;
         _config = config;
         _logger = logger;
+        _menu = menu;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -54,6 +57,8 @@ public sealed class TenantConfigRefreshWorker : BackgroundService
             using var scope = _scopes.CreateScope();
             var tenants = scope.ServiceProvider.GetRequiredService<ITenantDatabaseBootstrap>();
             await tenants.RefreshAsync(tenant, stoppingToken).ConfigureAwait(false);
+            var menu = await tenants.GetMenuFlagsAsync(tenant, stoppingToken).ConfigureAwait(false);
+            _menu.Apply(menu.ShowSynchronization, menu.ShowDocumentTransfer);
             await MigrateSecretsOnceAsync(scope.ServiceProvider, tenant, stoppingToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)

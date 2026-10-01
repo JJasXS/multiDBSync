@@ -3,6 +3,7 @@
 @using Microsoft.Extensions.Options
 @using SqlAccountSync.Options
 @inject IOptions<FeatureOptions> FeatureOptions
+@inject SqlAccountSync.Services.Tenants.TenantMenuFlags MenuFlags
 @{
     ViewData["Title"] = Model.Db?.DisplayName ?? "Database";
     var d = Model.Db!;
@@ -43,7 +44,10 @@
                 {
                     <button type="button" id="openEditDatabase">Edit</button>
                 }
-                <a asp-page="/Transactions/Index">Document transfer</a>
+                @if (MenuFlags.ShowDocumentTransfer)
+                {
+                    <a asp-page="/Transactions/Index">Document transfer</a>
+                }
                 <a asp-page="/Logs">View logs</a>
                 @if (showMappingsUi)
                 {
