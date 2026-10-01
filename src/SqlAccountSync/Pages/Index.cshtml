@@ -393,16 +393,26 @@
                         <button type="button" class="accounts-modal-close" data-edit-relationship-close aria-label="Close">&times;</button>
                     </div>
                     <div class="accounts-modal-body">
-                        <p class="field-hint">Untick a relationship, then press Update to unlink it. The company stays registered.</p>
+                        <p class="field-hint">Subs are listed under their master. Untick a sub, then press Update to unlink it. The company stays registered.</p>
                         <div class="rel-edit-list">
-                            @foreach (var link in Model.Links)
+                            @foreach (var group in Model.Links.GroupBy(l => l.MasterDbId).OrderBy(g => g.First().MasterName))
                             {
-                                <label class="rel-edit-row">
-                                    <input type="hidden" name="LinkIds" value="@link.LinkId" />
-                                    <input type="checkbox" name="KeepLinkIds" value="@link.LinkId" checked
-                                           data-rel-keep data-rel-name="@($"{link.MasterName} → {link.SubName}")" />
-                                    <span>@link.MasterName → @link.SubName</span>
-                                </label>
+                                <section class="rel-edit-group">
+                                    <div class="rel-edit-master">
+                                        <span class="rel-role">MASTER</span>
+                                        <span>@group.First().MasterName</span>
+                                    </div>
+                                    @foreach (var link in group.OrderBy(l => l.SubName))
+                                    {
+                                        <label class="rel-edit-row">
+                                            <input type="hidden" name="LinkIds" value="@link.LinkId" />
+                                            <input type="checkbox" name="KeepLinkIds" value="@link.LinkId" checked
+                                                   data-rel-keep data-rel-name="@($"{link.MasterName} → {link.SubName}")" />
+                                            <span class="rel-role">SUB</span>
+                                            <span>@link.SubName</span>
+                                        </label>
+                                    }
+                                </section>
                             }
                         </div>
                     </div>

@@ -2323,23 +2323,42 @@ input:focus, select:focus, textarea:focus {
 .rel-edit-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  max-height: min(360px, 50vh);
+  gap: 10px;
+  max-height: min(420px, 56vh);
   overflow: auto;
 }
+.rel-edit-group {
+  border: 1px solid var(--ice-border-soft);
+  border-radius: 8px;
+  background: var(--ice-surface-alt);
+  overflow: hidden;
+}
+.rel-edit-master {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  font-weight: 700;
+  color: var(--ice-heading);
+  background: rgba(30, 58, 82, 0.05);
+}
+.rel-edit-master span:last-child { min-width: 0; }
 .rel-edit-row {
   display: flex;
   align-items: center;
   justify-content: flex-start;
   gap: 10px;
-  padding: 8px 10px;
-  border: 1px solid var(--ice-border-soft);
-  border-radius: 8px;
-  background: var(--ice-surface-alt);
+  margin: 0 8px 0 22px;
+  padding: 8px 8px 8px 14px;
+  border: 0;
+  border-left: 1px solid var(--ice-border);
+  border-radius: 0;
+  background: transparent;
   cursor: pointer;
 }
+.rel-edit-group .rel-edit-row:last-child { margin-bottom: 8px; }
 .rel-edit-row input[type="checkbox"] { flex: 0 0 auto; margin: 0; }
-.rel-edit-row span { min-width: 0; }
+.rel-edit-row span:last-child { min-width: 0; }
 .rel-card .rel-head-side {
   display: flex;
   align-items: center;
