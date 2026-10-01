@@ -2330,14 +2330,16 @@ input:focus, select:focus, textarea:focus {
 .rel-edit-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  justify-content: flex-start;
+  gap: 10px;
   padding: 8px 10px;
   border: 1px solid var(--ice-border-soft);
   border-radius: 8px;
   background: var(--ice-surface-alt);
+  cursor: pointer;
 }
-.rel-edit-row form { margin: 0; }
+.rel-edit-row input[type="checkbox"] { flex: 0 0 auto; margin: 0; }
+.rel-edit-row span { min-width: 0; }
 .rel-card .rel-head-side {
   display: flex;
   align-items: center;

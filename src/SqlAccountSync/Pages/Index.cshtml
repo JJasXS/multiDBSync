@@ -386,35 +386,34 @@
                 if (document.querySelector("[data-link-error]")) openAddRelationship();
             </script>
             <dialog id="editRelationshipDialog" class="accounts-modal" aria-labelledby="editRelationshipTitle">
-                <div class="accounts-modal-form">
+                <form method="post" asp-page="/Databases/Link" asp-page-handler="UpdateLinks" class="accounts-modal-form" id="editRelationshipForm">
+                    <input type="hidden" name="ReturnTo" value="dashboard" />
                     <div class="accounts-modal-head">
                         <h3 id="editRelationshipTitle">Edit relationship</h3>
                         <button type="button" class="accounts-modal-close" data-edit-relationship-close aria-label="Close">&times;</button>
                     </div>
                     <div class="accounts-modal-body">
-                        <p class="field-hint">Unlink a Sub from its Master. The company stays registered.</p>
+                        <p class="field-hint">Untick a relationship, then press Update to unlink it. The company stays registered.</p>
                         <div class="rel-edit-list">
                             @foreach (var link in Model.Links)
                             {
-                                <div class="rel-edit-row">
+                                <label class="rel-edit-row">
+                                    <input type="hidden" name="LinkIds" value="@link.LinkId" />
+                                    <input type="checkbox" name="KeepLinkIds" value="@link.LinkId" checked
+                                           data-rel-keep data-rel-name="@($"{link.MasterName} → {link.SubName}")" />
                                     <span>@link.MasterName → @link.SubName</span>
-                                    <form method="post" asp-page="/Databases/Link" asp-page-handler="Unlink">
-                                        <input type="hidden" name="ReturnTo" value="dashboard" />
-                                        <input type="hidden" name="linkId" value="@link.LinkId" />
-                                        <button class="btn small secondary" type="submit"
-                                                data-confirm="Unlink @link.SubName from @link.MasterName?"
-                                                data-confirm-title="Unlink relationship"
-                                                data-confirm-ok="Unlink"
-                                                data-confirm-danger>Unlink</button>
-                                    </form>
-                                </div>
+                                </label>
                             }
                         </div>
                     </div>
                     <div class="accounts-modal-actions">
                         <button type="button" class="btn btn-ghost" data-edit-relationship-close>Close</button>
+                        <button class="btn" type="submit" id="updateRelationships"
+                                data-confirm-title="Update relationships"
+                                data-confirm-ok="Update"
+                                data-confirm-danger>Update</button>
                     </div>
-                </div>
+                </form>
             </dialog>
             <script>
                 function openEditRelationship() {
@@ -426,6 +425,24 @@
                 document.querySelectorAll("[data-edit-relationship-close]").forEach((btn) => {
                     btn.addEventListener("click", () => document.getElementById("editRelationshipDialog")?.close());
                 });
+                (function () {
+                    const form = document.getElementById("editRelationshipForm");
+                    const update = document.getElementById("updateRelationships");
+                    if (!form || !update) return;
+                    const boxes = () => Array.from(form.querySelectorAll("[data-rel-keep]"));
+                    const refresh = () => {
+                        const names = boxes().filter((box) => !box.checked).map((box) => box.getAttribute("data-rel-name"));
+                        if (names.length === 0) update.removeAttribute("data-confirm");
+                        else update.setAttribute("data-confirm", "Unlink " + names.join(", ") + "? The companies stay registered.");
+                    };
+                    form.addEventListener("change", refresh);
+                    form.addEventListener("submit", (e) => {
+                        if (boxes().some((box) => !box.checked)) return;
+                        e.preventDefault();
+                        document.getElementById("editRelationshipDialog")?.close();
+                    });
+                    refresh();
+                })();
             </script>
         }
 

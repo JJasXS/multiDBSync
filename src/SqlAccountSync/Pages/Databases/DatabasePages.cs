@@ -194,6 +194,21 @@ public class LinkModel : SyncPageModel
         if (!IsAdmin) return Forbid();
         if (linkId <= 0)
             return await LinkFailedAsync("Choose a relationship to unlink.");
+        await RemoveLinkAsync(linkId);
+        return FromDashboard ? RedirectToPage("/Index") : RedirectToPage("Index");
+    }
+
+    public async Task<IActionResult> OnPostUpdateLinksAsync(int[]? linkIds, int[]? keepLinkIds)
+    {
+        if (!IsAdmin) return Forbid();
+        var keep = new HashSet<int>(keepLinkIds ?? []);
+        foreach (var id in (linkIds ?? []).Where(id => id > 0 && !keep.Contains(id)).Distinct())
+            await RemoveLinkAsync(id);
+        return FromDashboard ? RedirectToPage("/Index") : RedirectToPage("Index");
+    }
+
+    private async Task RemoveLinkAsync(int linkId)
+    {
         await _registry.DeactivateLinkAsync(linkId);
         await _audit.WriteAsync(new AuditEntry
         {
@@ -202,7 +217,6 @@ public class LinkModel : SyncPageModel
             RecordId = linkId.ToString(),
             Result = "SUCCESS"
         });
-        return FromDashboard ? RedirectToPage("/Index") : RedirectToPage("Index");
     }
 
     private bool FromDashboard =>
