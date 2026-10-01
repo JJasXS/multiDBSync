@@ -57,6 +57,10 @@
                 </div>
                 <button type="button" class="nav-close" data-nav-close aria-label="Close menu">&times;</button>
             </div>
+            @if (SqlAccountSync.Services.Auth.CurrentUser.IsAdmin(User))
+            {
+                <a class="@NavClass("/Users/Index")" asp-page="/Users/Index">User management</a>
+            }
             <div class="group">Overview</div>
             <a class="@NavClass("/Index")" asp-page="/Index">Dashboard</a>
             <a class="@DatabasesNavClass()" asp-page="/Databases/Index">Databases</a>
@@ -83,10 +87,6 @@
             }
             <a class="@LogsNavClass()" asp-page="/Logs">Logs</a>
             <div class="nav-footer">
-                @if (SqlAccountSync.Services.Auth.CurrentUser.IsAdmin(User))
-                {
-                    <a class="@NavClass("/Users/Index")" asp-page="/Users/Index">Users</a>
-                }
                 <a class="nav-logout" asp-page="/Logout">Log out</a>
             </div>
         </nav>
