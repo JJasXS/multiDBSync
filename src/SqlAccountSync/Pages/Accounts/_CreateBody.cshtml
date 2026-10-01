@@ -21,6 +21,10 @@
                 <form id="createPartnerForm" method="post" asp-page-handler="Create" class="partner-form">
                     <input type="hidden" name="Tab" value="partners" />
                     <input type="hidden" asp-for="EntityCode" />
+                    <div class="partner-form-intro">
+                        <h3>@Model.EntityTitle Details</h3>
+                        <p>Enter @Model.EntityTitle.ToLowerInvariant() information</p>
+                    </div>
 
                     <div class="partner-db-row">
                         <div class="partner-field">
@@ -35,10 +39,16 @@
                         </div>
                         @if (Model.SubTargets.Count > 0)
                         {
-                            <div class="partner-push-banner">
+                            <div class="partner-field partner-also">
+                                <span class="partner-also-label" id="pushToSubsLabel">Also create on</span>
                                 <label class="check-label" for="PushToSubs">
-                                    <input asp-for="PushToSubs" id="PushToSubs" type="checkbox" />
-                                    <span>Also create on @string.Join(", ", Model.SubTargets.Select(s => s.DisplayName))</span>
+                                    <input asp-for="PushToSubs" id="PushToSubs" type="checkbox" aria-labelledby="pushToSubsLabel" />
+                                    <span class="partner-sub-names">
+                                        @foreach (var s in Model.SubTargets)
+                                        {
+                                            <span>@s.DisplayName</span>
+                                        }
+                                    </span>
                                 </label>
                                 @if (Model.SubTargetsMissingApi.Count > 0)
                                 {
@@ -111,18 +121,16 @@
             <div class="card-head partner-existing-head">
                 <div>
                     <h3>Existing @Model.EntityTitle.ToLowerInvariant()s</h3>
-                    <p class="partner-form-lede">On the selected database</p>
+                    <p class="partner-form-lede">@(Model.EntityTitle)s in selected database</p>
                 </div>
-                @if (Model.Existing.Count > 0)
-                {
-                    <span class="count-pill" aria-label="@Model.Existing.Count records">@Model.Existing.Count</span>
-                }
+                <span class="count-pill" aria-label="@Model.Existing.Count records">@Model.Existing.Count</span>
             </div>
             @if (Model.Existing.Count > 0)
             {
                 <div class="partner-existing-filter">
                     <label class="sr-only" for="partnerExistingSearch">Filter existing</label>
-                    <input id="partnerExistingSearch" type="search" placeholder="Filter by code or name…"
+                    <input id="partnerExistingSearch" type="search"
+                           placeholder="Search code or @Model.EntityTitle.ToLowerInvariant() name..."
                            autocomplete="off" spellcheck="false" />
                 </div>
             }
@@ -137,7 +145,7 @@
                     <tbody id="partnerExistingBody">
                     @if (Model.Existing.Count == 0)
                     {
-                        <tr><td colspan="2" class="empty">No @Model.EntityTitle.ToLowerInvariant()s loaded.</td></tr>
+                        <tr><td colspan="2" class="empty">No @(Model.EntityTitle.ToLowerInvariant())s found</td></tr>
                     }
                     else
                     {
@@ -148,6 +156,9 @@
                                 <td><span class="cell-truncate" title="@r.Description">@r.Description</span></td>
                             </tr>
                         }
+                        <tr id="partnerSearchEmpty" hidden>
+                            <td colspan="2" class="empty">No matching @(Model.EntityTitle.ToLowerInvariant())s found</td>
+                        </tr>
                     }
                     </tbody>
                 </table>
@@ -221,14 +232,27 @@
 
   var search = document.getElementById('partnerExistingSearch');
   var body = document.getElementById('partnerExistingBody');
+  var searchEmpty = document.getElementById('partnerSearchEmpty');
   if (search && body) {
     search.addEventListener('input', function () {
       var q = String(search.value || '').trim().toLowerCase();
       var rows = body.querySelectorAll('tr[data-filter]');
+      var visible = 0;
       for (var i = 0; i < rows.length; i++) {
         var hay = rows[i].getAttribute('data-filter') || '';
-        rows[i].hidden = q.length > 0 && hay.indexOf(q) < 0;
+        var show = q.length === 0 || hay.indexOf(q) >= 0;
+        rows[i].hidden = !show;
+        if (show) visible++;
       }
+      if (searchEmpty) searchEmpty.hidden = visible > 0 || rows.length === 0;
+    });
+  }
+
+  var createForm = document.getElementById('createPartnerForm');
+  if (createForm) {
+    createForm.addEventListener('submit', function () {
+      var button = document.querySelector('button[form="createPartnerForm"]');
+      if (button) button.disabled = true;
     });
   }
 })();
