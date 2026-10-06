@@ -27,6 +27,38 @@ public interface ISqlAccountReadAdapter
     Task<bool> MasterExistsByCodeAsync(RegisteredDatabase db, string entityCode, string code, CancellationToken cancellationToken = default);
     /// <summary>True when the GL account has postings or child accounts.</summary>
     Task<bool> GlAccountHasActivityAsync(RegisteredDatabase db, string code, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// GL_TRANS lines for one company database, newest first.
+    /// Null when that database cannot be read. An empty list means the database opened and has no matching lines.
+    /// Date bounds are inclusive calendar days. A null bound does not constrain that side.
+    /// <paramref name="codeSearch"/> is a case-insensitive partial match on GL_TRANS.CODE.
+    /// </summary>
+    Task<List<GlTransLine>?> ListGlTransactionsAsync(
+        RegisteredDatabase db,
+        DateTime? dateFrom = null,
+        DateTime? dateTo = null,
+        string? codeSearch = null,
+        CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Restored Details-card read from the before-gl-acc-description backup.
+    /// Description comes from GL_ACC.DESCRIPTION and amount is DR minus CR.
+    /// </summary>
+    Task<List<GlTransLine>?> ListPlByProjectLinesAsync(
+        RegisteredDatabase db,
+        DateTime? dateFrom = null,
+        DateTime? dateTo = null,
+        string? codeSearch = null,
+        CancellationToken cancellationToken = default);
+    /// <summary>
+    /// PROJECT rows for SO Listing and Occupancy, with optional sales order and billing email.
+    /// Null when that database cannot be read. An empty list means the database opened and no rows matched.
+    /// <paramref name="filterColumn"/> is a whitelist key, not a SQL identifier from the caller.
+    /// </summary>
+    Task<List<SoListingRow>?> ListSoListingAsync(
+        RegisteredDatabase db,
+        string? filterColumn = null,
+        string? filterValue = null,
+        CancellationToken cancellationToken = default);
     Task<StockGroupRecord?> GetStockGroupAsync(RegisteredDatabase db, string code, CancellationToken cancellationToken = default);
     Task<DocumentHeader?> GetDocumentAsync(RegisteredDatabase db, string docType, string docKeyOrNo, CancellationToken cancellationToken = default);
     Task<List<DocumentListItem>> ListDocumentsAsync(RegisteredDatabase db, string docType, int take = 200, CancellationToken cancellationToken = default);
@@ -341,6 +373,361 @@ ORDER BY CODE";
         static string? NullIfEmpty(string? s) =>
             string.IsNullOrWhiteSpace(s) ? null : s.Trim();
     }
+
+    public async Task<List<GlTransLine>?> ListGlTransactionsAsync(
+        RegisteredDatabase db,
+        DateTime? dateFrom = null,
+        DateTime? dateTo = null,
+        string? codeSearch = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await WithReadTx(db, async (conn, tx) =>
+            {
+                if (!await TableExistsConn(conn, tx, "GL_ACC", cancellationToken).ConfigureAwait(false)
+                    || !await TableExistsConn(conn, tx, "GL_TRANS", cancellationToken).ConfigureAwait(false))
+                {
+                    _logger.LogWarning(
+                        "GL_ACC or GL_TRANS is missing for {Company} ({Db}) at {Host} path {Path}",
+                        db.DisplayName, db.DbCode, _factory.EffectiveHost(db), db.FbPath);
+                    return null;
+                }
+
+                var transCols = await Columns(conn, tx, "GL_TRANS", cancellationToken).ConfigureAwait(false);
+                var accCols = await Columns(conn, tx, "GL_ACC", cancellationToken).ConfigureAwait(false);
+                string[] required = ["CODE", "DOCDATE", "REF1", "PROJECT", "LOCALDR", "LOCALCR", "DOCKEY"];
+                if (required.Any(name => !transCols.Contains(name, StringComparer.OrdinalIgnoreCase))
+                    || !accCols.Contains("CODE", StringComparer.OrdinalIgnoreCase))
+                {
+                    _logger.LogWarning(
+                        "GL transaction columns are incomplete for {Company} ({Db}) at {Host} path {Path}",
+                        db.DisplayName, db.DbCode, _factory.EffectiveHost(db), db.FbPath);
+                    return null;
+                }
+
+                var descriptionSql = accCols.Contains("DESCRIPTION", StringComparer.OrdinalIgnoreCase)
+                    ? "(SELECT FIRST 1 TRIM(a.DESCRIPTION) FROM GL_ACC a WHERE UPPER(TRIM(a.CODE)) = UPPER(TRIM(t.CODE)))"
+                    : "CAST(NULL AS VARCHAR(1))";
+                var sql = $"""
+                    SELECT t.DOCDATE, t.REF1, t.PROJECT, {descriptionSql} AS ACCTDESC, t.LOCALDR, t.LOCALCR, t.CODE
+                    FROM GL_TRANS t
+                    WHERE EXISTS (
+                        SELECT 1 FROM GL_ACC a
+                        WHERE UPPER(TRIM(a.CODE)) = UPPER(TRIM(t.CODE))
+                    )
+                    """;
+                var args = new Dictionary<string, object?>();
+                if (dateFrom is DateTime from)
+                {
+                    sql += "\nAND t.DOCDATE >= @DATEFROM";
+                    args["DATEFROM"] = from.Date;
+                }
+                if (dateTo is DateTime to)
+                {
+                    sql += "\nAND t.DOCDATE < @DATETOEXCL";
+                    args["DATETOEXCL"] = to.Date.AddDays(1);
+                }
+                var codeKey = (codeSearch ?? "").Trim();
+                if (codeKey.Length > 0)
+                {
+                    sql += "\nAND UPPER(TRIM(t.CODE)) CONTAINING @CODEKEY";
+                    args["CODEKEY"] = codeKey.ToUpperInvariant();
+                }
+                sql += "\nORDER BY t.DOCDATE DESC, t.DOCKEY DESC";
+                SqlGuard.EnsureSelectOnly(sql);
+                await using var cmd = conn.CreateCommand();
+                cmd.Transaction = tx;
+                cmd.CommandText = sql;
+                CentralDb.Bind(cmd, args);
+                await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                var list = new List<GlTransLine>();
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    list.Add(new GlTransLine
+                    {
+                        DocDate = ReadDate(reader, "DOCDATE"),
+                        Ref1 = ReadText(reader, "REF1"),
+                        Project = ReadText(reader, "PROJECT"),
+                        AccountDescription = ReadText(reader, "ACCTDESC"),
+                        Amount = ReadDecimal(reader, "LOCALDR") - ReadDecimal(reader, "LOCALCR"),
+                        AccountCode = ReadText(reader, "CODE")
+                    });
+                }
+                return list;
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "GL transaction read failed for {Company} ({Db}) at {Host} path {Path}: {Error}",
+                db.DisplayName, db.DbCode, _factory.EffectiveHost(db), db.FbPath, CredentialRedactor.Redact(ex.Message));
+            return null;
+        }
+    }
+
+    public async Task<List<GlTransLine>?> ListPlByProjectLinesAsync(
+        RegisteredDatabase db,
+        DateTime? dateFrom = null,
+        DateTime? dateTo = null,
+        string? codeSearch = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await WithReadTx(db, async (conn, tx) =>
+            {
+                if (!await TableExistsConn(conn, tx, "GL_ACC", cancellationToken).ConfigureAwait(false)
+                    || !await TableExistsConn(conn, tx, "GL_TRANS", cancellationToken).ConfigureAwait(false))
+                {
+                    _logger.LogWarning(
+                        "GL_ACC or GL_TRANS is missing for {Company} ({Db}) at {Host} path {Path}",
+                        db.DisplayName, db.DbCode, _factory.EffectiveHost(db), db.FbPath);
+                    return null;
+                }
+
+                var transCols = await Columns(conn, tx, "GL_TRANS", cancellationToken).ConfigureAwait(false);
+                var accCols = await Columns(conn, tx, "GL_ACC", cancellationToken).ConfigureAwait(false);
+                string[] required = ["CODE", "DOCDATE", "REF1", "PROJECT", "DR", "CR", "DOCKEY"];
+                if (required.Any(name => !transCols.Contains(name, StringComparer.OrdinalIgnoreCase))
+                    || !accCols.Contains("CODE", StringComparer.OrdinalIgnoreCase))
+                {
+                    _logger.LogWarning(
+                        "GL transaction columns are incomplete for {Company} ({Db}) at {Host} path {Path}",
+                        db.DisplayName, db.DbCode, _factory.EffectiveHost(db), db.FbPath);
+                    return null;
+                }
+
+                var descriptionSql = accCols.Contains("DESCRIPTION", StringComparer.OrdinalIgnoreCase)
+                    ? "(SELECT FIRST 1 TRIM(a.DESCRIPTION) FROM GL_ACC a WHERE UPPER(TRIM(a.CODE)) = UPPER(TRIM(t.CODE)))"
+                    : "CAST(NULL AS VARCHAR(1))";
+                var sql = $"""
+                    SELECT t.DOCDATE, t.REF1, {descriptionSql} AS ACCTDESC, t.DR, t.CR, t.CODE
+                    FROM GL_TRANS t
+                    WHERE EXISTS (
+                        SELECT 1 FROM GL_ACC a
+                        WHERE UPPER(TRIM(a.CODE)) = UPPER(TRIM(t.CODE))
+                    )
+                    """;
+                var args = new Dictionary<string, object?>();
+                if (dateFrom is DateTime from)
+                {
+                    sql += "\nAND t.DOCDATE >= @DATEFROM";
+                    args["DATEFROM"] = from.Date;
+                }
+                if (dateTo is DateTime to)
+                {
+                    sql += "\nAND t.DOCDATE < @DATETOEXCL";
+                    args["DATETOEXCL"] = to.Date.AddDays(1);
+                }
+                var codeKey = (codeSearch ?? "").Trim();
+                if (codeKey.Length > 0)
+                {
+                    sql += "\nAND UPPER(TRIM(t.CODE)) CONTAINING @CODEKEY";
+                    args["CODEKEY"] = codeKey.ToUpperInvariant();
+                }
+                sql += "\nORDER BY t.DOCDATE DESC, t.DOCKEY DESC";
+                SqlGuard.EnsureSelectOnly(sql);
+                await using var cmd = conn.CreateCommand();
+                cmd.Transaction = tx;
+                cmd.CommandText = sql;
+                CentralDb.Bind(cmd, args);
+                await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                var list = new List<GlTransLine>();
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    list.Add(new GlTransLine
+                    {
+                        DocDate = ReadDate(reader, "DOCDATE"),
+                        Ref1 = ReadText(reader, "REF1"),
+                        Project = ReadText(reader, "ACCTDESC"),
+                        Amount = ReadDecimal(reader, "DR") - ReadDecimal(reader, "CR"),
+                        AccountCode = ReadText(reader, "CODE")
+                    });
+                }
+                return list;
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "GL transaction read failed for {Company} ({Db}) at {Host} path {Path}: {Error}",
+                db.DisplayName, db.DbCode, _factory.EffectiveHost(db), db.FbPath, CredentialRedactor.Redact(ex.Message));
+            return null;
+        }
+    }
+
+    private static readonly Dictionary<string, string> SoListingFilterSql = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["properties"] = "UPPER(TRIM(P.UDF_PROJECTDESC))",
+        ["type"] = "UPPER(TRIM(P.UDF_PROPTYPE))",
+        ["projectCode"] = "UPPER(TRIM(P.DESCRIPTION2))",
+        ["soNo"] = "UPPER(TRIM(S.DOCNO))",
+        ["tenantName"] = "UPPER(TRIM(S.COMPANYNAME))",
+        ["tradeName"] = "UPPER(TRIM(S.UDF_CUSTOMERNAME2))",
+        ["registrationNo"] = "UPPER(TRIM(S.IDNO))",
+        ["tin"] = "UPPER(TRIM(S.TIN))",
+        ["email"] = "UPPER(TRIM(B.EMAIL))"
+    };
+
+    public async Task<List<SoListingRow>?> ListSoListingAsync(
+        RegisteredDatabase db,
+        string? filterColumn = null,
+        string? filterValue = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await WithReadTx(db, async (conn, tx) =>
+            {
+                if (!await TableExistsConn(conn, tx, "PROJECT", cancellationToken).ConfigureAwait(false)
+                    || !await TableExistsConn(conn, tx, "SL_SO", cancellationToken).ConfigureAwait(false)
+                    || !await TableExistsConn(conn, tx, "AR_CUSTOMER", cancellationToken).ConfigureAwait(false)
+                    || !await TableExistsConn(conn, tx, "AR_CUSTOMERBRANCH", cancellationToken).ConfigureAwait(false))
+                {
+                    _logger.LogWarning(
+                        "SO listing tables are missing for {Company} ({Db}) at {Host} path {Path}",
+                        db.DisplayName, db.DbCode, _factory.EffectiveHost(db), db.FbPath);
+                    return null;
+                }
+
+                var projectCols = await Columns(conn, tx, "PROJECT", cancellationToken).ConfigureAwait(false);
+                var soCols = await Columns(conn, tx, "SL_SO", cancellationToken).ConfigureAwait(false);
+                var customerCols = await Columns(conn, tx, "AR_CUSTOMER", cancellationToken).ConfigureAwait(false);
+                var branchCols = await Columns(conn, tx, "AR_CUSTOMERBRANCH", cancellationToken).ConfigureAwait(false);
+                string[] projectRequired = ["CODE", "DESCRIPTION2", "UDF_PROJECTDESC", "UDF_PROPTYPE", "UDF_DEPOSIT01", "UDF_DEPOSIT02", "UDF_DEPOSIT03", "UDF_DEPOSIT04", "UDF_DEPOSIT05", "UDF_DATEFROM", "UDF_DATETO", "UDF_UNITPRICE", "UDF_SERVICECHARGE"];
+                string[] soRequired = ["PROJECT", "CODE", "DOCNO", "COMPANYNAME", "UDF_CUSTOMERNAME2", "IDNO", "TIN", "ADDRESS1", "ADDRESS2", "ADDRESS3", "ADDRESS4", "POSTCODE", "CITY", "PHONE1"];
+                if (projectRequired.Any(name => !projectCols.Contains(name, StringComparer.OrdinalIgnoreCase))
+                    || soRequired.Any(name => !soCols.Contains(name, StringComparer.OrdinalIgnoreCase))
+                    || !customerCols.Contains("CODE", StringComparer.OrdinalIgnoreCase)
+                    || !branchCols.Contains("CODE", StringComparer.OrdinalIgnoreCase)
+                    || !branchCols.Contains("EMAIL", StringComparer.OrdinalIgnoreCase))
+                {
+                    _logger.LogWarning(
+                        "SO listing columns are incomplete for {Company} ({Db}) at {Host} path {Path}",
+                        db.DisplayName, db.DbCode, _factory.EffectiveHost(db), db.FbPath);
+                    return null;
+                }
+
+                var sql = """
+                    SELECT
+                        TRIM(P.UDF_PROJECTDESC) AS UDF_PROJECTDESC,
+                        TRIM(P.UDF_PROPTYPE) AS UDF_PROPTYPE,
+                        TRIM(P.DESCRIPTION2) AS DESCRIPTION2,
+                        TRIM(S.DOCNO) AS DOCNO,
+                        P.UDF_DEPOSIT01 AS UDF_DEPOSIT01,
+                        P.UDF_DEPOSIT02 AS UDF_DEPOSIT02,
+                        P.UDF_DEPOSIT03 AS UDF_DEPOSIT03,
+                        P.UDF_DEPOSIT04 AS UDF_DEPOSIT04,
+                        P.UDF_DEPOSIT05 AS UDF_DEPOSIT05,
+                        TRIM(S.COMPANYNAME) AS COMPANYNAME,
+                        TRIM(S.UDF_CUSTOMERNAME2) AS UDF_CUSTOMERNAME2,
+                        TRIM(S.IDNO) AS IDNO,
+                        TRIM(S.TIN) AS TIN,
+                        TRIM(S.ADDRESS1) AS ADDRESS1,
+                        TRIM(S.ADDRESS2) AS ADDRESS2,
+                        TRIM(S.ADDRESS3) AS ADDRESS3,
+                        TRIM(S.ADDRESS4) AS ADDRESS4,
+                        TRIM(S.POSTCODE) AS POSTCODE,
+                        TRIM(S.CITY) AS CITY,
+                        TRIM(B.EMAIL) AS EMAIL,
+                        TRIM(S.PHONE1) AS PHONE1,
+                        P.UDF_DATEFROM AS UDF_DATEFROM,
+                        P.UDF_DATETO AS UDF_DATETO,
+                        P.UDF_UNITPRICE AS UDF_UNITPRICE,
+                        P.UDF_SERVICECHARGE AS UDF_SERVICECHARGE
+                    FROM PROJECT P
+                    LEFT JOIN SL_SO S ON UPPER(TRIM(S.PROJECT)) = UPPER(TRIM(P.CODE))
+                    LEFT JOIN AR_CUSTOMER C ON UPPER(TRIM(C.CODE)) = UPPER(TRIM(S.CODE))
+                    LEFT JOIN AR_CUSTOMERBRANCH B ON UPPER(TRIM(B.CODE)) = UPPER(TRIM(C.CODE))
+                    """;
+                var args = new Dictionary<string, object?>();
+                var columnKey = (filterColumn ?? "").Trim();
+                var search = (filterValue ?? "").Trim();
+                if (search.Length > 0
+                    && SoListingFilterSql.TryGetValue(columnKey, out var filterSql))
+                {
+                    sql += $"\nWHERE {filterSql} CONTAINING @SEARCH";
+                    args["SEARCH"] = search.ToUpperInvariant();
+                }
+                sql += "\nORDER BY TRIM(P.CODE)";
+                SqlGuard.EnsureSelectOnly(sql);
+                await using var cmd = conn.CreateCommand();
+                cmd.Transaction = tx;
+                cmd.CommandText = sql;
+                CentralDb.Bind(cmd, args);
+                await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                var list = new List<SoListingRow>();
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    list.Add(new SoListingRow
+                    {
+                        Properties = ReadText(reader, "UDF_PROJECTDESC"),
+                        Type = ReadText(reader, "UDF_PROPTYPE"),
+                        ProjectCode = ReadText(reader, "DESCRIPTION2"),
+                        SoNo = ReadText(reader, "DOCNO"),
+                        SecurityDeposit = ReadNullableDecimal(reader, "UDF_DEPOSIT01"),
+                        UtilitiesDeposit = ReadNullableDecimal(reader, "UDF_DEPOSIT02"),
+                        FitOutDeposits = ReadNullableDecimal(reader, "UDF_DEPOSIT03"),
+                        AccessCard = ReadNullableDecimal(reader, "UDF_DEPOSIT04"),
+                        BookingDeposits = ReadNullableDecimal(reader, "UDF_DEPOSIT05"),
+                        TenantName = ReadText(reader, "COMPANYNAME"),
+                        TradeName = ReadText(reader, "UDF_CUSTOMERNAME2"),
+                        RegistrationNo = ReadText(reader, "IDNO"),
+                        Tin = ReadText(reader, "TIN"),
+                        Address = JoinAddress(
+                            ReadText(reader, "ADDRESS1"),
+                            ReadText(reader, "ADDRESS2"),
+                            ReadText(reader, "ADDRESS3"),
+                            ReadText(reader, "ADDRESS4")),
+                        PostalCode = ReadText(reader, "POSTCODE"),
+                        City = ReadText(reader, "CITY"),
+                        Email = ReadText(reader, "EMAIL"),
+                        ContactNo = ReadText(reader, "PHONE1"),
+                        TenantStart = ReadDate(reader, "UDF_DATEFROM"),
+                        TenantEnd = ReadDate(reader, "UDF_DATETO"),
+                        MonthlyRental = ReadNullableDecimal(reader, "UDF_UNITPRICE"),
+                        ServiceCharge = ReadNullableDecimal(reader, "UDF_SERVICECHARGE")
+                    });
+                }
+                return list;
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "SO listing read failed for {Company} ({Db}) at {Host} path {Path}: {Error}",
+                db.DisplayName, db.DbCode, _factory.EffectiveHost(db), db.FbPath, CredentialRedactor.Redact(ex.Message));
+            return null;
+        }
+    }
+
+    private static decimal ReadDecimal(FbDataReader reader, string name)
+    {
+        var ordinal = reader.GetOrdinal(name);
+        return reader.IsDBNull(ordinal) ? 0m : reader.GetDecimal(ordinal);
+    }
+
+    private static decimal? ReadNullableDecimal(FbDataReader reader, string name)
+    {
+        var ordinal = reader.GetOrdinal(name);
+        return reader.IsDBNull(ordinal) ? null : reader.GetDecimal(ordinal);
+    }
+
+    private static DateTime? ReadDate(FbDataReader reader, string name)
+    {
+        var ordinal = reader.GetOrdinal(name);
+        return reader.IsDBNull(ordinal) ? null : reader.GetDateTime(ordinal);
+    }
+
+    private static string ReadText(FbDataReader reader, string name)
+    {
+        var ordinal = reader.GetOrdinal(name);
+        return reader.IsDBNull(ordinal) ? "" : (Convert.ToString(reader.GetValue(ordinal))?.Trim() ?? "");
+    }
+
+    private static string JoinAddress(params string[] lines) =>
+        string.Join(", ", lines.Where(line => !string.IsNullOrWhiteSpace(line)));
 
     public async Task<List<MasterRecord>> GetUomsAsync(RegisteredDatabase db, CancellationToken cancellationToken = default)
     {

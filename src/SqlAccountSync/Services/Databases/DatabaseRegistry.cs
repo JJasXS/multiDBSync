@@ -22,6 +22,16 @@ public interface IDatabaseRegistry
     Task<int> AddLinkAsync(int masterId, int subId, string user, CancellationToken cancellationToken = default);
     Task DeactivateLinkAsync(int linkId, CancellationToken cancellationToken = default);
     Task<DashboardStats> DashboardAsync(CancellationToken cancellationToken = default);
+    Task<DashboardRegistrySnapshot> ReadDashboardRegistryAsync(CancellationToken cancellationToken = default);
+}
+
+public sealed class DashboardRegistrySnapshot
+{
+    public bool Configured { get; set; }
+    public bool ReadsLiveRegistry { get; set; }
+    public DashboardStats Stats { get; set; } = new();
+    public List<RegisteredDatabase> Databases { get; set; } = [];
+    public List<DatabaseLink> Links { get; set; } = [];
 }
 
 public sealed class DashboardStats
@@ -39,11 +49,13 @@ public sealed class DashboardStats
 public sealed class DatabaseRegistry : IDatabaseRegistry
 {
     private readonly CentralDb _db;
+    private readonly IRegistryReadGateway _registryReads;
     private readonly SyncOptions _sync;
 
-    public DatabaseRegistry(CentralDb db, IOptions<SyncOptions> sync)
+    public DatabaseRegistry(CentralDb db, IRegistryReadGateway registryReads, IOptions<SyncOptions> sync)
     {
         _db = db;
+        _registryReads = registryReads;
         _sync = sync.Value;
     }
 
@@ -239,22 +251,61 @@ VALUES (@LINKID, @MASTERDBID, @SUBDBID, 1, CURRENT_TIMESTAMP, @USER)",
         if (!_db.IsConfigured)
             return new DashboardStats();
 
-        const string sql = """
-            SELECT
-              (SELECT COUNT(*) FROM SYNC_DATABASE WHERE ISACTIVE=1) AS TOTALDATABASES,
-              (SELECT COUNT(*) FROM SYNC_DATABASE WHERE ISACTIVE=1 AND CONNSTATUS='ONLINE') AS ONLINE,
-              (SELECT COUNT(*) FROM SYNC_DATABASE WHERE ISACTIVE=1 AND CONNSTATUS IN ('OFFLINE','NETWORK_ERROR','TIMEOUT')) AS OFFLINE,
-              (SELECT COUNT(*) FROM SYNC_DATABASE WHERE ISACTIVE=1 AND CONNSTATUS NOT IN ('ONLINE','OFFLINE')) AS ERRORCOUNT,
-              (SELECT COUNT(*) FROM SYNC_JOB WHERE STATUS IN ('PENDING','RETRYING')) AS PENDING,
-              (SELECT COUNT(*) FROM SYNC_JOB WHERE STATUS='PROCESSING') AS PROCESSING,
-              (SELECT COUNT(*) FROM SYNC_JOB WHERE STATUS IN ('FAILED','CONFLICT','WAITING_FOR_MAPPING')) AS FAILED,
-              (SELECT COUNT(*) FROM SYNC_JOB WHERE STATUS='COMPLETED' AND CREATEDAT >= CURRENT_DATE) AS COMPLETEDTODAY
-            FROM RDB$DATABASE
-            """;
-
-        return await _db.QuerySingleAsync(sql, MapDashboard, cancellationToken: cancellationToken).ConfigureAwait(false)
+        return await _db.QuerySingleAsync(DashboardCountSql, MapDashboard, cancellationToken: cancellationToken).ConfigureAwait(false)
             ?? new DashboardStats();
     }
+
+    public async Task<DashboardRegistrySnapshot> ReadDashboardRegistryAsync(CancellationToken cancellationToken = default)
+    {
+        var snapshot = new DashboardRegistrySnapshot { ReadsLiveRegistry = _registryReads.ReadsLiveRegistry };
+        if (!_registryReads.IsConfigured)
+            return snapshot;
+
+        snapshot.Configured = true;
+        snapshot.Databases = await _registryReads.QueryAsync(
+            "SELECT * FROM SYNC_DATABASE WHERE ISACTIVE = 1 ORDER BY DISPLAYNAME",
+            MapDb,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+        snapshot.Links = await _registryReads.QueryAsync(@"
+SELECT L.*, M.DISPLAYNAME AS MASTERNAME, S.DISPLAYNAME AS SUBNAME
+FROM SYNC_DBLINK L
+JOIN SYNC_DATABASE M ON M.DBID = L.MASTERDBID
+JOIN SYNC_DATABASE S ON S.DBID = L.SUBDBID
+WHERE L.ISACTIVE = 1
+ORDER BY M.DISPLAYNAME, S.DISPLAYNAME", MapLink, cancellationToken: cancellationToken).ConfigureAwait(false);
+        snapshot.Stats = await ReadStatsAsync(_registryReads, cancellationToken).ConfigureAwait(false);
+        return snapshot;
+    }
+
+    private static DatabaseLink MapLink(FbDataReader r) => new()
+    {
+        LinkId = CentralDb.Int(r, "LINKID"),
+        MasterDbId = CentralDb.Int(r, "MASTERDBID"),
+        SubDbId = CentralDb.Int(r, "SUBDBID"),
+        IsActive = CentralDb.Flag(r, "ISACTIVE"),
+        MasterName = CentralDb.Str(r, "MASTERNAME"),
+        SubName = CentralDb.Str(r, "SUBNAME"),
+        CreatedAt = CentralDb.TimeReq(r, "CREATEDAT")
+    };
+
+    private static async Task<DashboardStats> ReadStatsAsync(IRegistryReadGateway source, CancellationToken cancellationToken)
+    {
+        var rows = await source.QueryAsync(DashboardCountSql, MapDashboard, cancellationToken: cancellationToken).ConfigureAwait(false);
+        return rows.FirstOrDefault() ?? new DashboardStats();
+    }
+
+    private const string DashboardCountSql = """
+        SELECT
+          (SELECT COUNT(*) FROM SYNC_DATABASE WHERE ISACTIVE=1) AS TOTALDATABASES,
+          (SELECT COUNT(*) FROM SYNC_DATABASE WHERE ISACTIVE=1 AND CONNSTATUS='ONLINE') AS ONLINE,
+          (SELECT COUNT(*) FROM SYNC_DATABASE WHERE ISACTIVE=1 AND CONNSTATUS IN ('OFFLINE','NETWORK_ERROR','TIMEOUT')) AS OFFLINE,
+          (SELECT COUNT(*) FROM SYNC_DATABASE WHERE ISACTIVE=1 AND CONNSTATUS NOT IN ('ONLINE','OFFLINE')) AS ERRORCOUNT,
+          (SELECT COUNT(*) FROM SYNC_JOB WHERE STATUS IN ('PENDING','RETRYING')) AS PENDING,
+          (SELECT COUNT(*) FROM SYNC_JOB WHERE STATUS='PROCESSING') AS PROCESSING,
+          (SELECT COUNT(*) FROM SYNC_JOB WHERE STATUS IN ('FAILED','CONFLICT','WAITING_FOR_MAPPING')) AS FAILED,
+          (SELECT COUNT(*) FROM SYNC_JOB WHERE STATUS='COMPLETED' AND CREATEDAT >= CURRENT_DATE) AS COMPLETEDTODAY
+        FROM RDB$DATABASE
+        """;
 
     private static DashboardStats MapDashboard(FbDataReader reader) => new()
     {

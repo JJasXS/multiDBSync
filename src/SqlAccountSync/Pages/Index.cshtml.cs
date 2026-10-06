@@ -71,11 +71,8 @@ public class IndexModel : SyncPageModel
 
     public async Task OnGetAsync()
     {
-        CentralConfigured = _db.IsConfigured;
         var tenant = (_syncOptions.TenantCode ?? "").Trim();
-        var statsTask = _registry.DashboardAsync();
-        var databasesTask = _registry.ListAsync();
-        var linksTask = _registry.ListLinksAsync();
+        var registryTask = _registry.ReadDashboardRegistryAsync();
         var maxTask = _tenants.GetMaxDatabasesAsync(tenant);
         var jobsTask = _jobs.ListAsync(take: 8);
         var mappedTask = _mapping.CountMappedAsync();
@@ -85,18 +82,20 @@ public class IndexModel : SyncPageModel
         var errorsTask = _errors.ListAsync(unresolvedOnly: true, take: 5);
         var auditTask = _audit.ListAsync(take: 5);
         var usersTask = _users.ListAsync();
-        var settingsTask = CentralConfigured
+        var settingsTask = _db.IsConfigured
             ? _db.ScalarAsync("SELECT COUNT(*) FROM SYNC_SETTING")
             : Task.FromResult<object?>(0);
 
         await Task.WhenAll(
-            statsTask, databasesTask, linksTask, maxTask, jobsTask,
+            registryTask, maxTask, jobsTask,
             mappedTask, conflictsTask, rulesTask, txnsTask, errorsTask,
             auditTask, usersTask, settingsTask);
 
-        Stats = await statsTask;
-        Databases = await databasesTask;
-        Links = await linksTask;
+        var registry = await registryTask;
+        CentralConfigured = registry.Configured;
+        Stats = registry.Stats;
+        Databases = registry.Databases;
+        Links = registry.Links;
         MaxDatabases = await maxTask;
         RecentJobs = await jobsTask;
         MappedCount = await mappedTask;

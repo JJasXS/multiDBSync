@@ -1,0 +1,223 @@
+@model SoListingDetails
+<section class="card txn-summary so-listing" data-so-summary data-so-status="@(Model.DatabaseAvailable ? "ready" : "error")">
+    <div class="card-head">
+        <h3>SO Listing &amp; Occupancy</h3>
+    </div>
+    <form method="get" asp-page="/Reports/SoListing" class="txn-summary-filters" data-so-filters>
+        <div class="txn-filter so-filter-company">
+            <label for="soCompany">Company</label>
+            <select id="soCompany" name="companyId" data-so-company>
+                @if (Model.CompanyId > 0 && !Model.Companies.Any(company => company.DbId == Model.CompanyId))
+                {
+                    <option value="@Model.CompanyId" selected>Selected company is unavailable</option>
+                }
+                <option value="" selected="@(Model.CompanyId <= 0 ? "selected" : null)">All Companies</option>
+                @foreach (var company in Model.Companies)
+                {
+                    <option value="@company.DbId"
+                            selected="@(company.DbId == Model.CompanyId ? "selected" : null)">
+                        @company.Label
+                    </option>
+                }
+            </select>
+        </div>
+        <div class="txn-filter so-filter-column">
+            <label for="soFilterColumn">Filter column</label>
+            <select id="soFilterColumn" name="filterColumn" data-so-column>
+                <option value="properties"
+                        selected="@(Model.FilterColumn == "properties" ? "selected" : null)">
+                    Properties
+                </option>
+                <option value="type"
+                        selected="@(Model.FilterColumn == "type" ? "selected" : null)">
+                    Type
+                </option>
+                <option value="projectCode"
+                        selected="@(Model.FilterColumn == "projectCode" ? "selected" : null)">
+                    Project Code
+                </option>
+                <option value="soNo"
+                        selected="@(Model.FilterColumn == "soNo" ? "selected" : null)">
+                    SO No
+                </option>
+                <option value="tenantName"
+                        selected="@(Model.FilterColumn == "tenantName" ? "selected" : null)">
+                    Tenant Name
+                </option>
+                <option value="tradeName"
+                        selected="@(Model.FilterColumn == "tradeName" ? "selected" : null)">
+                    Trade Name
+                </option>
+                <option value="registrationNo"
+                        selected="@(Model.FilterColumn == "registrationNo" ? "selected" : null)">
+                    Registration No
+                </option>
+                <option value="tin"
+                        selected="@(Model.FilterColumn == "tin" ? "selected" : null)">
+                    TIN
+                </option>
+                <option value="email"
+                        selected="@(Model.FilterColumn == "email" ? "selected" : null)">
+                    Email
+                </option>
+            </select>
+        </div>
+        <div class="txn-filter so-filter-value">
+            <label for="soFilterValue">Search value</label>
+            <input id="soFilterValue" name="filterValue" type="text" data-so-value autocomplete="off" value="@Model.FilterValue" />
+        </div>
+        <div class="txn-filter-actions">
+            <button type="button" class="btn secondary" data-so-export-company @(Model.CompanyId <= 0 ? "disabled" : null)>Export Selected Company</button>
+            <button type="button" class="btn secondary" data-so-export-all>Export All</button>
+            <button type="button" class="btn secondary" data-so-clear>Clear</button>
+        </div>
+    </form>
+    <div class="table-wrap txn-summary-scroll">
+        <div data-so-results>
+            @if (Model.DatabaseAvailable)
+            {
+                <partial name="_SoListingResults" model="Model" />
+            }
+        </div>
+        <p class="empty txn-summary-status" data-so-panel="loading" hidden>Loading listing data.</p>
+        <p class="empty txn-summary-status" data-so-panel="error" hidden>@(string.IsNullOrWhiteSpace(Model.ErrorMessage) ? "SO listing data could not be loaded." : Model.ErrorMessage)</p>
+    </div>
+    <script>
+        (() => {
+            const root = document.querySelector("[data-so-summary]");
+            if (!root) return;
+
+            const filters = root.querySelector("[data-so-filters]");
+            const results = root.querySelector("[data-so-results]");
+            const exportCompany = root.querySelector("[data-so-export-company]");
+            const refreshDelayMs = 300;
+            let refreshTimer = 0;
+            let refreshInFlight = false;
+            let refreshAgain = false;
+
+            const panels = () => root.querySelectorAll("[data-so-panel]");
+
+            const applyStatus = (status) => {
+                panels().forEach((panel) => {
+                    panel.hidden = panel.getAttribute("data-so-panel") !== status;
+                });
+            };
+
+            const syncExportCompany = () => {
+                const company = root.querySelector("[data-so-company]");
+                if (exportCompany)
+                    exportCompany.disabled = !company || company.value === "";
+            };
+
+            const syncHeaderOffset = () => {
+                const table = root.querySelector(".so-matrix");
+                const firstRow = table?.querySelector("thead tr:first-child");
+                if (!table || !firstRow) return;
+                const height = Math.round(firstRow.getBoundingClientRect().height);
+                if (height > 0)
+                    table.style.setProperty("--so-head-1", `${height}px`);
+            };
+
+            const rememberFilters = () => {
+                if (!filters) return;
+                const pageQuery = new URLSearchParams(new FormData(filters));
+                const pageUrl = new URL(filters.getAttribute("action"), window.location.href);
+                pageUrl.search = pageQuery.toString();
+                history.replaceState(null, "", pageUrl);
+            };
+
+            const refreshDetails = async () => {
+                if (!filters || !results) return;
+                if (refreshInFlight) {
+                    refreshAgain = true;
+                    return;
+                }
+                refreshInFlight = true;
+                applyStatus("loading");
+                root.setAttribute("aria-busy", "true");
+                const query = new URLSearchParams(new FormData(filters));
+                query.set("handler", "Details");
+                rememberFilters();
+                try {
+                    const response = await fetch(`${filters.getAttribute("action")}?${query}`, {
+                        headers: { "X-Requested-With": "fetch" }
+                    });
+                    if (!response.ok) {
+                        const message = (await response.text()).trim();
+                        const errorPanel = root.querySelector("[data-so-panel='error']");
+                        if (errorPanel && message && !message.startsWith("<"))
+                            errorPanel.textContent = message;
+                        throw new Error(String(response.status));
+                    }
+                    results.innerHTML = await response.text();
+                    applyStatus("ready");
+                    syncHeaderOffset();
+                    root.removeAttribute("aria-busy");
+                } catch {
+                    applyStatus("error");
+                    root.removeAttribute("aria-busy");
+                } finally {
+                    refreshInFlight = false;
+                    if (refreshAgain) {
+                        refreshAgain = false;
+                        refreshDetails();
+                    }
+                }
+            };
+
+            const scheduleRefresh = () => {
+                window.clearTimeout(refreshTimer);
+                refreshTimer = window.setTimeout(refreshDetails, refreshDelayMs);
+            };
+
+            const downloadReport = (params) => {
+                if (!filters) return;
+                const url = new URL(filters.getAttribute("action"), window.location.href);
+                url.search = params.toString();
+                const link = document.createElement("a");
+                link.href = url.toString();
+                link.click();
+            };
+
+            root.querySelector("[data-so-company]")?.addEventListener("change", () => {
+                window.clearTimeout(refreshTimer);
+                const value = root.querySelector("[data-so-value]");
+                if (value) value.value = "";
+                syncExportCompany();
+                refreshDetails();
+            });
+            exportCompany?.addEventListener("click", () => {
+                if (exportCompany.disabled) return;
+                const params = new URLSearchParams();
+                params.set("handler", "ExportCompany");
+                params.set("companyId", root.querySelector("[data-so-company]")?.value ?? "");
+                downloadReport(params);
+            });
+            root.querySelector("[data-so-export-all]")?.addEventListener("click", () => {
+                const params = new URLSearchParams();
+                params.set("handler", "ExportAll");
+                downloadReport(params);
+            });
+            root.querySelector("[data-so-column]")?.addEventListener("change", scheduleRefresh);
+            root.querySelector("[data-so-value]")?.addEventListener("input", scheduleRefresh);
+            filters?.addEventListener("submit", (event) => {
+                event.preventDefault();
+                window.clearTimeout(refreshTimer);
+                refreshDetails();
+            });
+            root.querySelector("[data-so-clear]")?.addEventListener("click", () => {
+                window.clearTimeout(refreshTimer);
+                const column = root.querySelector("[data-so-column]");
+                const value = root.querySelector("[data-so-value]");
+                if (column) column.value = "properties";
+                if (value) value.value = "";
+                refreshDetails();
+            });
+
+            syncExportCompany();
+            applyStatus(root.getAttribute("data-so-status") || "ready");
+            syncHeaderOffset();
+            window.addEventListener("resize", syncHeaderOffset);
+        })();
+    </script>
+</section>

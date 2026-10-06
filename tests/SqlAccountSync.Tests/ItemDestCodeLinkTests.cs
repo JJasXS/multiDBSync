@@ -157,6 +157,29 @@ public class ItemDestCodeLinkTests
         public Task<bool> GlAccountHasActivityAsync(RegisteredDatabase db, string code, CancellationToken cancellationToken = default) =>
             Task.FromResult(false);
 
+        public Task<List<GlTransLine>?> ListGlTransactionsAsync(
+            RegisteredDatabase db,
+            DateTime? dateFrom = null,
+            DateTime? dateTo = null,
+            string? codeSearch = null,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<List<GlTransLine>?>([]);
+
+        public Task<List<GlTransLine>?> ListPlByProjectLinesAsync(
+            RegisteredDatabase db,
+            DateTime? dateFrom = null,
+            DateTime? dateTo = null,
+            string? codeSearch = null,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<List<GlTransLine>?>([]);
+
+        public Task<List<SoListingRow>?> ListSoListingAsync(
+            RegisteredDatabase db,
+            string? filterColumn = null,
+            string? filterValue = null,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<List<SoListingRow>?>([]);
+
         public Task<MasterRecord?> GetItemDetailAsync(RegisteredDatabase db, string code, CancellationToken cancellationToken = default) =>
             Task.FromResult<MasterRecord?>(new MasterRecord { Code = code, Description = $"Item {code}" });
 
@@ -248,6 +271,14 @@ public class ItemDestCodeLinkTests
         public Task<int> AddLinkAsync(int masterId, int subId, string user, CancellationToken cancellationToken = default) => Task.FromResult(0);
         public Task DeactivateLinkAsync(int linkId, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task<DashboardStats> DashboardAsync(CancellationToken cancellationToken = default) => Task.FromResult(new DashboardStats());
+        public Task<DashboardRegistrySnapshot> ReadDashboardRegistryAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(new DashboardRegistrySnapshot
+            {
+                Configured = true,
+                Databases = new List<RegisteredDatabase> { source, dest },
+                Links = new List<DatabaseLink>(),
+                Stats = new DashboardStats()
+            });
     }
 
     private sealed class TestJobQueue : IJobQueue

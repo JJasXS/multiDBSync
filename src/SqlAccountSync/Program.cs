@@ -62,6 +62,7 @@ if (envOverrides.Count > 0)
     builder.Configuration.AddInMemoryCollection(envOverrides);
 
 builder.Services.Configure<CentralDbOptions>(builder.Configuration.GetSection(CentralDbOptions.SectionName));
+builder.Services.Configure<CentralRegistryOptions>(builder.Configuration.GetSection(CentralRegistryOptions.SectionName));
 builder.Services.Configure<SmtpOptions>(builder.Configuration.GetSection(SmtpOptions.SectionName));
 builder.Services.Configure<SyncOptions>(builder.Configuration.GetSection(SyncOptions.SectionName));
 builder.Services.Configure<BootstrapOptions>(builder.Configuration.GetSection(BootstrapOptions.SectionName));
@@ -105,6 +106,7 @@ builder.Services.AddSingleton<ISecretResolver, SecretResolver>();
 builder.Services.AddSingleton<ISqlApiCredentialBundle, SqlApiCredentialBundle>();
 builder.Services.AddSingleton<ISqlApiSecretProvisioner, SqlApiSecretProvisioner>();
 builder.Services.AddSingleton<CentralDb>();
+builder.Services.AddSingleton<IRegistryReadGateway, RegistryReadGateway>();
 builder.Services.AddSingleton<CompanyConnectionFactory>();
 builder.Services.AddSingleton<SchemaBootstrap>();
 builder.Services.AddScoped<IDatabaseRegistry, DatabaseRegistry>();

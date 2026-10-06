@@ -1,0 +1,88 @@
+@model DashboardDetailsModel
+@{
+    var selectedYear = Model.DateFrom.Year;
+    var todayYear = DateTime.Today.Year;
+    var maxYear = Math.Max(selectedYear, todayYear);
+    var minYear = Math.Min(selectedYear, todayYear - 5);
+}
+<form method="get" asp-page="/Reports/MomCollection" class="txn-summary-filters" data-txn-filters
+      data-default-year="@todayYear">
+    <input type="hidden" name="dbFilter" value="true" />
+    <div class="txn-filter txn-filter-year">
+        <label for="txnYear">Year</label>
+        <select id="txnYear" name="year" data-txn-year>
+            @for (var year = maxYear; year >= minYear; year--)
+            {
+                if (year == selectedYear)
+                {
+                    <option value="@year" selected>@year</option>
+                }
+                else
+                {
+                    <option value="@year">@year</option>
+                }
+            }
+        </select>
+    </div>
+    <div class="txn-filter txn-filter-databases">
+        <label id="txnDatabasesLabel">Database</label>
+        <details class="txn-col-menu txn-db-menu">
+            <summary aria-labelledby="txnDatabasesLabel">
+                <span data-txn-db-summary>@(Model.AllDatabases ? "All databases" : "Selected databases")</span>
+                <svg class="txn-col-chevron" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </summary>
+            <div class="txn-col-panel" role="group" aria-label="Databases">
+                <label class="txn-col-option">
+                    <input type="checkbox" data-txn-db-all @(Model.AllDatabases ? "checked" : null) />
+                    <span>All databases</span>
+                </label>
+                @foreach (var db in Model.Databases)
+                {
+                    var selected = Model.AllDatabases || Model.SelectedDbCodes.Contains(db.DbCode);
+                    <label class="txn-col-option">
+                        <input type="checkbox" name="db" value="@db.DbCode" data-txn-db data-txn-db-label="@db.DisplayName" @(selected ? "checked" : null) />
+                        <span>@db.DisplayName</span>
+                        @if (!string.IsNullOrWhiteSpace(db.DbRole))
+                        {
+                            <span class="badge badge-@db.DbRole.ToLowerInvariant()">@db.DbRole</span>
+                        }
+                    </label>
+                }
+            </div>
+        </details>
+    </div>
+    <div class="txn-filter txn-filter-customer">
+        <label for="txnCompany">Company</label>
+        <input id="txnCompany" name="customer" type="text" data-txn-customer autocomplete="off" placeholder="Search company..." value="@Model.Customer" />
+    </div>
+    <div class="txn-filter txn-filter-columns">
+        <label id="txnColumnsLabel">Columns</label>
+        <details class="txn-col-menu">
+            <summary aria-labelledby="txnColumnsLabel">
+                <span data-txn-col-summary>All columns</span>
+                <svg class="txn-col-chevron" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </summary>
+            <div class="txn-col-panel" role="group" aria-label="Visible columns">
+                <label class="txn-col-option"><input type="checkbox" value="entities" data-txn-col-toggle checked /> <span>Entities</span></label>
+                <label class="txn-col-option"><input type="checkbox" value="properties" data-txn-col-toggle checked /> <span>Properties</span></label>
+                <label class="txn-col-option"><input type="checkbox" value="type" data-txn-col-toggle checked /> <span>Type</span></label>
+                <label class="txn-col-option"><input type="checkbox" value="project" data-txn-col-toggle checked /> <span>Project Code</span></label>
+                <label class="txn-col-option"><input type="checkbox" value="jan" data-txn-col-toggle checked /> <span>Jan</span></label>
+                <label class="txn-col-option"><input type="checkbox" value="feb" data-txn-col-toggle checked /> <span>Feb</span></label>
+                <label class="txn-col-option"><input type="checkbox" value="mar" data-txn-col-toggle checked /> <span>Mar</span></label>
+                <label class="txn-col-option"><input type="checkbox" value="apr" data-txn-col-toggle checked /> <span>Apr</span></label>
+                <label class="txn-col-option"><input type="checkbox" value="may" data-txn-col-toggle checked /> <span>May</span></label>
+                <label class="txn-col-option"><input type="checkbox" value="jun" data-txn-col-toggle checked /> <span>Jun</span></label>
+                <label class="txn-col-option"><input type="checkbox" value="jul" data-txn-col-toggle checked /> <span>Jul</span></label>
+                <label class="txn-col-option"><input type="checkbox" value="aug" data-txn-col-toggle checked /> <span>Aug</span></label>
+                <label class="txn-col-option"><input type="checkbox" value="sep" data-txn-col-toggle checked /> <span>Sep</span></label>
+                <label class="txn-col-option"><input type="checkbox" value="oct" data-txn-col-toggle checked /> <span>Oct</span></label>
+                <label class="txn-col-option"><input type="checkbox" value="nov" data-txn-col-toggle checked /> <span>Nov</span></label>
+                <label class="txn-col-option"><input type="checkbox" value="dec" data-txn-col-toggle checked /> <span>Dec</span></label>
+            </div>
+        </details>
+    </div>
+    <div class="txn-filter-actions">
+        <button type="button" class="btn secondary" data-txn-clear>Clear</button>
+    </div>
+</form>

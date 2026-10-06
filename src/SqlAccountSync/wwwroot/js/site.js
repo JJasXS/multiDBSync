@@ -21,6 +21,15 @@
   shell.querySelectorAll(".nav a").forEach((link) => {
     link.addEventListener("click", () => setOpen(false));
   });
+  shell.querySelectorAll("[data-nav-tree]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const tree = button.closest(".nav-tree");
+      if (!tree) return;
+      const open = !tree.classList.contains("is-open");
+      tree.classList.toggle("is-open", open);
+      button.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+  });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") setOpen(false);
   });
