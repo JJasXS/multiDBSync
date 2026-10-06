@@ -3378,6 +3378,15 @@ input:focus, select:focus, textarea:focus {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.pl-by-project .txn-matrix tbody td.pl-col-code,
+.pl-by-project .txn-matrix tbody td.pl-col-desc {
+  height: auto;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: normal;
+  text-overflow: clip;
+  vertical-align: top;
+}
 .pl-by-project .pl-col-code,
 .pl-by-project .pl-col-desc,
 .pl-by-project .pl-col-total {
@@ -3614,13 +3623,20 @@ input:focus, select:focus, textarea:focus {
   --mom-head-1: 34px;
   --mom-head-2: 32px;
 }
+.mom-collection .txn-filter-actions { margin-left: 0; }
 .mom-collection .txn-filter-columns .txn-col-panel {
   max-height: 320px;
   overflow: auto;
 }
 .mom-collection .txn-lines-scroll {
   max-width: 100%;
-  overflow: auto;
+  max-height: none;
+  margin-left: 0;
+  padding-left: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  overscroll-behavior-y: auto;
 }
 .mom-collection .mom-lines thead tr:first-child > th.mom-month {
   height: var(--mom-head-1);
@@ -3631,24 +3647,49 @@ input:focus, select:focus, textarea:focus {
 .mom-collection .mom-lines thead tr:nth-child(2) > th {
   top: var(--mom-head-1);
   z-index: 3;
-  height: var(--mom-head-2);
-  padding-top: 0;
-  padding-bottom: 0;
+  height: auto;
+  min-height: var(--mom-head-2);
+  padding: 3px 8px 4px;
   text-align: center;
+  vertical-align: top;
 }
 .mom-collection .mom-lines thead tr:first-child > th {
-  z-index: 4;
+  z-index: 3;
+}
+.mom-collection .mom-lines thead tr > th.mom-sticky {
+  z-index: 5;
+  background-color: var(--ice-surface-muted);
 }
 .mom-collection .mom-lines thead tr:first-child > th.mom-sticky {
-  z-index: 6;
+  z-index: 5;
+  border-bottom-color: var(--ice-surface-muted);
+  padding-bottom: 1px;
+  vertical-align: bottom;
+}
+.mom-collection .mom-lines thead tr:nth-child(2) > th.mom-sticky {
+  z-index: 5;
+  padding-top: 0;
+  text-align: left;
+  vertical-align: top;
+}
+.mom-collection .mom-lines thead th:not(.mom-sticky) {
+  overflow: hidden;
 }
 .mom-collection .mom-lines tbody td {
-  height: 40px;
+  height: auto;
+  min-height: 40px;
 }
 .mom-collection .mom-lines .mom-sticky {
   position: sticky;
+  background-clip: border-box;
+}
+.mom-collection .mom-lines tbody td.mom-sticky {
   overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  text-overflow: clip;
+  vertical-align: top;
 }
 .mom-collection .mom-lines .mom-col-entities {
   left: 0;
@@ -3675,22 +3716,49 @@ input:focus, select:focus, textarea:focus {
   max-width: var(--mom-project);
 }
 .mom-collection .mom-lines thead th.mom-sticky {
-  z-index: 6;
-  background: var(--ice-surface-muted);
+  z-index: 5;
+  background-color: var(--ice-surface-muted);
+  box-shadow: 1px 0 0 var(--ice-surface-muted);
 }
 .mom-collection .mom-lines tbody td.mom-sticky {
   z-index: 2;
-  background: var(--ice-surface);
+  background-color: var(--ice-surface);
+  box-shadow: 1px 0 0 var(--ice-surface);
 }
 .mom-collection .mom-lines tbody tr:hover td.mom-sticky {
-  background: var(--ice-surface-alt);
+  background-color: var(--ice-surface-alt);
+  box-shadow: 1px 0 0 var(--ice-surface-alt);
 }
-.mom-collection .mom-lines .mom-sticky-edge {
-  box-shadow: 1px 0 0 var(--ice-border);
+.mom-collection .mom-lines thead th.mom-sticky-edge {
+  border-right: 2px solid var(--ice-border);
+  box-shadow: 1px 0 0 var(--ice-surface-muted), 3px 0 4px rgba(26, 77, 110, 0.12);
+}
+.mom-collection .mom-lines tbody td.mom-sticky-edge {
+  border-right: 2px solid var(--ice-border);
+  box-shadow: 1px 0 0 var(--ice-surface), 3px 0 4px rgba(26, 77, 110, 0.12);
+}
+.mom-collection .mom-lines tbody tr:hover td.mom-sticky-edge {
+  box-shadow: 1px 0 0 var(--ice-surface-alt), 3px 0 4px rgba(26, 77, 110, 0.12);
+}
+.mom-collection .mom-lines .mom-col-title,
+.mom-collection .mom-lines .mom-col-source {
+  display: block;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mom-collection .mom-lines .mom-col-source {
+  margin-top: 1px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ice-text-muted);
 }
 .mom-collection .mom-lines .mom-month {
-  width: calc(var(--mom-month) * 2);
-  min-width: calc(var(--mom-month) * 2);
+  width: calc(var(--mom-month) + 128px);
+  min-width: calc(var(--mom-month) + 128px);
 }
 .mom-collection .mom-lines .mom-sub,
 .mom-collection .mom-lines .mom-money {
@@ -3704,8 +3772,46 @@ input:focus, select:focus, textarea:focus {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+.mom-collection .mom-lines thead th.mom-sub-receipt,
+.mom-collection .mom-lines td.mom-receipt {
+  width: auto;
+  min-width: 128px;
+  max-width: none;
+  white-space: normal;
+  text-align: left;
+  vertical-align: top;
+}
+.mom-collection .mom-lines .mom-receipt-day + .mom-receipt-day { margin-top: 8px; }
+.mom-collection .mom-lines .mom-receipt-date {
+  font-weight: 650;
+  color: var(--ice-heading);
+  white-space: nowrap;
+}
+.mom-collection .mom-lines .mom-receipt-item { margin-top: 2px; }
+.mom-collection .mom-lines .mom-receipt-item + .mom-receipt-item { margin-top: 6px; }
+.mom-collection .mom-lines .mom-receipt-no,
+.mom-collection .mom-lines .mom-receipt-amt {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
 .mom-collection .mom-lines .mom-group-edge {
   border-left: 2px solid var(--ice-border);
+}
+@media (max-width: 1200px) {
+  .mom-collection {
+    --mom-entities: 128px;
+    --mom-properties: 168px;
+    --mom-type: 88px;
+    --mom-project: 112px;
+  }
+}
+@media (max-width: 900px) {
+  .mom-collection {
+    --mom-entities: 104px;
+    --mom-properties: 136px;
+    --mom-type: 72px;
+    --mom-project: 96px;
+  }
 }
 
 .main:has(.so-listing) {
@@ -3740,6 +3846,27 @@ input:focus, select:focus, textarea:focus {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.so-listing .so-matrix tbody td.so-col-entity,
+.so-listing .so-matrix tbody td.so-col-properties,
+.so-listing .so-matrix tbody td.so-col-type,
+.so-listing .so-matrix tbody td.so-col-code,
+.so-listing .so-matrix tbody td.so-col-so,
+.so-listing .so-matrix tbody td.so-col-tenant,
+.so-listing .so-matrix tbody td.so-col-trade,
+.so-listing .so-matrix tbody td.so-col-reg,
+.so-listing .so-matrix tbody td.so-col-tin,
+.so-listing .so-matrix tbody td.so-col-address,
+.so-listing .so-matrix tbody td.so-col-postal,
+.so-listing .so-matrix tbody td.so-col-city,
+.so-listing .so-matrix tbody td.so-col-email,
+.so-listing .so-matrix tbody td.so-col-contact {
+  height: auto;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: normal;
+  text-overflow: clip;
+  vertical-align: top;
 }
 .so-listing .so-matrix thead th {
   position: sticky;

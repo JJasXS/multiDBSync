@@ -37,11 +37,11 @@
             };
 
             const stickyKeys = ["entities", "properties", "type", "project"];
-            const stickyWidths = { entities: "160px", properties: "220px", type: "120px", project: "150px" };
 
             const applyStickyColumns = (selected) => {
                 stickyKeys.forEach((key) => {
-                    root.style.setProperty(`--mom-${key}`, selected.has(key) ? stickyWidths[key] : "0px");
+                    if (selected.has(key)) root.style.removeProperty(`--mom-${key}`);
+                    else root.style.setProperty(`--mom-${key}`, "0px");
                 });
                 root.querySelectorAll(".mom-sticky-edge").forEach((cell) => cell.classList.remove("mom-sticky-edge"));
                 const edge = [...stickyKeys].reverse().find((key) => selected.has(key));
@@ -96,12 +96,23 @@
                     syncingDatabases = false;
                 }
                 const summary = root.querySelector("[data-txn-db-summary]");
+                const exportSelected = root.querySelector("[data-txn-export-selected]");
+                if (exportSelected) exportSelected.disabled = selected.length === 0;
                 if (!summary) return;
-                if (boxes.length === 0 || selected.length === boxes.length) summary.textContent = "All databases";
+                if (boxes.length === 0 || selected.length === boxes.length) summary.textContent = "All Company";
                 else if (selected.length === 0) summary.textContent = "None";
                 else summary.textContent = selected
                     .map((box) => box.getAttribute("data-txn-db-label") || box.value)
                     .join(", ");
+            };
+
+            const downloadReport = (params) => {
+                if (!filters) return;
+                const url = new URL(filters.getAttribute("action"), window.location.href);
+                url.search = params.toString();
+                const link = document.createElement("a");
+                link.href = url.toString();
+                link.click();
             };
 
             const results = root.querySelector("[data-txn-results]");
@@ -174,6 +185,23 @@
             root.querySelector("[data-txn-year]")?.addEventListener("change", scheduleRefresh);
             root.querySelector("[data-txn-customer]")?.addEventListener("input", scheduleRefresh);
 
+            root.querySelector("[data-txn-export-all]")?.addEventListener("click", () => {
+                const params = new URLSearchParams();
+                params.set("handler", "ExportAll");
+                params.set("year", root.querySelector("[data-txn-year]")?.value ?? "");
+                downloadReport(params);
+            });
+            root.querySelector("[data-txn-export-selected]")?.addEventListener("click", (event) => {
+                if (event.currentTarget.disabled) return;
+                const params = new URLSearchParams();
+                params.set("handler", "ExportSelected");
+                params.set("year", root.querySelector("[data-txn-year]")?.value ?? "");
+                params.set("customer", root.querySelector("[data-txn-customer]")?.value ?? "");
+                params.set("dbFilter", "true");
+                dbBoxes().filter((box) => box.checked).forEach((box) => params.append("db", box.value));
+                downloadReport(params);
+            });
+
             filters?.addEventListener("submit", (event) => {
                 event.preventDefault();
                 window.clearTimeout(refreshTimer);
@@ -204,13 +232,10 @@
                 const toggle = event.target.closest("[data-txn-db-toggle]");
                 if (!toggle || !root.contains(toggle)) return;
                 const group = toggle.closest("[data-txn-db-group]");
+                if (!group) return;
                 const willOpen = toggle.getAttribute("aria-expanded") === "false";
-                root.querySelectorAll("[data-txn-db-group]").forEach((item) => {
-                    const button = item.querySelector("[data-txn-db-toggle]");
-                    const open = willOpen && item === group;
-                    item.classList.toggle("is-collapsed", !open);
-                    button?.setAttribute("aria-expanded", open ? "true" : "false");
-                });
+                group.classList.toggle("is-collapsed", !willOpen);
+                toggle.setAttribute("aria-expanded", willOpen ? "true" : "false");
                 if (willOpen) requestAnimationFrame(() => applyColumns());
             });
 
@@ -218,6 +243,15 @@
                 if (event.key !== "Escape") return;
                 root.querySelectorAll("details.txn-col-menu").forEach((menu) => menu.removeAttribute("open"));
             });
+
+            const pageScroll = document.querySelector(".main");
+            root.addEventListener("wheel", (event) => {
+                const scroller = event.target.closest(".txn-lines-scroll");
+                if (!pageScroll || !scroller || !root.contains(scroller) || event.shiftKey) return;
+                if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+                pageScroll.scrollTop += event.deltaY;
+                event.preventDefault();
+            }, { passive: false });
 
             applyColumns();
             applyDatabases();
