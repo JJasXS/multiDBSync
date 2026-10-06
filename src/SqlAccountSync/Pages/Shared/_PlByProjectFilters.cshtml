@@ -1,0 +1,50 @@
+@model DashboardDetailsModel
+<form method="get" asp-page="/Reports/PlByProject" class="txn-summary-filters" data-txn-filters
+      data-default-date-from="@Model.DefaultDateFrom.ToString("yyyy-MM-dd")"
+      data-default-date-to="@Model.DefaultDateTo.ToString("yyyy-MM-dd")">
+    <input type="hidden" name="dbFilter" value="true" />
+    <div class="txn-filter txn-filter-date">
+        <label for="plDateFrom">Date From</label>
+        <input id="plDateFrom" name="dateFrom" type="date" data-txn-date-from value="@Model.DateFrom.ToString("yyyy-MM-dd")" />
+    </div>
+    <div class="txn-filter txn-filter-date">
+        <label for="plDateTo">Date To</label>
+        <input id="plDateTo" name="dateTo" type="date" data-txn-date-to value="@Model.DateTo.ToString("yyyy-MM-dd")" />
+    </div>
+    <div class="txn-filter txn-filter-databases">
+        <label id="plDatabasesLabel">Company</label>
+        <details class="txn-col-menu txn-db-menu">
+            <summary aria-labelledby="plDatabasesLabel">
+                <span data-txn-db-summary>@(Model.AllDatabases ? "All companies" : "Selected companies")</span>
+                <svg class="txn-col-chevron" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </summary>
+            <div class="txn-col-panel" role="group" aria-label="Companies">
+                <label class="txn-col-option">
+                    <input type="checkbox" data-txn-db-all @(Model.AllDatabases ? "checked" : null) />
+                    <span>All companies</span>
+                </label>
+                @foreach (var db in Model.Databases)
+                {
+                    var selected = Model.AllDatabases || Model.SelectedDbCodes.Contains(db.DbCode);
+                    <label class="txn-col-option">
+                        <input type="checkbox" name="db" value="@db.DbCode" data-txn-db data-txn-db-label="@db.DisplayName" @(selected ? "checked" : null) />
+                        <span>@db.DisplayName</span>
+                        @if (!string.IsNullOrWhiteSpace(db.DbRole))
+                        {
+                            <span class="badge badge-@db.DbRole.ToLowerInvariant()">@db.DbRole</span>
+                        }
+                    </label>
+                }
+            </div>
+        </details>
+    </div>
+    <div class="txn-filter txn-filter-customer">
+        <label for="plCustomer">Customer</label>
+        <input id="plCustomer" name="customer" type="text" data-txn-customer autocomplete="off" placeholder="Search code..." value="@Model.Customer" />
+    </div>
+    <div class="txn-filter-actions">
+        <button type="button" class="btn secondary" data-pl-export-date>Export by Date</button>
+        <button type="button" class="btn secondary" data-pl-export-all>Export All</button>
+        <button type="button" class="btn secondary" data-txn-clear>Clear</button>
+    </div>
+</form>

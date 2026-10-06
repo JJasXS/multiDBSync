@@ -1,0 +1,78 @@
+@model IReadOnlyList<DashboardDetailRow>
+@{
+    var months = new[]
+    {
+        new { Key = "jan", Label = "Jan" },
+        new { Key = "feb", Label = "Feb" },
+        new { Key = "mar", Label = "Mar" },
+        new { Key = "apr", Label = "Apr" },
+        new { Key = "may", Label = "May" },
+        new { Key = "jun", Label = "Jun" },
+        new { Key = "jul", Label = "Jul" },
+        new { Key = "aug", Label = "Aug" },
+        new { Key = "sep", Label = "Sep" },
+        new { Key = "oct", Label = "Oct" },
+        new { Key = "nov", Label = "Nov" },
+        new { Key = "dec", Label = "Dec" },
+    };
+
+    string Money(decimal amount) => amount.ToString("N2", System.Globalization.CultureInfo.InvariantCulture);
+}
+<div class="txn-groups" data-txn-panel="ready">
+    @foreach (var row in Model)
+    {
+        <section class="txn-db-group is-collapsed" data-txn-db-group>
+            <button type="button" class="txn-db-head" data-txn-db-toggle aria-expanded="false">
+                <svg class="txn-db-chevron" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <svg class="rel-db-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+                <span class="txn-db">
+                    <span class="txn-db-name">@row.DatabaseName</span>
+                    @if (!string.IsNullOrWhiteSpace(row.Role))
+                    {
+                        <span class="badge badge-@row.Role.ToLowerInvariant()">@row.Role</span>
+                    }
+                </span>
+                <span class="txn-db-total">Total: @Money(row.TotalAmount)</span>
+            </button>
+            <div class="txn-db-body">
+                <div class="txn-lines-scroll">
+                    <table class="txn-lines mom-lines" aria-label="@row.DatabaseName collection">
+                        <thead>
+                            <tr>
+                                <th class="mom-sticky mom-col-entities" rowspan="2" data-txn-col="entities" scope="col">Entities</th>
+                                <th class="mom-sticky mom-col-properties" rowspan="2" data-txn-col="properties" scope="col">Properties</th>
+                                <th class="mom-sticky mom-col-type" rowspan="2" data-txn-col="type" scope="col">Type</th>
+                                <th class="mom-sticky mom-col-project mom-sticky-edge" rowspan="2" data-txn-col="project" scope="col">Project Code</th>
+                                @foreach (var month in months)
+                                {
+                                    <th class="mom-month mom-group-edge" colspan="2" data-txn-col="@month.Key" scope="colgroup">@month.Label</th>
+                                }
+                            </tr>
+                            <tr>
+                                @foreach (var month in months)
+                                {
+                                    <th class="mom-sub mom-sub-invoice mom-group-edge" data-txn-col="@month.Key" scope="col">Invoice</th>
+                                    <th class="mom-sub mom-sub-receipt" data-txn-col="@month.Key" scope="col">Receipt</th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @* Temporary empty row so the month grid can be reviewed. Remove when collection rows are supplied. *@
+                            <tr class="mom-placeholder" data-mom-placeholder>
+                                <td class="mom-sticky mom-col-entities" data-txn-col="entities"></td>
+                                <td class="mom-sticky mom-col-properties" data-txn-col="properties"></td>
+                                <td class="mom-sticky mom-col-type" data-txn-col="type"></td>
+                                <td class="mom-sticky mom-col-project mom-sticky-edge" data-txn-col="project"></td>
+                                @foreach (var month in months)
+                                {
+                                    <td class="mom-money mom-invoice mom-group-edge" data-txn-col="@month.Key"></td>
+                                    <td class="mom-money mom-receipt" data-txn-col="@month.Key"></td>
+                                }
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    }
+</div>

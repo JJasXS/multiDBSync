@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using SqlAccountSync.Data;
 using SqlAccountSync.Helpers;
@@ -37,12 +38,23 @@ public sealed class JobQueue : IJobQueue
 {
     private readonly CentralDb _db;
     private readonly SyncOptions _options;
+    private readonly IRegistryReadGateway? _registryReads;
+    private readonly IHostEnvironment? _environment;
 
-    public JobQueue(CentralDb db, IOptions<SyncOptions> options)
+    public JobQueue(
+        CentralDb db,
+        IOptions<SyncOptions> options,
+        IRegistryReadGateway? registryReads = null,
+        IHostEnvironment? environment = null)
     {
         _db = db;
         _options = options.Value;
+        _registryReads = registryReads;
+        _environment = environment;
     }
+
+    private bool UseLiveDashboardReads =>
+        _environment?.IsDevelopment() == true && _registryReads?.ReadsLiveRegistry == true;
 
     public async Task<JobEnqueueResult> EnqueueAsync(
         SyncJob job, CancellationToken cancellationToken = default, bool reviveCancelled = true)
@@ -162,9 +174,17 @@ WHERE JOBID=@JOBID",
 
     public Task<List<SyncJob>> ListAsync(string? status = null, int take = 200, CancellationToken cancellationToken = default)
     {
+        take = Math.Clamp(take, 1, 500);
+        if (UseLiveDashboardReads)
+        {
+            if (string.IsNullOrWhiteSpace(status))
+                return _registryReads!.QueryAsync($"SELECT FIRST {take} * FROM SYNC_JOB ORDER BY JOBID DESC", Map, cancellationToken: cancellationToken);
+            return _registryReads!.QueryAsync(
+                $"SELECT FIRST {take} * FROM SYNC_JOB WHERE STATUS=@STATUS ORDER BY JOBID DESC",
+                Map, new { STATUS = status }, cancellationToken);
+        }
         if (!_db.IsConfigured)
             return Task.FromResult(new List<SyncJob>());
-        take = Math.Clamp(take, 1, 500);
         if (string.IsNullOrWhiteSpace(status))
             return _db.QueryAsync($"SELECT FIRST {take} * FROM SYNC_JOB ORDER BY JOBID DESC", Map, cancellationToken: cancellationToken);
         return _db.QueryAsync($"SELECT FIRST {take} * FROM SYNC_JOB WHERE STATUS=@STATUS ORDER BY JOBID DESC", Map, new { STATUS = status }, cancellationToken);

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using Microsoft.Extensions.Hosting;
 using SqlAccountSync.Data;
 using SqlAccountSync.Helpers;
 using SqlAccountSync.Models;
@@ -42,6 +43,8 @@ public sealed class TransactionEngine : ITransactionEngine
     private readonly IAuditService _audit;
     private readonly IErrorLogService _errors;
     private readonly ITransferMasterEnsure _masters;
+    private readonly IRegistryReadGateway? _registryReads;
+    private readonly IHostEnvironment? _environment;
 
     public TransactionEngine(
         CentralDb db,
@@ -53,7 +56,9 @@ public sealed class TransactionEngine : ITransactionEngine
         IJobQueue queue,
         IAuditService audit,
         IErrorLogService errors,
-        ITransferMasterEnsure masters)
+        ITransferMasterEnsure masters,
+        IRegistryReadGateway? registryReads = null,
+        IHostEnvironment? environment = null)
     {
         _db = db;
         _registry = registry;
@@ -65,7 +70,12 @@ public sealed class TransactionEngine : ITransactionEngine
         _audit = audit;
         _errors = errors;
         _masters = masters;
+        _registryReads = registryReads;
+        _environment = environment;
     }
+
+    private bool UseLiveDashboardReads =>
+        _environment?.IsDevelopment() == true && _registryReads?.ReadsLiveRegistry == true;
 
     public Task<List<(string Code, string Name, string Src, string Dst, string DstPath)>> ListTypesAsync(CancellationToken cancellationToken = default)
     {
@@ -515,14 +525,19 @@ WHERE T.TXNID=@TXNID", MapTxn, new { TXNID = txnId }, cancellationToken);
 
     public Task<List<SyncTransaction>> ListAsync(int take = 200, CancellationToken cancellationToken = default)
     {
-        if (!_db.IsConfigured)
-            return Task.FromResult(new List<SyncTransaction>());
-        return _db.QueryAsync($@"
-SELECT FIRST {Math.Clamp(take, 1, 500)} T.*, S.DISPLAYNAME AS SOURCENAME, D.DISPLAYNAME AS DESTNAME
+        var limit = Math.Clamp(take, 1, 500);
+        const string sql = @"
+SELECT FIRST {0} T.*, S.DISPLAYNAME AS SOURCENAME, D.DISPLAYNAME AS DESTNAME
 FROM SYNC_TXN T
 JOIN SYNC_DATABASE S ON S.DBID=T.SOURCEDBID
 JOIN SYNC_DATABASE D ON D.DBID=T.DESTDBID
-ORDER BY T.TXNPK DESC", MapTxn, cancellationToken: cancellationToken);
+ORDER BY T.TXNPK DESC";
+        var command = string.Format(CultureInfo.InvariantCulture, sql, limit);
+        if (UseLiveDashboardReads)
+            return _registryReads!.QueryAsync(command, MapTxn, cancellationToken: cancellationToken);
+        if (!_db.IsConfigured)
+            return Task.FromResult(new List<SyncTransaction>());
+        return _db.QueryAsync(command, MapTxn, cancellationToken: cancellationToken);
     }
 
     public Task<List<SyncTransaction>> ListPageAsync(

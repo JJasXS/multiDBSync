@@ -1,0 +1,6 @@
+@model SoListingDetails
+@if (Model.ReadFailures.Count > 0)
+{
+    <p class="empty so-read-warning" data-so-panel="ready">@string.Join(" ", Model.ReadFailures)</p>
+}
+<partial name="_SoListingTable" model="Model.Rows" />

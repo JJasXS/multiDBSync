@@ -1,4 +1,5 @@
 using FirebirdSql.Data.FirebirdClient;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using SqlAccountSync.Helpers;
 using SqlAccountSync.Models;
@@ -165,10 +166,34 @@ public sealed class CentralDb
 public sealed class CompanyConnectionFactory
 {
     private readonly ISecretResolver _secrets;
+    private readonly IHostEnvironment? _environment;
+    private readonly CentralRegistryOptions? _registry;
 
-    public CompanyConnectionFactory(ISecretResolver secrets)
+    public CompanyConnectionFactory(
+        ISecretResolver secrets,
+        IHostEnvironment? environment = null,
+        IOptions<CentralRegistryOptions>? registry = null)
     {
         _secrets = secrets;
+        _environment = environment;
+        _registry = registry?.Value;
+    }
+
+    /// <summary>
+    /// Development + live registry stores company hosts as localhost, which is the live Firebird
+    /// server. Use CentralRegistry:Host for those connections. Production keeps the registry host.
+    /// </summary>
+    public string EffectiveHost(RegisteredDatabase db)
+    {
+        var registryHost = (db.FbHost ?? "").Trim();
+        if (_environment?.IsDevelopment() != true)
+            return registryHost;
+        if (!registryHost.Equals("localhost", StringComparison.OrdinalIgnoreCase))
+            return registryHost;
+        var overrideHost = (_registry?.Host ?? "").Trim();
+        if (_registry?.IsLiveRequested != true || overrideHost.Length == 0)
+            return registryHost;
+        return overrideHost;
     }
 
     public async Task<string> BuildAsync(RegisteredDatabase db, CancellationToken cancellationToken = default)
@@ -193,7 +218,7 @@ public sealed class CompanyConnectionFactory
 
         var csb = new FbConnectionStringBuilder
         {
-            DataSource = db.FbHost,
+            DataSource = EffectiveHost(db),
             Port = db.FbPort <= 0 ? 3050 : db.FbPort,
             Database = db.FbPath.Replace('\\', '/'),
             UserID = string.IsNullOrWhiteSpace(db.FbUser) ? "SYSDBA" : db.FbUser,

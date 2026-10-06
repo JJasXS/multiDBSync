@@ -1,0 +1,42 @@
+@model IReadOnlyList<DashboardDetailRow>
+@{
+    var matrix = PlByProjectMatrix.From(Model);
+    string Money(decimal amount) => amount.ToString("N2", System.Globalization.CultureInfo.InvariantCulture);
+    string Text(string? value) => string.IsNullOrWhiteSpace(value) ? "---" : value;
+}
+<table class="txn-matrix" data-txn-panel="ready" aria-label="PL by Project">
+    <thead>
+        <tr>
+            <th class="pl-col-code" scope="col">CODE</th>
+            <th class="pl-col-desc" scope="col">ACCOUNT DESCRIPTION</th>
+            @foreach (var company in matrix.Companies)
+            {
+                <th class="pl-col-company" scope="col" title="@company">@company</th>
+            }
+            <th class="pl-col-total" scope="col">TOTAL AMOUNT</th>
+        </tr>
+    </thead>
+    <tbody>
+        @if (matrix.Rows.Count == 0)
+        {
+            <tr>
+                <td class="txn-no-records" colspan="@(matrix.Companies.Count + 3)">No transaction data to display.</td>
+            </tr>
+        }
+        else
+        {
+            foreach (var row in matrix.Rows)
+            {
+                <tr>
+                    <td class="pl-col-code" title="@row.Code">@Text(row.Code)</td>
+                    <td class="pl-col-desc" title="@row.Description">@Text(row.Description)</td>
+                    @foreach (var amount in row.Amounts)
+                    {
+                        <td class="pl-col-company">@Money(amount)</td>
+                    }
+                    <td class="pl-col-total">@Money(row.Total)</td>
+                </tr>
+            }
+        }
+    </tbody>
+</table>

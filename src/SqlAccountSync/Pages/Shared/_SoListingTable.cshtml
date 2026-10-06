@@ -1,0 +1,163 @@
+@model IReadOnlyList<SoListingRow>
+@{
+    string Text(string? value) => string.IsNullOrWhiteSpace(value) ? "" : value;
+    string Money(decimal? amount) =>
+        amount?.ToString("N2", System.Globalization.CultureInfo.InvariantCulture) ?? "";
+    string Day(DateTime? value) =>
+        value?.ToString("dd-MM-yyyy", System.Globalization.CultureInfo.InvariantCulture) ?? "";
+}
+<table class="txn-matrix so-matrix" data-so-panel="ready" aria-label="SO Listing and Occupancy">
+    <thead>
+        <tr>
+            <th class="so-col-entity" rowspan="2" scope="col">
+                <div>COMPANY</div>
+                <small class="db-column-name">Registry NAME</small>
+            </th>
+            <th class="so-col-properties" rowspan="2" scope="col">
+                <div>Properties</div>
+                <small class="db-column-name">PROJECT.UDF_PROJECTDESC</small>
+            </th>
+            <th class="so-col-type" rowspan="2" scope="col">
+                <div>Type</div>
+                <small class="db-column-name">PROJECT.UDF_PROPTYPE</small>
+            </th>
+            <th class="so-col-code" rowspan="2" scope="col">
+                <div>Project Code</div>
+                <small class="db-column-name">PROJECT.DESCRIPTION2</small>
+            </th>
+            <th class="so-col-so" rowspan="2" scope="col">
+                <div>SO No</div>
+                <small class="db-column-name">SL_SO.DOCNO</small>
+            </th>
+            <th class="so-group so-group-edge" colspan="5" scope="colgroup">Deposit from Tenant</th>
+            <th class="so-col-tenant" rowspan="2" scope="col">
+                <div>Tenant Name</div>
+                <small class="db-column-name">SL_SO.COMPANYNAME</small>
+            </th>
+            <th class="so-col-trade" rowspan="2" scope="col">
+                <div>Trade Name</div>
+                <small class="db-column-name">SL_SO.UDF_CUSTOMERNAME2</small>
+            </th>
+            <th class="so-col-reg" rowspan="2" scope="col">
+                <div>Registration No</div>
+                <small class="db-column-name">SL_SO.IDNO</small>
+            </th>
+            <th class="so-col-tin" rowspan="2" scope="col">
+                <div>TIN</div>
+                <small class="db-column-name">SL_SO.TIN</small>
+            </th>
+            <th class="so-col-address" rowspan="2" scope="col">
+                <div>Address</div>
+                <small class="db-column-name">SL_SO.ADDRESS1, SL_SO.ADDRESS2, SL_SO.ADDRESS3, SL_SO.ADDRESS4</small>
+            </th>
+            <th class="so-col-postal" rowspan="2" scope="col">
+                <div>Postal Code</div>
+                <small class="db-column-name">SL_SO.POSTCODE</small>
+            </th>
+            <th class="so-col-city" rowspan="2" scope="col">
+                <div>City</div>
+                <small class="db-column-name">SL_SO.CITY</small>
+            </th>
+            <th class="so-col-email" rowspan="2" scope="col">
+                <div>Email</div>
+                <small class="db-column-name">AR_CUSTOMERBRANCH.EMAIL</small>
+            </th>
+            <th class="so-col-contact" rowspan="2" scope="col">
+                <div>Contact No</div>
+                <small class="db-column-name">SL_SO.PHONE1</small>
+            </th>
+            <th class="so-group so-group-edge" colspan="4" scope="colgroup">Term</th>
+        </tr>
+        <tr>
+            <th class="so-col-money so-group-edge" scope="col">
+                <div>Security Deposit</div>
+                <small class="db-column-name">PROJECT.UDF_DEPOSIT01</small>
+            </th>
+            <th class="so-col-money" scope="col">
+                <div>Utilities Deposit</div>
+                <small class="db-column-name">PROJECT.UDF_DEPOSIT02</small>
+            </th>
+            <th class="so-col-money" scope="col">
+                <div>Fit Out Deposits</div>
+                <small class="db-column-name">PROJECT.UDF_DEPOSIT03</small>
+            </th>
+            <th class="so-col-money" scope="col">
+                <div>Access Card</div>
+                <small class="db-column-name">PROJECT.UDF_DEPOSIT04</small>
+            </th>
+            <th class="so-col-money" scope="col">
+                <div>Booking Deposits</div>
+                <small class="db-column-name">PROJECT.UDF_DEPOSIT05</small>
+            </th>
+            <th class="so-col-date so-group-edge" scope="col">
+                <div>Tenant Start</div>
+                <small class="db-column-name">PROJECT.UDF_DATEFROM</small>
+            </th>
+            <th class="so-col-date" scope="col">
+                <div>Tenant End</div>
+                <small class="db-column-name">PROJECT.UDF_DATETO</small>
+            </th>
+            <th class="so-col-money" scope="col">
+                <div>Monthly Rental</div>
+                <small class="db-column-name">PROJECT.UDF_UNITPRICE</small>
+            </th>
+            <th class="so-col-money" scope="col">
+                <div>Service Charge</div>
+                <small class="db-column-name">PROJECT.UDF_SERVICECHARGE</small>
+            </th>
+        </tr>
+    </thead>
+    <tbody>
+        @if (Model.Count == 0)
+        {
+            <tr>
+                <td class="so-no-records" colspan="23">No records to display.</td>
+            </tr>
+        }
+        else
+        {
+            foreach (var row in Model)
+            {
+                var company = Text(row.Company);
+                var properties = Text(row.Properties);
+                var type = Text(row.Type);
+                var projectCode = Text(row.ProjectCode);
+                var soNo = Text(row.SoNo);
+                var tenantName = Text(row.TenantName);
+                var tradeName = Text(row.TradeName);
+                var registrationNo = Text(row.RegistrationNo);
+                var tin = Text(row.Tin);
+                var address = Text(row.Address);
+                var postalCode = Text(row.PostalCode);
+                var city = Text(row.City);
+                var email = Text(row.Email);
+                var contactNo = Text(row.ContactNo);
+                <tr>
+                    <td class="so-col-entity" title="@company">@company</td>
+                    <td class="so-col-properties" title="@properties">@properties</td>
+                    <td class="so-col-type" title="@type">@type</td>
+                    <td class="so-col-code" title="@projectCode">@projectCode</td>
+                    <td class="so-col-so" title="@soNo">@soNo</td>
+                    <td class="so-col-money so-group-edge">@Money(row.SecurityDeposit)</td>
+                    <td class="so-col-money">@Money(row.UtilitiesDeposit)</td>
+                    <td class="so-col-money">@Money(row.FitOutDeposits)</td>
+                    <td class="so-col-money">@Money(row.AccessCard)</td>
+                    <td class="so-col-money">@Money(row.BookingDeposits)</td>
+                    <td class="so-col-tenant" title="@tenantName">@tenantName</td>
+                    <td class="so-col-trade" title="@tradeName">@tradeName</td>
+                    <td class="so-col-reg" title="@registrationNo">@registrationNo</td>
+                    <td class="so-col-tin" title="@tin">@tin</td>
+                    <td class="so-col-address" title="@address">@address</td>
+                    <td class="so-col-postal" title="@postalCode">@postalCode</td>
+                    <td class="so-col-city" title="@city">@city</td>
+                    <td class="so-col-email" title="@email">@email</td>
+                    <td class="so-col-contact" title="@contactNo">@contactNo</td>
+                    <td class="so-col-date so-group-edge">@Day(row.TenantStart)</td>
+                    <td class="so-col-date">@Day(row.TenantEnd)</td>
+                    <td class="so-col-money">@Money(row.MonthlyRental)</td>
+                    <td class="so-col-money">@Money(row.ServiceCharge)</td>
+                </tr>
+            }
+        }
+    </tbody>
+</table>

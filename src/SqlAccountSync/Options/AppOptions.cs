@@ -13,6 +13,32 @@ public sealed class CentralDbOptions
     public bool Pooling { get; set; } = true;
 }
 
+/// <summary>
+/// Dashboard company registry source. <see cref="Mode"/> Local reads <see cref="CentralDbOptions"/>.
+/// Live reads another Firebird SYNC database with SELECT only. Writes always stay on <see cref="CentralDbOptions"/>.
+/// </summary>
+public sealed class CentralRegistryOptions
+{
+    public const string SectionName = "CentralRegistry";
+    public const string LocalMode = "Local";
+    public const string LiveMode = "Live";
+
+    public string Mode { get; set; } = LocalMode;
+    public string Host { get; set; } = "";
+    public int Port { get; set; } = 3050;
+    public string Path { get; set; } = "";
+    public string User { get; set; } = "SYSDBA";
+    public string Charset { get; set; } = "UTF8";
+    public int Dialect { get; set; } = 3;
+    public string PasswordSecretRef { get; set; } = "env:CENTRAL_FB_MASTERKEY";
+
+    public bool IsLiveRequested =>
+        string.Equals(Mode?.Trim(), LiveMode, StringComparison.OrdinalIgnoreCase);
+
+    public bool HasLiveTarget =>
+        !string.IsNullOrWhiteSpace(Host) && !string.IsNullOrWhiteSpace(Path);
+}
+
 public sealed class SmtpOptions
 {
     public const string SectionName = "Smtp";

@@ -71,10 +71,11 @@ public class IndexModel : SyncPageModel
 
     public async Task OnGetAsync()
     {
-        CentralConfigured = _db.IsConfigured;
-        Stats = await _registry.DashboardAsync();
-        Databases = await _registry.ListAsync();
-        Links = await _registry.ListLinksAsync();
+        var registry = await _registry.ReadDashboardRegistryAsync();
+        CentralConfigured = registry.Configured;
+        Stats = registry.Stats;
+        Databases = registry.Databases;
+        Links = registry.Links;
         MaxDatabases = await _tenants.GetMaxDatabasesAsync((_syncOptions.TenantCode ?? "").Trim());
         RecentJobs = await _jobs.ListAsync(take: 8);
         await LoadSummariesAsync();

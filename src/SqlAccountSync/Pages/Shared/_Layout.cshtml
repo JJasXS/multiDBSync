@@ -42,6 +42,11 @@
         var current = ViewContext.RouteData.Values["page"]?.ToString() ?? "";
         return current is "/Push/Index" or "/Jobs/Index" ? "active" : "";
     }
+    bool IsReportPage()
+    {
+        var current = ViewContext.RouteData.Values["page"]?.ToString() ?? "";
+        return current.StartsWith("/Reports/", StringComparison.OrdinalIgnoreCase);
+    }
     var showMappingsUi = FeatureOptions.Value.ShowMappingsUi;
     var showSyncConfigUi = FeatureOptions.Value.ShowSyncConfigUi;
 }
@@ -64,6 +69,17 @@
             <div class="group">Overview</div>
             <a class="@NavClass("/Index")" asp-page="/Index">Dashboard</a>
             <a class="@DatabasesNavClass()" asp-page="/Databases/Index">Databases</a>
+            <div class="nav-tree@(IsReportPage() ? " is-open" : "")">
+                <button type="button" class="nav-tree-toggle" data-nav-tree aria-expanded="@(IsReportPage() ? "true" : "false")">
+                    <span>Master Report</span>
+                    <svg class="nav-chevron" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <div class="nav-tree-children">
+                    <a class="@NavClass("/Reports/PlByProject")" asp-page="/Reports/PlByProject">PL by Project</a>
+                    <a class="@NavClass("/Reports/MomCollection")" asp-page="/Reports/MomCollection">Mom Collection Report</a>
+                    <a class="@NavClass("/Reports/SoListing")" asp-page="/Reports/SoListing">SO Listing &amp; Occupancy</a>
+                </div>
+            </div>
             @if (showSyncConfigUi || showMappingsUi)
             {
                 <div class="group">Configuration</div>
