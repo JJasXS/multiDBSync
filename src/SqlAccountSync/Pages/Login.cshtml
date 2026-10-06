@@ -7,29 +7,29 @@
 <div class="login-page" id="login-page">
     <aside class="login-aside" aria-label="About SQL Account Sync">
         <div class="login-aside-header">
-            <p class="login-aside-kicker">Operations</p>
-            <p class="login-aside-hint">Intercompany sync for SQL Account — master data, partner maps, and document flows.</p>
+            <p class="login-aside-kicker">Between companies</p>
+            <p class="login-aside-hint">Keep your SQL Accounting companies in step. Share master records, link trading partners, and pass documents between companies.</p>
         </div>
         <div class="login-feature-list">
             <div class="login-feature">
                 <span class="login-feature-icon" aria-hidden="true">⇄</span>
                 <div>
-                    <div class="login-feature-title">Master → Sub</div>
-                    <div class="login-feature-desc">Push customers, items, and suppliers to linked company databases.</div>
+                    <div class="login-feature-title">Master to subsidiary</div>
+                    <div class="login-feature-desc">Copy customers, suppliers, and accounts from the master company into each linked company.</div>
                 </div>
             </div>
             <div class="login-feature">
                 <span class="login-feature-icon" aria-hidden="true">🤝</span>
                 <div>
-                    <div class="login-feature-title">Partner maps</div>
-                    <div class="login-feature-desc">Reciprocal Customer ↔ Supplier mapping for Sub-to-Sub sync.</div>
+                    <div class="login-feature-title">Partner links</div>
+                    <div class="login-feature-desc">Match a customer in one company to the supplier record in another.</div>
                 </div>
             </div>
             <div class="login-feature">
                 <span class="login-feature-icon" aria-hidden="true">📄</span>
                 <div>
-                    <div class="login-feature-title">SI → PI</div>
-                    <div class="login-feature-desc">Translate sales invoices into purchase invoices across companies.</div>
+                    <div class="login-feature-title">Sales to purchase invoice</div>
+                    <div class="login-feature-desc">Create a purchase invoice in one company from a sales invoice in another.</div>
                 </div>
             </div>
         </div>
@@ -46,7 +46,7 @@
                     </svg>
                 </div>
                 <h1 class="login-brand-title">SQL Account Sync</h1>
-                <p class="login-brand-sub">Secure sign-in · one-time code</p>
+                <p class="login-brand-sub">Sign in with a one-time code</p>
             </div>
 
             <div class="login-card"
@@ -72,7 +72,7 @@
                     <p class="subtitle">Enter the 6-digit code sent to<br><span id="email-display"></span></p>
                     <form id="otp-form">
                         <div class="form-group">
-                            <label for="otp-1">Enter OTP</label>
+                            <label for="otp-1">Enter code</label>
                             <div class="otp-boxes" id="otp-boxes">
                                 <input type="tel" id="otp-1" class="otp-digit" maxlength="1" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" required />
                                 <input type="tel" id="otp-2" class="otp-digit" maxlength="1" inputmode="numeric" pattern="[0-9]*" autocomplete="off" required />
@@ -81,7 +81,7 @@
                                 <input type="tel" id="otp-5" class="otp-digit" maxlength="1" inputmode="numeric" pattern="[0-9]*" autocomplete="off" required />
                                 <input type="tel" id="otp-6" class="otp-digit" maxlength="1" inputmode="numeric" pattern="[0-9]*" autocomplete="off" required />
                             </div>
-                            <div class="otp-hint" id="otp-timer">OTP expires in <span id="otp-countdown">@Model.OtpSeconds</span>s</div>
+                            <div class="otp-hint" id="otp-timer">Code expires in <span id="otp-countdown">@Model.OtpSeconds</span>s</div>
                         </div>
                         <button type="submit" class="btn-submit" id="otp-verify-btn">Verify</button>
                     </form>

@@ -212,7 +212,7 @@
     e.preventDefault();
     showError(otpError, "");
     if (otpExpired) {
-      showError(otpError, "OTP expired. Please resend.");
+      showError(otpError, "This code has expired. Send a new one.");
       return;
     }
     const code = readOtp();
