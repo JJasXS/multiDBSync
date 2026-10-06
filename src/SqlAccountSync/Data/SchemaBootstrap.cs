@@ -28,6 +28,9 @@ public sealed class SchemaBootstrap
             return;
         }
 
+        if (await IsCurrentSchemaAsync(cancellationToken).ConfigureAwait(false))
+            return;
+
         await _db.EnsureDatabaseExistsAsync(cancellationToken).ConfigureAwait(false);
         await using var conn = await _db.OpenAsync(cancellationToken).ConfigureAwait(false);
         await EnsureGenerator(conn, "GEN_SYNC_DATABASE", cancellationToken);
@@ -465,6 +468,22 @@ VALUES (@I, @E, @N, @R, 1, CURRENT_TIMESTAMP)",
         cmd.CommandText = sql;
         CentralDb.Bind(cmd, args);
         await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+    }
+
+    private async Task<bool> IsCurrentSchemaAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using var conn = await _db.OpenAsync(cancellationToken).ConfigureAwait(false);
+            var ver = await ScalarInt(conn, "SELECT COALESCE(MAX(VERID), 0) FROM SYNC_SCHEMA_VER", cancellationToken)
+                .ConfigureAwait(false);
+            return ver >= CurrentVersion;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Schema version check did not find version {Version}. Running full bootstrap.", CurrentVersion);
+            return false;
+        }
     }
 
     private static async Task<int> ScalarInt(FbConnection conn, string sql, CancellationToken ct, IDictionary<string, object?>? args = null)

@@ -1,5 +1,3 @@
-using System.Globalization;
-using System.Text.Json;
 using SqlAccountSync.Models;
 
 namespace SqlAccountSync.Services.Documents;
@@ -17,24 +15,18 @@ public static class SalesNoteMapper
         BuildPayload(document, txnStamp, isDebitNote: false);
 
     public static string SerializePayload(Dictionary<string, object?> payload) =>
-        JsonSerializer.Serialize(payload, new JsonSerializerOptions
-        {
-            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-        });
+        DocumentPayload.Serialize(payload);
 
     private static Dictionary<string, object?> BuildPayload(DocumentHeader document, string txnStamp, bool isDebitNote)
     {
-        var docDate = FormatDate(document.DocDate ?? document.PostDate ?? DateTime.Today);
-        var postDate = FormatDate(document.PostDate ?? document.DocDate ?? DateTime.Today);
-        var taxDate = FormatDate(document.TaxDate ?? document.DocDate ?? DateTime.Today);
-        var code = (document.PartyCode ?? "").Trim();
-        var currency = NullIfEmpty(document.Currency) ?? "----";
-        var rate = NullIfEmpty(document.CurrencyRate) ?? "1";
-        var docAmt = Dec(document.Amount);
-
-        var note = string.IsNullOrWhiteSpace(document.Note) ? "" : document.Note.Trim();
-        if (!string.IsNullOrWhiteSpace(txnStamp))
-            note = string.IsNullOrWhiteSpace(note) ? $"SYNC|{txnStamp}" : $"{note} | SYNC|{txnStamp}";
+        var docDate = DocumentPayload.DocDate(document);
+        var postDate = DocumentPayload.PostDate(document);
+        var taxDate = DocumentPayload.TaxDate(document);
+        var code = DocumentPayload.PartyCode(document);
+        var currency = DocumentPayload.Currency(document);
+        var rate = DocumentPayload.Rate(document);
+        var docAmt = DocumentPayload.DocAmount(document);
+        var note = DocumentPayload.StampNote(document.Note, txnStamp);
 
         var defaultDesc = isDebitNote ? "Sales debit note" : "Sales credit note";
         var lines = document.Lines.Count > 0 ? document.Lines : [];
@@ -46,26 +38,26 @@ public static class SalesNoteMapper
             ["postdate"] = postDate,
             ["taxdate"] = taxDate,
             ["code"] = code,
-            ["companyname"] = NullIfEmpty(document.PartyName),
-            ["country"] = FieldOr(document.Fields, "country", "MY"),
-            ["area"] = NullIfEmpty(document.Area) ?? "----",
-            ["agent"] = NullIfEmpty(document.Agent) ?? "----",
-            ["project"] = NullIfEmpty(document.Project) ?? "----",
-            ["terms"] = NullIfEmpty(document.Terms) ?? "30 Days",
+            ["companyname"] = DocumentPayload.NullIfEmpty(document.PartyName),
+            ["country"] = DocumentPayload.FieldOr(document.Fields, "country", "MY"),
+            ["area"] = DocumentPayload.NullIfEmpty(document.Area) ?? "----",
+            ["agent"] = DocumentPayload.NullIfEmpty(document.Agent) ?? "----",
+            ["project"] = DocumentPayload.NullIfEmpty(document.Project) ?? "----",
+            ["terms"] = DocumentPayload.NullIfEmpty(document.Terms) ?? "30 Days",
             ["currencycode"] = currency,
             ["currencyrate"] = rate,
-            ["shipper"] = FieldOr(document.Fields, "shipper", "----"),
-            ["description"] = NullIfEmpty(document.Description) ?? defaultDesc,
+            ["shipper"] = DocumentPayload.FieldOr(document.Fields, "shipper", "----"),
+            ["description"] = DocumentPayload.NullIfEmpty(document.Description) ?? defaultDesc,
             ["cancelled"] = false,
             ["status"] = 0,
             ["docamt"] = docAmt,
             ["localdocamt"] = docAmt,
-            ["branchname"] = FieldOr(document.Fields, "branchname", "BILLING"),
-            ["dcountry"] = FieldOr(document.Fields, "dcountry", "MY"),
-            ["sic"] = FieldOr(document.Fields, "sic", "00000"),
+            ["branchname"] = DocumentPayload.FieldOr(document.Fields, "branchname", "BILLING"),
+            ["dcountry"] = DocumentPayload.FieldOr(document.Fields, "dcountry", "MY"),
+            ["sic"] = DocumentPayload.FieldOr(document.Fields, "sic", "00000"),
             ["submissiontype"] = 0,
             ["irbm_status"] = 0,
-            ["note"] = NullIfEmpty(note),
+            ["note"] = DocumentPayload.NullIfEmpty(note),
             ["printcount"] = 0,
             ["sdsdocdetail"] = sdsdocdetail,
             ["changed"] = true
@@ -74,7 +66,7 @@ public static class SalesNoteMapper
         if (isDebitNote)
             payload["transferable"] = true;
 
-        CopyIfPresent(payload, document.Fields,
+        DocumentPayload.CopyIfPresent(payload, document.Fields,
             "address1", "address2", "address3", "address4", "postcode", "city", "state",
             "phone1", "mobile", "fax1", "attention",
             "daddress1", "daddress2", "daddress3", "daddress4", "dpostcode", "dcity", "dstate",
@@ -88,30 +80,31 @@ public static class SalesNoteMapper
     private static Dictionary<string, object?> BuildLine(
         DocumentLine line, int index, DocumentHeader document, bool isDebitNote)
     {
-        var seq = line.Seq > 0 ? line.Seq : (index + 1) * 1000;
-        var qty = Dec(line.Qty);
-        var unit = Dec(line.UnitPrice);
-        var amt = line.Amount != 0 ? Dec(line.Amount) : Dec(line.Qty * line.UnitPrice);
-        var delivery = FormatDate(line.DeliveryDate ?? document.DocDate ?? DateTime.Today);
+        var amounts = DocumentPayload.Line(line, index);
+        var seq = amounts.Seq;
+        var qty = amounts.Qty;
+        var unit = amounts.Unit;
+        var amt = amounts.Amount;
+        var delivery = DocumentPayload.FormatDate(line.DeliveryDate ?? document.DocDate ?? DateTime.Today);
 
         var row = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
         {
             ["seq"] = seq,
-            ["itemcode"] = NullIfEmpty(line.ItemCode),
-            ["location"] = NullIfEmpty(line.Warehouse) ?? "----",
-            ["batch"] = NullIfEmpty(line.Batch),
-            ["project"] = NullIfEmpty(line.Project) ?? NullIfEmpty(document.Project) ?? "----",
-            ["description"] = NullIfEmpty(line.Description),
-            ["description2"] = NullIfEmpty(line.Description2),
+            ["itemcode"] = DocumentPayload.NullIfEmpty(line.ItemCode),
+            ["location"] = DocumentPayload.NullIfEmpty(line.Warehouse) ?? "----",
+            ["batch"] = DocumentPayload.NullIfEmpty(line.Batch),
+            ["project"] = DocumentPayload.Project(line, document),
+            ["description"] = DocumentPayload.NullIfEmpty(line.Description),
+            ["description2"] = DocumentPayload.NullIfEmpty(line.Description2),
             ["qty"] = qty,
-            ["uom"] = NullIfEmpty(line.Uom) ?? "PCS",
-            ["rate"] = NullIfEmpty(line.Rate) ?? "1",
+            ["uom"] = DocumentPayload.NullIfEmpty(line.Uom) ?? "PCS",
+            ["rate"] = DocumentPayload.NullIfEmpty(line.Rate) ?? "1",
             ["sqty"] = qty,
             ["suomqty"] = "0",
             ["unitprice"] = unit,
-            ["disc"] = NullIfEmpty(line.Disc),
-            ["tax"] = NullIfEmpty(line.TaxCode),
-            ["irbm_classification"] = NullIfEmpty(line.IrbmClassification) ?? "036",
+            ["disc"] = DocumentPayload.NullIfEmpty(line.Disc),
+            ["tax"] = DocumentPayload.NullIfEmpty(line.TaxCode),
+            ["irbm_classification"] = DocumentPayload.NullIfEmpty(line.IrbmClassification) ?? "036",
             ["taxamt"] = "0",
             ["localtaxamt"] = "0",
             ["exempted_taxamt"] = "0",
@@ -119,7 +112,7 @@ public static class SalesNoteMapper
             ["amount"] = amt,
             ["localamount"] = amt,
             ["amountwithtax"] = amt,
-            ["account"] = NullIfEmpty(line.Account),
+            ["account"] = DocumentPayload.NullIfEmpty(line.Account),
             ["printable"] = true,
             ["changed"] = true
         };
@@ -137,22 +130,4 @@ public static class SalesNoteMapper
         return row;
     }
 
-    private static void CopyIfPresent(Dictionary<string, object?> payload, Dictionary<string, string> fields, params string[] keys)
-    {
-        foreach (var key in keys)
-        {
-            if (fields.TryGetValue(key, out var v) && !string.IsNullOrWhiteSpace(v))
-                payload[key] = v.Trim();
-        }
-    }
-
-    private static string FieldOr(Dictionary<string, string> fields, string key, string fallback) =>
-        fields.TryGetValue(key, out var v) && !string.IsNullOrWhiteSpace(v) ? v.Trim() : fallback;
-
-    private static string FormatDate(DateTime dt) => dt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-
-    private static string Dec(decimal value) => value.ToString("0.##", CultureInfo.InvariantCulture);
-
-    private static string? NullIfEmpty(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

@@ -1,3 +1,4 @@
+using FirebirdSql.Data.FirebirdClient;
 using Microsoft.Extensions.Options;
 using SqlAccountSync.Data;
 using SqlAccountSync.Helpers;
@@ -235,19 +236,37 @@ VALUES (@LINKID, @MASTERDBID, @SUBDBID, 1, CURRENT_TIMESTAMP, @USER)",
 
     public async Task<DashboardStats> DashboardAsync(CancellationToken cancellationToken = default)
     {
-        var stats = new DashboardStats();
         if (!_db.IsConfigured)
-            return stats;
-        stats.TotalDatabases = Convert.ToInt32(await _db.ScalarAsync("SELECT COUNT(*) FROM SYNC_DATABASE WHERE ISACTIVE=1", cancellationToken: cancellationToken) ?? 0);
-        stats.Online = Convert.ToInt32(await _db.ScalarAsync("SELECT COUNT(*) FROM SYNC_DATABASE WHERE ISACTIVE=1 AND CONNSTATUS='ONLINE'", cancellationToken: cancellationToken) ?? 0);
-        stats.Offline = Convert.ToInt32(await _db.ScalarAsync("SELECT COUNT(*) FROM SYNC_DATABASE WHERE ISACTIVE=1 AND CONNSTATUS IN ('OFFLINE','NETWORK_ERROR','TIMEOUT')", cancellationToken: cancellationToken) ?? 0);
-        stats.Error = Convert.ToInt32(await _db.ScalarAsync("SELECT COUNT(*) FROM SYNC_DATABASE WHERE ISACTIVE=1 AND CONNSTATUS NOT IN ('ONLINE','OFFLINE')", cancellationToken: cancellationToken) ?? 0);
-        stats.Pending = Convert.ToInt32(await _db.ScalarAsync("SELECT COUNT(*) FROM SYNC_JOB WHERE STATUS IN ('PENDING','RETRYING')", cancellationToken: cancellationToken) ?? 0);
-        stats.Processing = Convert.ToInt32(await _db.ScalarAsync("SELECT COUNT(*) FROM SYNC_JOB WHERE STATUS='PROCESSING'", cancellationToken: cancellationToken) ?? 0);
-        stats.Failed = Convert.ToInt32(await _db.ScalarAsync("SELECT COUNT(*) FROM SYNC_JOB WHERE STATUS IN ('FAILED','CONFLICT','WAITING_FOR_MAPPING')", cancellationToken: cancellationToken) ?? 0);
-        stats.CompletedToday = Convert.ToInt32(await _db.ScalarAsync("SELECT COUNT(*) FROM SYNC_JOB WHERE STATUS='COMPLETED' AND CREATEDAT >= CURRENT_DATE", cancellationToken: cancellationToken) ?? 0);
-        return stats;
+            return new DashboardStats();
+
+        const string sql = """
+            SELECT
+              (SELECT COUNT(*) FROM SYNC_DATABASE WHERE ISACTIVE=1) AS TOTALDATABASES,
+              (SELECT COUNT(*) FROM SYNC_DATABASE WHERE ISACTIVE=1 AND CONNSTATUS='ONLINE') AS ONLINE,
+              (SELECT COUNT(*) FROM SYNC_DATABASE WHERE ISACTIVE=1 AND CONNSTATUS IN ('OFFLINE','NETWORK_ERROR','TIMEOUT')) AS OFFLINE,
+              (SELECT COUNT(*) FROM SYNC_DATABASE WHERE ISACTIVE=1 AND CONNSTATUS NOT IN ('ONLINE','OFFLINE')) AS ERRORCOUNT,
+              (SELECT COUNT(*) FROM SYNC_JOB WHERE STATUS IN ('PENDING','RETRYING')) AS PENDING,
+              (SELECT COUNT(*) FROM SYNC_JOB WHERE STATUS='PROCESSING') AS PROCESSING,
+              (SELECT COUNT(*) FROM SYNC_JOB WHERE STATUS IN ('FAILED','CONFLICT','WAITING_FOR_MAPPING')) AS FAILED,
+              (SELECT COUNT(*) FROM SYNC_JOB WHERE STATUS='COMPLETED' AND CREATEDAT >= CURRENT_DATE) AS COMPLETEDTODAY
+            FROM RDB$DATABASE
+            """;
+
+        return await _db.QuerySingleAsync(sql, MapDashboard, cancellationToken: cancellationToken).ConfigureAwait(false)
+            ?? new DashboardStats();
     }
+
+    private static DashboardStats MapDashboard(FbDataReader reader) => new()
+    {
+        TotalDatabases = CentralDb.Int(reader, "TOTALDATABASES"),
+        Online = CentralDb.Int(reader, "ONLINE"),
+        Offline = CentralDb.Int(reader, "OFFLINE"),
+        Error = CentralDb.Int(reader, "ERRORCOUNT"),
+        Pending = CentralDb.Int(reader, "PENDING"),
+        Processing = CentralDb.Int(reader, "PROCESSING"),
+        Failed = CentralDb.Int(reader, "FAILED"),
+        CompletedToday = CentralDb.Int(reader, "COMPLETEDTODAY")
+    };
 
     private static object Args(RegisteredDatabase db, int id, string user) => new
     {
