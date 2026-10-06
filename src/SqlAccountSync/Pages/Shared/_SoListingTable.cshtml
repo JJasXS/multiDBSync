@@ -9,102 +9,33 @@
 <table class="txn-matrix so-matrix" data-so-panel="ready" aria-label="SO Listing and Occupancy">
     <thead>
         <tr>
-            <th class="so-col-entity" rowspan="2" scope="col">
-                <div>COMPANY</div>
-                <small class="db-column-name">Registry NAME</small>
-            </th>
-            <th class="so-col-properties" rowspan="2" scope="col">
-                <div>Properties</div>
-                <small class="db-column-name">PROJECT.UDF_PROJECTDESC</small>
-            </th>
-            <th class="so-col-type" rowspan="2" scope="col">
-                <div>Type</div>
-                <small class="db-column-name">PROJECT.UDF_PROPTYPE</small>
-            </th>
-            <th class="so-col-code" rowspan="2" scope="col">
-                <div>Project Code</div>
-                <small class="db-column-name">PROJECT.DESCRIPTION2</small>
-            </th>
-            <th class="so-col-so" rowspan="2" scope="col">
-                <div>SO No</div>
-                <small class="db-column-name">SL_SO.DOCNO</small>
-            </th>
+            <th class="so-col-entity" rowspan="2" scope="col" data-sort="0" data-sort-type="text" tabindex="0" aria-sort="none">COMPANY</th>
+            <th class="so-col-properties" rowspan="2" scope="col" data-sort="1" data-sort-type="text" tabindex="0" aria-sort="none">Properties</th>
+            <th class="so-col-type" rowspan="2" scope="col" data-sort="2" data-sort-type="text" tabindex="0" aria-sort="none">Type</th>
+            <th class="so-col-code" rowspan="2" scope="col" data-sort="3" data-sort-type="text" tabindex="0" aria-sort="none">Project Code</th>
+            <th class="so-col-so" rowspan="2" scope="col" data-sort="4" data-sort-type="text" tabindex="0" aria-sort="none">SO No</th>
             <th class="so-group so-group-edge" colspan="5" scope="colgroup">Deposit from Tenant</th>
-            <th class="so-col-tenant" rowspan="2" scope="col">
-                <div>Tenant Name</div>
-                <small class="db-column-name">SL_SO.COMPANYNAME</small>
-            </th>
-            <th class="so-col-trade" rowspan="2" scope="col">
-                <div>Trade Name</div>
-                <small class="db-column-name">SL_SO.UDF_CUSTOMERNAME2</small>
-            </th>
-            <th class="so-col-reg" rowspan="2" scope="col">
-                <div>Registration No</div>
-                <small class="db-column-name">SL_SO.IDNO</small>
-            </th>
-            <th class="so-col-tin" rowspan="2" scope="col">
-                <div>TIN</div>
-                <small class="db-column-name">SL_SO.TIN</small>
-            </th>
-            <th class="so-col-address" rowspan="2" scope="col">
-                <div>Address</div>
-                <small class="db-column-name">SL_SO.ADDRESS1, SL_SO.ADDRESS2, SL_SO.ADDRESS3, SL_SO.ADDRESS4</small>
-            </th>
-            <th class="so-col-postal" rowspan="2" scope="col">
-                <div>Postal Code</div>
-                <small class="db-column-name">SL_SO.POSTCODE</small>
-            </th>
-            <th class="so-col-city" rowspan="2" scope="col">
-                <div>City</div>
-                <small class="db-column-name">SL_SO.CITY</small>
-            </th>
-            <th class="so-col-email" rowspan="2" scope="col">
-                <div>Email</div>
-                <small class="db-column-name">AR_CUSTOMERBRANCH.EMAIL</small>
-            </th>
-            <th class="so-col-contact" rowspan="2" scope="col">
-                <div>Contact No</div>
-                <small class="db-column-name">SL_SO.PHONE1</small>
-            </th>
+            <th class="so-col-tenant" rowspan="2" scope="col" data-sort="10" data-sort-type="text" tabindex="0" aria-sort="none">Tenant Name</th>
+            <th class="so-col-trade" rowspan="2" scope="col" data-sort="11" data-sort-type="text" tabindex="0" aria-sort="none">Trade Name</th>
+            <th class="so-col-reg" rowspan="2" scope="col" data-sort="12" data-sort-type="text" tabindex="0" aria-sort="none">Registration No</th>
+            <th class="so-col-tin" rowspan="2" scope="col" data-sort="13" data-sort-type="text" tabindex="0" aria-sort="none">TIN</th>
+            <th class="so-col-address" rowspan="2" scope="col" data-sort="14" data-sort-type="text" tabindex="0" aria-sort="none">Address</th>
+            <th class="so-col-postal" rowspan="2" scope="col" data-sort="15" data-sort-type="text" tabindex="0" aria-sort="none">Postal Code</th>
+            <th class="so-col-city" rowspan="2" scope="col" data-sort="16" data-sort-type="text" tabindex="0" aria-sort="none">City</th>
+            <th class="so-col-email" rowspan="2" scope="col" data-sort="17" data-sort-type="text" tabindex="0" aria-sort="none">Email</th>
+            <th class="so-col-contact" rowspan="2" scope="col" data-sort="18" data-sort-type="text" tabindex="0" aria-sort="none">Contact No</th>
             <th class="so-group so-group-edge" colspan="4" scope="colgroup">Term</th>
         </tr>
         <tr>
-            <th class="so-col-money so-group-edge" scope="col">
-                <div>Security Deposit</div>
-                <small class="db-column-name">PROJECT.UDF_DEPOSIT01</small>
-            </th>
-            <th class="so-col-money" scope="col">
-                <div>Utilities Deposit</div>
-                <small class="db-column-name">PROJECT.UDF_DEPOSIT02</small>
-            </th>
-            <th class="so-col-money" scope="col">
-                <div>Fit Out Deposits</div>
-                <small class="db-column-name">PROJECT.UDF_DEPOSIT03</small>
-            </th>
-            <th class="so-col-money" scope="col">
-                <div>Access Card</div>
-                <small class="db-column-name">PROJECT.UDF_DEPOSIT04</small>
-            </th>
-            <th class="so-col-money" scope="col">
-                <div>Booking Deposits</div>
-                <small class="db-column-name">PROJECT.UDF_DEPOSIT05</small>
-            </th>
-            <th class="so-col-date so-group-edge" scope="col">
-                <div>Tenant Start</div>
-                <small class="db-column-name">PROJECT.UDF_DATEFROM</small>
-            </th>
-            <th class="so-col-date" scope="col">
-                <div>Tenant End</div>
-                <small class="db-column-name">PROJECT.UDF_DATETO</small>
-            </th>
-            <th class="so-col-money" scope="col">
-                <div>Monthly Rental</div>
-                <small class="db-column-name">PROJECT.UDF_UNITPRICE</small>
-            </th>
-            <th class="so-col-money" scope="col">
-                <div>Service Charge</div>
-                <small class="db-column-name">PROJECT.UDF_SERVICECHARGE</small>
-            </th>
+            <th class="so-col-money so-group-edge" scope="col" data-sort="5" data-sort-type="money" tabindex="0" aria-sort="none">Security Deposit</th>
+            <th class="so-col-money" scope="col" data-sort="6" data-sort-type="money" tabindex="0" aria-sort="none">Utilities Deposit</th>
+            <th class="so-col-money" scope="col" data-sort="7" data-sort-type="money" tabindex="0" aria-sort="none">Fit Out Deposits</th>
+            <th class="so-col-money" scope="col" data-sort="8" data-sort-type="money" tabindex="0" aria-sort="none">Access Card</th>
+            <th class="so-col-money" scope="col" data-sort="9" data-sort-type="money" tabindex="0" aria-sort="none">Booking Deposits</th>
+            <th class="so-col-date so-group-edge" scope="col" data-sort="19" data-sort-type="date" tabindex="0" aria-sort="none">Tenant Start</th>
+            <th class="so-col-date" scope="col" data-sort="20" data-sort-type="date" tabindex="0" aria-sort="none">Tenant End</th>
+            <th class="so-col-money" scope="col" data-sort="21" data-sort-type="money" tabindex="0" aria-sort="none">Monthly Rental</th>
+            <th class="so-col-money" scope="col" data-sort="22" data-sort-type="money" tabindex="0" aria-sort="none">Service Charge</th>
         </tr>
     </thead>
     <tbody>
