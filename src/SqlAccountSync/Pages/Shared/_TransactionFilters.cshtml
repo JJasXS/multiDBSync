@@ -25,16 +25,16 @@
         </select>
     </div>
     <div class="txn-filter txn-filter-databases">
-        <label id="txnDatabasesLabel">Database</label>
+        <label id="txnDatabasesLabel">Company</label>
         <details class="txn-col-menu txn-db-menu">
             <summary aria-labelledby="txnDatabasesLabel">
-                <span data-txn-db-summary>@(Model.AllDatabases ? "All databases" : "Selected databases")</span>
+                <span data-txn-db-summary>@(Model.AllDatabases ? "All Company" : "Selected Company")</span>
                 <svg class="txn-col-chevron" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </summary>
-            <div class="txn-col-panel" role="group" aria-label="Databases">
+            <div class="txn-col-panel" role="group" aria-label="Companies">
                 <label class="txn-col-option">
                     <input type="checkbox" data-txn-db-all @(Model.AllDatabases ? "checked" : null) />
-                    <span>All databases</span>
+                    <span>All Company</span>
                 </label>
                 @foreach (var db in Model.Databases)
                 {
@@ -52,7 +52,7 @@
         </details>
     </div>
     <div class="txn-filter txn-filter-customer">
-        <label for="txnCompany">Company</label>
+        <label for="txnCompany">Company Search</label>
         <input id="txnCompany" name="customer" type="text" data-txn-customer autocomplete="off" placeholder="Search company..." value="@Model.Customer" />
     </div>
     <div class="txn-filter txn-filter-columns">
@@ -63,7 +63,7 @@
                 <svg class="txn-col-chevron" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </summary>
             <div class="txn-col-panel" role="group" aria-label="Visible columns">
-                <label class="txn-col-option"><input type="checkbox" value="entities" data-txn-col-toggle checked /> <span>Entities</span></label>
+                <label class="txn-col-option"><input type="checkbox" value="entities" data-txn-col-toggle checked /> <span>Company</span></label>
                 <label class="txn-col-option"><input type="checkbox" value="properties" data-txn-col-toggle checked /> <span>Properties</span></label>
                 <label class="txn-col-option"><input type="checkbox" value="type" data-txn-col-toggle checked /> <span>Type</span></label>
                 <label class="txn-col-option"><input type="checkbox" value="project" data-txn-col-toggle checked /> <span>Project Code</span></label>
@@ -83,6 +83,8 @@
         </details>
     </div>
     <div class="txn-filter-actions">
+        <button type="button" class="btn secondary" data-txn-export-all>Export All</button>
+        <button type="button" class="btn secondary" data-txn-export-selected>Export Selected</button>
         <button type="button" class="btn secondary" data-txn-clear>Clear</button>
     </div>
 </form>

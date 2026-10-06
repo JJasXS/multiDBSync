@@ -165,6 +165,14 @@ public class ItemDestCodeLinkTests
             CancellationToken cancellationToken = default) =>
             Task.FromResult<List<GlTransLine>?>([]);
 
+        public Task<List<MomCollectionSourceRow>?> ListMomCollectionAsync(
+            RegisteredDatabase db,
+            DateTime dateFrom,
+            DateTime dateTo,
+            string? companySearch = null,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<List<MomCollectionSourceRow>?>([]);
+
         public Task<List<GlTransLine>?> ListPlByProjectLinesAsync(
             RegisteredDatabase db,
             DateTime? dateFrom = null,

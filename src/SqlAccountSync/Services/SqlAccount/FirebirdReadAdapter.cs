@@ -40,6 +40,17 @@ public interface ISqlAccountReadAdapter
         string? codeSearch = null,
         CancellationToken cancellationToken = default);
     /// <summary>
+    /// SL_IV rows for Mom Collection. Year and month come from UDF_ORDATE.
+    /// Invoice amount is UDF_ORAMT. Company is COMPANYNAME. Properties is UDF_PROJECTDESC.
+    /// Null when that database cannot be read.
+    /// </summary>
+    Task<List<MomCollectionSourceRow>?> ListMomCollectionAsync(
+        RegisteredDatabase db,
+        DateTime dateFrom,
+        DateTime dateTo,
+        string? companySearch = null,
+        CancellationToken cancellationToken = default);
+    /// <summary>
     /// Restored Details-card read from the before-gl-acc-description backup.
     /// Description comes from GL_ACC.DESCRIPTION and amount is DR minus CR.
     /// </summary>
@@ -461,6 +472,91 @@ ORDER BY CODE";
         {
             _logger.LogWarning(ex,
                 "GL transaction read failed for {Company} ({Db}) at {Host} path {Path}: {Error}",
+                db.DisplayName, db.DbCode, _factory.EffectiveHost(db), db.FbPath, CredentialRedactor.Redact(ex.Message));
+            return null;
+        }
+    }
+
+    public async Task<List<MomCollectionSourceRow>?> ListMomCollectionAsync(
+        RegisteredDatabase db,
+        DateTime dateFrom,
+        DateTime dateTo,
+        string? companySearch = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await WithReadTx(db, async (conn, tx) =>
+            {
+                if (!await TableExistsConn(conn, tx, "SL_IV", cancellationToken).ConfigureAwait(false))
+                {
+                    _logger.LogWarning(
+                        "SL_IV is missing for {Company} ({Db}) at {Host} path {Path}",
+                        db.DisplayName, db.DbCode, _factory.EffectiveHost(db), db.FbPath);
+                    return null;
+                }
+
+                var cols = await Columns(conn, tx, "SL_IV", cancellationToken).ConfigureAwait(false);
+                string[] required =
+                [
+                    "DOCKEY", "COMPANYNAME", "UDF_PROJECTDESC", "UDF_PROPTYPE", "UDF_PROJECTCODE",
+                    "UDF_ORDATE", "UDF_ORNO", "UDF_ORAMT"
+                ];
+                if (required.Any(name => !cols.Contains(name, StringComparer.OrdinalIgnoreCase)))
+                {
+                    _logger.LogWarning(
+                        "SL_IV collection columns are incomplete for {Company} ({Db}) at {Host} path {Path}",
+                        db.DisplayName, db.DbCode, _factory.EffectiveHost(db), db.FbPath);
+                    return null;
+                }
+
+                var sql = """
+                    SELECT DOCKEY, COMPANYNAME, UDF_PROJECTDESC, UDF_PROPTYPE, UDF_PROJECTCODE,
+                           UDF_ORDATE, UDF_ORNO, UDF_ORAMT
+                    FROM SL_IV
+                    WHERE UDF_ORDATE >= @DATEFROM
+                      AND UDF_ORDATE < @DATETOEXCL
+                    """;
+                var args = new Dictionary<string, object?>
+                {
+                    ["DATEFROM"] = dateFrom.Date,
+                    ["DATETOEXCL"] = dateTo.Date.AddDays(1)
+                };
+                var companyKey = (companySearch ?? "").Trim();
+                if (companyKey.Length > 0)
+                {
+                    sql += "\nAND UPPER(TRIM(COMPANYNAME)) CONTAINING @COMPANY";
+                    args["COMPANY"] = companyKey.ToUpperInvariant();
+                }
+                sql += "\nORDER BY COMPANYNAME, UDF_PROJECTCODE, UDF_ORDATE, DOCKEY";
+                SqlGuard.EnsureSelectOnly(sql);
+                await using var cmd = conn.CreateCommand();
+                cmd.Transaction = tx;
+                cmd.CommandText = sql;
+                CentralDb.Bind(cmd, args);
+                await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                var list = new List<MomCollectionSourceRow>();
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    list.Add(new MomCollectionSourceRow
+                    {
+                        DocKey = reader["DOCKEY"] is DBNull ? 0 : Convert.ToInt32(reader["DOCKEY"]),
+                        Entities = ReadText(reader, "COMPANYNAME"),
+                        Properties = ReadText(reader, "UDF_PROJECTDESC"),
+                        Type = ReadText(reader, "UDF_PROPTYPE"),
+                        ProjectCode = ReadText(reader, "UDF_PROJECTCODE"),
+                        OrDate = ReadDate(reader, "UDF_ORDATE"),
+                        OrNo = ReadText(reader, "UDF_ORNO"),
+                        OrAmount = ReadDecimal(reader, "UDF_ORAMT")
+                    });
+                }
+                return list;
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "SL_IV collection read failed for {Company} ({Db}) at {Host} path {Path}: {Error}",
                 db.DisplayName, db.DbCode, _factory.EffectiveHost(db), db.FbPath, CredentialRedactor.Redact(ex.Message));
             return null;
         }
