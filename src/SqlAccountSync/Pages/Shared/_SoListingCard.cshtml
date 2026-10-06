@@ -109,6 +109,15 @@
                     exportCompany.disabled = !company || company.value === "";
             };
 
+            const syncHeaderOffset = () => {
+                const table = root.querySelector(".so-matrix");
+                const firstRow = table?.querySelector("thead tr:first-child");
+                if (!table || !firstRow) return;
+                const height = Math.round(firstRow.getBoundingClientRect().height);
+                if (height > 0)
+                    table.style.setProperty("--so-head-1", `${height}px`);
+            };
+
             const rememberFilters = () => {
                 if (!filters) return;
                 const pageQuery = new URLSearchParams(new FormData(filters));
@@ -142,6 +151,7 @@
                     }
                     results.innerHTML = await response.text();
                     applyStatus("ready");
+                    syncHeaderOffset();
                     root.removeAttribute("aria-busy");
                 } catch {
                     applyStatus("error");
@@ -206,6 +216,8 @@
 
             syncExportCompany();
             applyStatus(root.getAttribute("data-so-status") || "ready");
+            syncHeaderOffset();
+            window.addEventListener("resize", syncHeaderOffset);
         })();
     </script>
 </section>
