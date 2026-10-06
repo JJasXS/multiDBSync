@@ -71,27 +71,40 @@ public class IndexModel : SyncPageModel
 
     public async Task OnGetAsync()
     {
-        var registry = await _registry.ReadDashboardRegistryAsync();
+        var tenant = (_syncOptions.TenantCode ?? "").Trim();
+        var registryTask = _registry.ReadDashboardRegistryAsync();
+        var maxTask = _tenants.GetMaxDatabasesAsync(tenant);
+        var jobsTask = _jobs.ListAsync(take: 8);
+        var mappedTask = _mapping.CountMappedAsync();
+        var conflictsTask = _mapping.ConflictsAsync();
+        var rulesTask = _sync.CountEnabledRulesAsync();
+        var txnsTask = _txns.ListAsync(take: 5);
+        var errorsTask = _errors.ListAsync(unresolvedOnly: true, take: 5);
+        var auditTask = _audit.ListAsync(take: 5);
+        var usersTask = _users.ListAsync();
+        var settingsTask = _db.IsConfigured
+            ? _db.ScalarAsync("SELECT COUNT(*) FROM SYNC_SETTING")
+            : Task.FromResult<object?>(0);
+
+        await Task.WhenAll(
+            registryTask, maxTask, jobsTask,
+            mappedTask, conflictsTask, rulesTask, txnsTask, errorsTask,
+            auditTask, usersTask, settingsTask);
+
+        var registry = await registryTask;
         CentralConfigured = registry.Configured;
         Stats = registry.Stats;
         Databases = registry.Databases;
         Links = registry.Links;
-        MaxDatabases = await _tenants.GetMaxDatabasesAsync((_syncOptions.TenantCode ?? "").Trim());
-        RecentJobs = await _jobs.ListAsync(take: 8);
-        await LoadSummariesAsync();
-    }
-
-    private async Task LoadSummariesAsync()
-    {
-        MappedCount = await _mapping.CountMappedAsync();
-        Conflicts = await _mapping.ConflictsAsync();
-        EnabledRuleCount = await _sync.CountEnabledRulesAsync();
-        RecentTxns = await _txns.ListAsync(take: 5);
-        UnresolvedErrors = await _errors.ListAsync(unresolvedOnly: true, take: 5);
-        RecentAudit = await _audit.ListAsync(take: 5);
-        Users = await _users.ListAsync();
-        if (!CentralConfigured)
-            return;
-        SettingsKeyCount = Convert.ToInt32(await _db.ScalarAsync("SELECT COUNT(*) FROM SYNC_SETTING") ?? 0);
+        MaxDatabases = await maxTask;
+        RecentJobs = await jobsTask;
+        MappedCount = await mappedTask;
+        Conflicts = await conflictsTask;
+        EnabledRuleCount = await rulesTask;
+        RecentTxns = await txnsTask;
+        UnresolvedErrors = await errorsTask;
+        RecentAudit = await auditTask;
+        Users = await usersTask;
+        SettingsKeyCount = Convert.ToInt32(await settingsTask ?? 0);
     }
 }
