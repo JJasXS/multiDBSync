@@ -211,15 +211,6 @@
                 root.querySelectorAll("details.txn-col-menu").forEach((menu) => menu.removeAttribute("open"));
             });
 
-            const pageScroll = document.querySelector(".main");
-            root.addEventListener("wheel", (event) => {
-                const scroller = event.target.closest(".txn-lines-scroll");
-                if (!pageScroll || !scroller || !root.contains(scroller) || event.shiftKey) return;
-                if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
-                pageScroll.scrollTop += event.deltaY;
-                event.preventDefault();
-            }, { passive: false });
-
             applyColumns();
             applyDatabases();
             applyStatus();

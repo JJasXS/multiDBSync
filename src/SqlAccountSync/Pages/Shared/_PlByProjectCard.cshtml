@@ -172,20 +172,6 @@
                 refreshDetails();
             });
 
-            root.querySelector("[data-txn-clear]")?.addEventListener("click", () => {
-                window.clearTimeout(refreshTimer);
-                const dateFrom = root.querySelector("[data-txn-date-from]");
-                const dateTo = root.querySelector("[data-txn-date-to]");
-                if (dateFrom) dateFrom.value = filters?.getAttribute("data-default-date-from") ?? "";
-                if (dateTo) dateTo.value = filters?.getAttribute("data-default-date-to") ?? "";
-                if (allDatabases) allDatabases.checked = true;
-                dbBoxes().forEach((box) => { box.checked = true; });
-                toggles().forEach((box) => { box.checked = true; });
-                applyDatabases();
-                applyColumns();
-                refreshDetails();
-            });
-
             document.addEventListener("click", (event) => {
                 root.querySelectorAll("details.txn-col-menu").forEach((menu) => {
                     if (!menu.contains(event.target)) menu.removeAttribute("open");
