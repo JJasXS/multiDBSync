@@ -62,18 +62,7 @@ public class MomCollectionModel : SyncPageModel
         return Partial("_TransactionResults", rows);
     }
 
-    public async Task<IActionResult> OnGetExportAllAsync()
-    {
-        await LoadRegistryAsync();
-        if (!CentralConfigured)
-            return Plain(StatusCodes.Status503ServiceUnavailable, "The company registry is not available.");
-        Customer = "";
-        var (dateFrom, dateTo) = ReportRange();
-        var rows = await LoadCollectionAsync(DetailDatabases(), dateFrom, dateTo, CancellationToken.None);
-        return File(MomCollectionExcel.Build(rows), MomCollectionExcel.ContentType, $"Mom-Collection-All-{ReportYear}.xlsx");
-    }
-
-    public async Task<IActionResult> OnGetExportSelectedAsync()
+    public async Task<IActionResult> OnGetExportAsync()
     {
         await LoadRegistryAsync();
         if (!CentralConfigured)
@@ -84,7 +73,7 @@ public class MomCollectionModel : SyncPageModel
             return Plain(StatusCodes.Status400BadRequest, "Select a company before exporting.");
         var (dateFrom, dateTo) = ReportRange();
         var rows = await LoadCollectionAsync(selected, dateFrom, dateTo, CancellationToken.None);
-        return File(MomCollectionExcel.Build(rows), MomCollectionExcel.ContentType, $"Mom-Collection-Selected-{ReportYear}.xlsx");
+        return File(MomCollectionExcel.Build(rows), MomCollectionExcel.ContentType, $"Collection-Report-{ReportYear}.xlsx");
     }
 
     private async Task LoadRegistryAsync()
@@ -142,7 +131,7 @@ public class MomCollectionModel : SyncPageModel
             return [];
         var loaded = await Task.WhenAll(databases.Select(async db =>
         {
-            var lines = await _companyRead.ListMomCollectionAsync(db, dateFrom, dateTo, Customer, cancellationToken);
+            var lines = await _companyRead.ListMomCollectionAsync(db, dateFrom, dateTo, null, cancellationToken);
             return (db, lines);
         }));
         var rows = new List<DashboardDetailRow>();
@@ -215,6 +204,7 @@ public class MomCollectionModel : SyncPageModel
             day.Receipts.Add(new MomCollectionReceipt
             {
                 OrNo = orNo,
+                InvoiceAmount = line.DocAmount,
                 Amount = line.OrAmount
             });
         }

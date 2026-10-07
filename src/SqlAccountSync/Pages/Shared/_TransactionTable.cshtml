@@ -15,126 +15,127 @@
         new { Key = "nov", Label = "Nov" },
         new { Key = "dec", Label = "Dec" },
     };
+    var hasRows = Model.Any(row => row.LoadFailed || row.CollectionLines.Count > 0);
 
     string Text(string? value) => string.IsNullOrWhiteSpace(value) ? "" : value;
-    string ReceiptAmount(decimal amount) => "RM" + amount.ToString("N2", System.Globalization.CultureInfo.InvariantCulture);
+    string ReceiptAmount(decimal amount) => amount.ToString("N2", System.Globalization.CultureInfo.InvariantCulture);
 }
-<div class="txn-groups" data-txn-panel="ready">
-    @foreach (var row in Model)
-    {
-        <section class="txn-db-group" data-txn-db-group>
-            <button type="button" class="txn-db-head" data-txn-db-toggle aria-expanded="true">
-                <svg class="txn-db-chevron" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                <svg class="rel-db-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
-                <span class="txn-db">
-                    <span class="txn-db-name">@row.DatabaseName</span>
-                    @if (!string.IsNullOrWhiteSpace(row.Role))
+<div class="txn-lines-scroll" data-txn-panel="ready">
+    <table class="txn-lines mom-lines" aria-label="Collection Report">
+        <thead>
+            <tr>
+                <th class="mom-sticky mom-col-database" data-txn-col="database" scope="col">
+                    <span class="mom-col-title">PROJECT</span>
+                </th>
+                <th class="mom-sticky mom-col-entities mom-sticky-edge" data-txn-col="entities" scope="col">
+                    <span class="mom-col-title">ENTITIES</span>
+                </th>
+                <th class="mom-col-properties" data-txn-col="properties" scope="col">
+                    <span class="mom-col-title">PROPERTIES</span>
+                </th>
+                <th class="mom-col-type" data-txn-col="type" scope="col">
+                    <span class="mom-col-title">TYPE</span>
+                </th>
+                <th class="mom-col-project" data-txn-col="project" scope="col">
+                    <span class="mom-col-title">PROJECT CODE</span>
+                </th>
+                @foreach (var month in months)
+                {
+                    <th class="mom-month mom-group-edge" colspan="2" data-txn-col="@month.Key" scope="colgroup">@month.Label</th>
+                }
+            </tr>
+            <tr>
+                <th class="mom-sticky mom-col-database" data-txn-col="database" scope="col">
+                    <span class="mom-col-source" title="SYNC_DATABASE.DISPLAYNAME">SYNC_DATABASE.DISPLAYNAME</span>
+                </th>
+                <th class="mom-sticky mom-col-entities mom-sticky-edge" data-txn-col="entities" scope="col">
+                    <span class="mom-col-source" title="SL_IV.COMPANYNAME">SL_IV.COMPANYNAME</span>
+                </th>
+                <th class="mom-col-properties" data-txn-col="properties" scope="col">
+                    <span class="mom-col-source" title="SL_IV.UDF_PROJECTDESC">SL_IV.UDF_PROJECTDESC</span>
+                </th>
+                <th class="mom-col-type" data-txn-col="type" scope="col">
+                    <span class="mom-col-source" title="SL_IV.UDF_PROPTYPE">SL_IV.UDF_PROPTYPE</span>
+                </th>
+                <th class="mom-col-project" data-txn-col="project" scope="col">
+                    <span class="mom-col-source" title="SL_IV.DOCNOEX">SL_IV.DOCNOEX</span>
+                </th>
+                @foreach (var month in months)
+                {
+                    <th class="mom-sub mom-sub-invoice mom-group-edge" data-txn-col="@month.Key" scope="col">
+                        <span class="mom-col-title">Invoice</span>
+                        <span class="mom-col-source" title="SL_IV.DOCAMT">SL_IV.DOCAMT</span>
+                    </th>
+                    <th class="mom-sub mom-sub-receipt" data-txn-col="@month.Key" scope="col">
+                        <span class="mom-col-title">Receipt</span>
+                        <span class="mom-col-source" title="SL_IV.UDF_ORAMT">SL_IV.UDF_ORAMT</span>
+                    </th>
+                }
+            </tr>
+        </thead>
+        <tbody>
+            @if (!hasRows)
+            {
+                <tr>
+                    <td class="txn-tree-empty" colspan="@(5 + (months.Length * 2))">No data found</td>
+                </tr>
+            }
+            else
+            {
+                foreach (var row in Model)
+                {
+                    var project = Text(row.DatabaseName);
+                    if (row.LoadFailed)
                     {
-                        <span class="badge badge-@row.Role.ToLowerInvariant()">@row.Role</span>
-                    }
-                </span>
-                @if (!row.LoadFailed)
-                {
-                    <span class="txn-db-total">Total: @row.TotalAmount.ToString("N2", System.Globalization.CultureInfo.InvariantCulture)</span>
-                }
-            </button>
-            <div class="txn-db-body">
-                @if (row.LoadFailed)
-                {
-                    <p class="txn-tree-empty"><span class="txn-tree-branch" aria-hidden="true"></span>Could not load this company.</p>
-                }
-                else if (row.CollectionLines.Count == 0)
-                {
-                    <p class="txn-tree-empty"><span class="txn-tree-branch" aria-hidden="true"></span>No data found</p>
-                }
-                else
-                {
-                <div class="txn-lines-scroll">
-                    <table class="txn-lines mom-lines" aria-label="@row.DatabaseName collection">
-                        <thead>
-                            <tr>
-                                <th class="mom-sticky mom-col-entities" data-txn-col="entities" scope="col">
-                                    <span class="mom-col-title">Company</span>
-                                </th>
-                                <th class="mom-sticky mom-col-properties" data-txn-col="properties" scope="col">
-                                    <span class="mom-col-title">Properties</span>
-                                </th>
-                                <th class="mom-sticky mom-col-type" data-txn-col="type" scope="col">
-                                    <span class="mom-col-title">Type</span>
-                                </th>
-                                <th class="mom-sticky mom-col-project mom-sticky-edge" data-txn-col="project" scope="col">
-                                    <span class="mom-col-title">Project Code</span>
-                                </th>
-                                @foreach (var month in months)
-                                {
-                                    <th class="mom-month mom-group-edge" colspan="2" data-txn-col="@month.Key" scope="colgroup">@month.Label</th>
-                                }
-                            </tr>
-                            <tr>
-                                <th class="mom-sticky mom-col-entities" data-txn-col="entities" scope="col">
-                                    <span class="mom-col-source" title="SL_IV.COMPANYNAME">SL_IV.COMPANYNAME</span>
-                                </th>
-                                <th class="mom-sticky mom-col-properties" data-txn-col="properties" scope="col">
-                                    <span class="mom-col-source" title="SL_IV.UDF_PROJECTDESC">SL_IV.UDF_PROJECTDESC</span>
-                                </th>
-                                <th class="mom-sticky mom-col-type" data-txn-col="type" scope="col">
-                                    <span class="mom-col-source" title="SL_IV.UDF_PROPTYPE">SL_IV.UDF_PROPTYPE</span>
-                                </th>
-                                <th class="mom-sticky mom-col-project mom-sticky-edge" data-txn-col="project" scope="col">
-                                    <span class="mom-col-source" title="SL_IV.UDF_PROJECTCODE">SL_IV.UDF_PROJECTCODE</span>
-                                </th>
-                                @foreach (var month in months)
-                                {
-                                    <th class="mom-sub mom-sub-invoice mom-group-edge" data-txn-col="@month.Key" scope="col">
-                                        <span class="mom-col-title">Invoice</span>
-                                        <span class="mom-col-source" title="SL_IV.UDF_ORAMT">SL_IV.UDF_ORAMT</span>
-                                    </th>
-                                    <th class="mom-sub mom-sub-receipt" data-txn-col="@month.Key" scope="col" title="Sum of SL_IV.UDF_ORAMT for this row">
-                                        <span class="mom-col-title">Receipt</span>
-                                        <span class="mom-col-source">Sum of invoice</span>
-                                    </th>
-                                }
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var line in row.CollectionLines)
+                        <tr>
+                            <td class="mom-sticky mom-col-database" data-txn-col="database" title="@project">@project</td>
+                            <td class="mom-sticky mom-col-entities mom-sticky-edge" data-txn-col="entities">Could not load this company.</td>
+                            <td class="mom-col-properties" data-txn-col="properties"></td>
+                            <td class="mom-col-type" data-txn-col="type"></td>
+                            <td class="mom-col-project" data-txn-col="project"></td>
+                            @foreach (var month in months)
                             {
-                                var entities = Text(line.Entities);
-                                var properties = Text(line.Properties);
-                                var type = Text(line.Type);
-                                var projectCode = Text(line.ProjectCode);
-                                <tr>
-                                    <td class="mom-sticky mom-col-entities" data-txn-col="entities" title="@entities">@entities</td>
-                                    <td class="mom-sticky mom-col-properties" data-txn-col="properties" title="@properties">@properties</td>
-                                    <td class="mom-sticky mom-col-type" data-txn-col="type" title="@type">@type</td>
-                                    <td class="mom-sticky mom-col-project mom-sticky-edge" data-txn-col="project" title="@projectCode">@projectCode</td>
-                                    @for (var monthIndex = 0; monthIndex < months.Length; monthIndex++)
-                                    {
-                                        var invoiceAmounts = line.ReceiptsByMonth[monthIndex]
-                                            .OrderBy(item => item.Date)
-                                            .SelectMany(item => item.Receipts)
-                                            .Select(item => item.Amount)
-                                            .ToList();
-                                        <td class="mom-money mom-invoice mom-group-edge" data-txn-col="@months[monthIndex].Key">
-                                            @foreach (var amount in invoiceAmounts)
-                                            {
-                                                <div class="mom-receipt-amt">@ReceiptAmount(amount)</div>
-                                            }
-                                        </td>
-                                        <td class="mom-receipt" data-txn-col="@months[monthIndex].Key">
-                                            @if (invoiceAmounts.Count > 0)
-                                            {
-                                                <div class="mom-receipt-amt">@ReceiptAmount(invoiceAmounts.Sum())</div>
-                                            }
-                                        </td>
-                                    }
-                                </tr>
+                                <td class="mom-money mom-invoice mom-group-edge" data-txn-col="@month.Key"></td>
+                                <td class="mom-receipt" data-txn-col="@month.Key"></td>
                             }
-                        </tbody>
-                    </table>
-                </div>
+                        </tr>
+                        continue;
+                    }
+
+                    foreach (var line in row.CollectionLines)
+                    {
+                        var entities = Text(line.Entities);
+                        var properties = Text(line.Properties);
+                        var type = Text(line.Type);
+                        var projectCode = Text(line.ProjectCode);
+                        <tr>
+                            <td class="mom-sticky mom-col-database" data-txn-col="database" title="@project">@project</td>
+                            <td class="mom-sticky mom-col-entities mom-sticky-edge" data-txn-col="entities" title="@entities">@entities</td>
+                            <td class="mom-col-properties" data-txn-col="properties" title="@properties">@properties</td>
+                            <td class="mom-col-type" data-txn-col="type" title="@type">@type</td>
+                            <td class="mom-col-project" data-txn-col="project" title="@projectCode">@projectCode</td>
+                            @for (var monthIndex = 0; monthIndex < months.Length; monthIndex++)
+                            {
+                                var entries = line.ReceiptsByMonth[monthIndex]
+                                    .SelectMany(item => item.Receipts)
+                                    .ToList();
+                                <td class="mom-money mom-invoice mom-group-edge" data-txn-col="@months[monthIndex].Key">
+                                    @if (entries.Count > 0)
+                                    {
+                                        <div class="mom-receipt-amt">@ReceiptAmount(entries.Sum(item => item.InvoiceAmount))</div>
+                                    }
+                                </td>
+                                <td class="mom-receipt" data-txn-col="@months[monthIndex].Key">
+                                    @if (entries.Count > 0)
+                                    {
+                                        <div class="mom-receipt-amt">@ReceiptAmount(entries.Sum(item => item.Amount))</div>
+                                    }
+                                </td>
+                            }
+                        </tr>
+                    }
                 }
-            </div>
-        </section>
-    }
+            }
+        </tbody>
+    </table>
 </div>

@@ -51,10 +51,6 @@
             </div>
         </details>
     </div>
-    <div class="txn-filter txn-filter-customer">
-        <label for="txnCompany">Company Search</label>
-        <input id="txnCompany" name="customer" type="text" data-txn-customer autocomplete="off" placeholder="Search company..." value="@Model.Customer" />
-    </div>
     <div class="txn-filter txn-filter-columns">
         <label id="txnColumnsLabel">Columns</label>
         <details class="txn-col-menu">
@@ -63,10 +59,11 @@
                 <svg class="txn-col-chevron" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </summary>
             <div class="txn-col-panel" role="group" aria-label="Visible columns">
-                <label class="txn-col-option"><input type="checkbox" value="entities" data-txn-col-toggle checked /> <span>Company</span></label>
-                <label class="txn-col-option"><input type="checkbox" value="properties" data-txn-col-toggle checked /> <span>Properties</span></label>
-                <label class="txn-col-option"><input type="checkbox" value="type" data-txn-col-toggle checked /> <span>Type</span></label>
-                <label class="txn-col-option"><input type="checkbox" value="project" data-txn-col-toggle checked /> <span>Project Code</span></label>
+                <label class="txn-col-option"><input type="checkbox" value="database" data-txn-col-toggle checked /> <span>PROJECT</span></label>
+                <label class="txn-col-option"><input type="checkbox" value="entities" data-txn-col-toggle checked /> <span>ENTITIES</span></label>
+                <label class="txn-col-option"><input type="checkbox" value="properties" data-txn-col-toggle checked /> <span>PROPERTIES</span></label>
+                <label class="txn-col-option"><input type="checkbox" value="type" data-txn-col-toggle checked /> <span>TYPE</span></label>
+                <label class="txn-col-option"><input type="checkbox" value="project" data-txn-col-toggle checked /> <span>PROJECT CODE</span></label>
                 <label class="txn-col-option"><input type="checkbox" value="jan" data-txn-col-toggle checked /> <span>Jan</span></label>
                 <label class="txn-col-option"><input type="checkbox" value="feb" data-txn-col-toggle checked /> <span>Feb</span></label>
                 <label class="txn-col-option"><input type="checkbox" value="mar" data-txn-col-toggle checked /> <span>Mar</span></label>
@@ -83,8 +80,6 @@
         </details>
     </div>
     <div class="txn-filter-actions">
-        <button type="button" class="btn secondary" data-txn-export-all>Export All</button>
-        <button type="button" class="btn secondary" data-txn-export-selected>Export Selected</button>
-        <button type="button" class="btn secondary" data-txn-clear>Clear</button>
+        <button type="button" class="btn secondary" data-txn-export>Export to Excel</button>
     </div>
 </form>

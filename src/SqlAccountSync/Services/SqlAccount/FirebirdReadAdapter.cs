@@ -499,7 +499,7 @@ ORDER BY CODE";
                 var cols = await Columns(conn, tx, "SL_IV", cancellationToken).ConfigureAwait(false);
                 string[] required =
                 [
-                    "DOCKEY", "COMPANYNAME", "UDF_PROJECTDESC", "UDF_PROPTYPE", "UDF_PROJECTCODE",
+                    "DOCKEY", "DOCNOEX", "COMPANYNAME", "UDF_PROJECTDESC", "UDF_PROPTYPE", "DOCAMT",
                     "UDF_ORDATE", "UDF_ORNO", "UDF_ORAMT"
                 ];
                 if (required.Any(name => !cols.Contains(name, StringComparer.OrdinalIgnoreCase)))
@@ -511,7 +511,7 @@ ORDER BY CODE";
                 }
 
                 var sql = """
-                    SELECT DOCKEY, COMPANYNAME, UDF_PROJECTDESC, UDF_PROPTYPE, UDF_PROJECTCODE,
+                    SELECT DOCKEY, DOCNOEX, COMPANYNAME, UDF_PROJECTDESC, UDF_PROPTYPE, DOCAMT,
                            UDF_ORDATE, UDF_ORNO, UDF_ORAMT
                     FROM SL_IV
                     WHERE UDF_ORDATE >= @DATEFROM
@@ -528,7 +528,7 @@ ORDER BY CODE";
                     sql += "\nAND UPPER(TRIM(COMPANYNAME)) CONTAINING @COMPANY";
                     args["COMPANY"] = companyKey.ToUpperInvariant();
                 }
-                sql += "\nORDER BY COMPANYNAME, UDF_PROJECTCODE, UDF_ORDATE, DOCKEY";
+                sql += "\nORDER BY COMPANYNAME, DOCNOEX, UDF_ORDATE, DOCKEY";
                 SqlGuard.EnsureSelectOnly(sql);
                 await using var cmd = conn.CreateCommand();
                 cmd.Transaction = tx;
@@ -544,7 +544,8 @@ ORDER BY CODE";
                         Entities = ReadText(reader, "COMPANYNAME"),
                         Properties = ReadText(reader, "UDF_PROJECTDESC"),
                         Type = ReadText(reader, "UDF_PROPTYPE"),
-                        ProjectCode = ReadText(reader, "UDF_PROJECTCODE"),
+                        ProjectCode = ReadText(reader, "DOCNOEX"),
+                        DocAmount = ReadDecimal(reader, "DOCAMT"),
                         OrDate = ReadDate(reader, "UDF_ORDATE"),
                         OrNo = ReadText(reader, "UDF_ORNO"),
                         OrAmount = ReadDecimal(reader, "UDF_ORAMT")
