@@ -3629,15 +3629,44 @@ input:focus, select:focus, textarea:focus {
   max-height: 320px;
   overflow: auto;
 }
+.mom-collection {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0;
+}
+.mom-collection > .card-head,
+.mom-collection > .txn-summary-filters {
+  flex-shrink: 0;
+}
+.mom-collection .txn-summary-scroll {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.mom-collection .txn-summary-scroll > [data-txn-results] {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
 .mom-collection .txn-lines-scroll {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
   max-width: 100%;
   max-height: none;
   margin-left: 0;
   padding-left: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  overscroll-behavior-x: contain;
-  overscroll-behavior-y: auto;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 .mom-collection .mom-lines thead tr:first-child > th.mom-month {
   height: var(--mom-head-1);
@@ -3829,7 +3858,8 @@ input:focus, select:focus, textarea:focus {
   }
 }
 
-.main:has(.so-listing) {
+.main:has(.so-listing),
+.main:has(.mom-collection) {
   display: flex;
   flex-direction: column;
   overflow: hidden;
