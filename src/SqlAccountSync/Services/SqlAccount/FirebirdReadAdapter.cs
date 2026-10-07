@@ -605,7 +605,7 @@ ORDER BY CODE";
                     WHERE EXISTS (
                         SELECT 1 FROM GL_ACC a
                         WHERE UPPER(TRIM(a.CODE)) = UPPER(TRIM(t.CODE))
-                          AND UPPER(TRIM(a.ACCTYPE)) IN ('SL', 'SA', 'NS', 'CO', 'GP', 'OI', 'EP')
+                          AND UPPER(TRIM(a.ACCTYPE)) IN ('SL', 'SA', 'CO', 'OI', 'EP')
                     )
                     """;
                 var args = new Dictionary<string, object?>();
