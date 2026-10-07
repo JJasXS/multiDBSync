@@ -148,9 +148,9 @@ public class SoListingModel : SyncPageModel
     private static string CompanyLabel(RegisteredDatabase db)
     {
         if (!string.IsNullOrWhiteSpace(db.DisplayName))
-            return db.DisplayName.Trim();
+            return ReportCompanyName.Label(db.DisplayName);
         if (!string.IsNullOrWhiteSpace(db.CompanyName))
-            return db.CompanyName.Trim();
+            return ReportCompanyName.Label(db.CompanyName);
         if (!string.IsNullOrWhiteSpace(db.DbCode))
             return db.DbCode.Trim();
         return "Selected company";

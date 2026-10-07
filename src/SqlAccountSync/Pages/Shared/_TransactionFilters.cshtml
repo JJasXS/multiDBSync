@@ -39,9 +39,10 @@
                 @foreach (var db in Model.Databases)
                 {
                     var selected = Model.AllDatabases || Model.SelectedDbCodes.Contains(db.DbCode);
+                    var companyLabel = ReportCompanyName.Label(db.DisplayName);
                     <label class="txn-col-option">
-                        <input type="checkbox" name="db" value="@db.DbCode" data-txn-db data-txn-db-label="@db.DisplayName" @(selected ? "checked" : null) />
-                        <span>@db.DisplayName</span>
+                        <input type="checkbox" name="db" value="@db.DbCode" data-txn-db data-txn-db-label="@companyLabel" @(selected ? "checked" : null) />
+                        <span>@companyLabel</span>
                         @if (!string.IsNullOrWhiteSpace(db.DbRole))
                         {
                             <span class="badge badge-@db.DbRole.ToLowerInvariant()">@db.DbRole</span>

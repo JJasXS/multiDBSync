@@ -141,7 +141,7 @@ public class MomCollectionModel : SyncPageModel
             {
                 rows.Add(new DashboardDetailRow
                 {
-                    DatabaseName = db.DisplayName,
+                    DatabaseName = ReportCompanyName.Label(db.DisplayName),
                     Role = db.DbRole,
                     LoadFailed = true
                 });
@@ -159,7 +159,7 @@ public class MomCollectionModel : SyncPageModel
             }
             rows.Add(new DashboardDetailRow
             {
-                DatabaseName = db.DisplayName,
+                DatabaseName = ReportCompanyName.Label(db.DisplayName),
                 Role = db.DbRole,
                 CollectionLines = collection,
                 TotalAmount = total
