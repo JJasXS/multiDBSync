@@ -22,7 +22,6 @@ public class PlByProjectModel : SyncPageModel
     public DashboardDetailsModel Details { get; private set; } = new();
     [BindProperty(SupportsGet = true)] public DateTime? DateFrom { get; set; }
     [BindProperty(SupportsGet = true)] public DateTime? DateTo { get; set; }
-    [BindProperty(SupportsGet = true)] public string Customer { get; set; } = "";
     [BindProperty(SupportsGet = true)] public List<string> Db { get; set; } = [];
     [BindProperty(SupportsGet = true)] public bool DbFilter { get; set; }
 
@@ -33,7 +32,7 @@ public class PlByProjectModel : SyncPageModel
         var dateTo = (DateTo ?? DefaultDateTo).Date;
         var subs = DetailDatabases();
         var selected = SelectedDatabases();
-        var rows = await LoadRowsAsync(selected, dateFrom, dateTo, Customer, CancellationToken.None);
+        var rows = await LoadRowsAsync(selected, dateFrom, dateTo, "", CancellationToken.None);
         var selectedCodes = selected.Select(db => db.DbCode).ToHashSet(StringComparer.OrdinalIgnoreCase);
         Details = new DashboardDetailsModel
         {
@@ -44,8 +43,7 @@ public class PlByProjectModel : SyncPageModel
             DateFrom = dateFrom,
             DateTo = dateTo,
             DefaultDateFrom = DefaultDateFrom,
-            DefaultDateTo = DefaultDateTo,
-            Customer = Customer ?? ""
+            DefaultDateTo = DefaultDateTo
         };
     }
 
@@ -54,26 +52,18 @@ public class PlByProjectModel : SyncPageModel
         await LoadRegistryAsync(CancellationToken.None);
         var dateFrom = (DateFrom ?? DefaultDateFrom).Date;
         var dateTo = (DateTo ?? DefaultDateTo).Date;
-        var rows = await LoadRowsAsync(SelectedDatabases(), dateFrom, dateTo, Customer, CancellationToken.None);
+        var rows = await LoadRowsAsync(SelectedDatabases(), dateFrom, dateTo, "", CancellationToken.None);
         return Partial("_PlByProjectResults", rows);
     }
 
-    public async Task<IActionResult> OnGetExportByDateAsync()
+    public async Task<IActionResult> OnGetExportExcelAsync()
     {
         await LoadRegistryAsync(CancellationToken.None);
         var dateFrom = (DateFrom ?? DefaultDateFrom).Date;
         var dateTo = (DateTo ?? DefaultDateTo).Date;
-        var rows = await LoadRowsAsync(DetailDatabases(), dateFrom, dateTo, "", CancellationToken.None);
+        var rows = await LoadRowsAsync(SelectedDatabases(), dateFrom, dateTo, "", CancellationToken.None);
         var bytes = PlByProjectExcel.Build(PlByProjectMatrix.From(rows));
         return File(bytes, PlByProjectExcel.ContentType, $"PL-by-Project-{dateFrom:yyyy-MM-dd}-to-{dateTo:yyyy-MM-dd}.xlsx");
-    }
-
-    public async Task<IActionResult> OnGetExportAllAsync()
-    {
-        await LoadRegistryAsync(CancellationToken.None);
-        var rows = await LoadRowsAsync(DetailDatabases(), null, null, "", CancellationToken.None);
-        var bytes = PlByProjectExcel.Build(PlByProjectMatrix.From(rows));
-        return File(bytes, PlByProjectExcel.ContentType, "PL-by-Project-All.xlsx");
     }
 
     private async Task LoadRegistryAsync(CancellationToken cancellationToken)

@@ -149,7 +149,6 @@
 
             root.querySelector("[data-txn-date-from]")?.addEventListener("change", scheduleRefresh);
             root.querySelector("[data-txn-date-to]")?.addEventListener("change", scheduleRefresh);
-            root.querySelector("[data-txn-customer]")?.addEventListener("input", scheduleRefresh);
 
             const downloadReport = (params) => {
                 if (!filters) return;
@@ -160,16 +159,10 @@
                 link.click();
             };
 
-            root.querySelector("[data-pl-export-date]")?.addEventListener("click", () => {
-                const params = new URLSearchParams();
-                params.set("handler", "ExportByDate");
-                params.set("dateFrom", root.querySelector("[data-txn-date-from]")?.value ?? "");
-                params.set("dateTo", root.querySelector("[data-txn-date-to]")?.value ?? "");
-                downloadReport(params);
-            });
-            root.querySelector("[data-pl-export-all]")?.addEventListener("click", () => {
-                const params = new URLSearchParams();
-                params.set("handler", "ExportAll");
+            root.querySelector("[data-pl-export]")?.addEventListener("click", () => {
+                if (!filters) return;
+                const params = new URLSearchParams(new FormData(filters));
+                params.set("handler", "ExportExcel");
                 downloadReport(params);
             });
 
@@ -183,10 +176,8 @@
                 window.clearTimeout(refreshTimer);
                 const dateFrom = root.querySelector("[data-txn-date-from]");
                 const dateTo = root.querySelector("[data-txn-date-to]");
-                const customer = root.querySelector("[data-txn-customer]");
                 if (dateFrom) dateFrom.value = filters?.getAttribute("data-default-date-from") ?? "";
                 if (dateTo) dateTo.value = filters?.getAttribute("data-default-date-to") ?? "";
-                if (customer) customer.value = "";
                 if (allDatabases) allDatabases.checked = true;
                 dbBoxes().forEach((box) => { box.checked = true; });
                 toggles().forEach((box) => { box.checked = true; });

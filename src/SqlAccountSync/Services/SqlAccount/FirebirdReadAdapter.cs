@@ -586,7 +586,8 @@ ORDER BY CODE";
                 var accCols = await Columns(conn, tx, "GL_ACC", cancellationToken).ConfigureAwait(false);
                 string[] required = ["CODE", "DOCDATE", "REF1", "PROJECT", "DR", "CR", "DOCKEY"];
                 if (required.Any(name => !transCols.Contains(name, StringComparer.OrdinalIgnoreCase))
-                    || !accCols.Contains("CODE", StringComparer.OrdinalIgnoreCase))
+                    || !accCols.Contains("CODE", StringComparer.OrdinalIgnoreCase)
+                    || !accCols.Contains("ACCTYPE", StringComparer.OrdinalIgnoreCase))
                 {
                     _logger.LogWarning(
                         "GL transaction columns are incomplete for {Company} ({Db}) at {Host} path {Path}",
@@ -603,6 +604,7 @@ ORDER BY CODE";
                     WHERE EXISTS (
                         SELECT 1 FROM GL_ACC a
                         WHERE UPPER(TRIM(a.CODE)) = UPPER(TRIM(t.CODE))
+                          AND UPPER(TRIM(a.ACCTYPE)) IN ('SL', 'SA', 'NS', 'CO', 'GP', 'OI', 'EP')
                     )
                     """;
                 var args = new Dictionary<string, object?>();
