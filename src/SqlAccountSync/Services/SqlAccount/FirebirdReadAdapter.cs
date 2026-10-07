@@ -585,7 +585,7 @@ ORDER BY CODE";
 
                 var transCols = await Columns(conn, tx, "GL_TRANS", cancellationToken).ConfigureAwait(false);
                 var accCols = await Columns(conn, tx, "GL_ACC", cancellationToken).ConfigureAwait(false);
-                string[] required = ["CODE", "DOCDATE", "REF1", "PROJECT", "DR", "CR", "DOCKEY"];
+                string[] required = ["CODE", "DOCDATE", "REF1", "PROJECT", "LOCALDR", "LOCALCR", "DOCKEY"];
                 if (required.Any(name => !transCols.Contains(name, StringComparer.OrdinalIgnoreCase))
                     || !accCols.Contains("CODE", StringComparer.OrdinalIgnoreCase)
                     || !accCols.Contains("ACCTYPE", StringComparer.OrdinalIgnoreCase))
@@ -600,7 +600,7 @@ ORDER BY CODE";
                     ? "(SELECT FIRST 1 TRIM(a.DESCRIPTION) FROM GL_ACC a WHERE UPPER(TRIM(a.CODE)) = UPPER(TRIM(t.CODE)))"
                     : "CAST(NULL AS VARCHAR(1))";
                 var sql = $"""
-                    SELECT t.DOCDATE, t.REF1, {descriptionSql} AS ACCTDESC, t.DR, t.CR, t.CODE
+                    SELECT t.DOCDATE, t.REF1, {descriptionSql} AS ACCTDESC, t.LOCALDR, t.LOCALCR, t.CODE
                     FROM GL_TRANS t
                     WHERE EXISTS (
                         SELECT 1 FROM GL_ACC a
@@ -640,7 +640,7 @@ ORDER BY CODE";
                         DocDate = ReadDate(reader, "DOCDATE"),
                         Ref1 = ReadText(reader, "REF1"),
                         Project = ReadText(reader, "ACCTDESC"),
-                        Amount = ReadDecimal(reader, "DR") - ReadDecimal(reader, "CR"),
+                        Amount = ReadDecimal(reader, "LOCALDR") - ReadDecimal(reader, "LOCALCR"),
                         AccountCode = ReadText(reader, "CODE")
                     });
                 }
