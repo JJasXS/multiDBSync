@@ -3356,6 +3356,7 @@ input:focus, select:focus, textarea:focus {
   padding-left: 12px;
   padding-right: 12px;
 }
+.pl-by-project .txn-filter-actions { margin-left: auto; }
 .pl-by-project .txn-db-menu { z-index: 30; }
 .pl-by-project .txn-db-menu .txn-col-panel {
   max-height: min(420px, 70vh);
