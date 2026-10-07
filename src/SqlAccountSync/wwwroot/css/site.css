@@ -3835,6 +3835,37 @@ input:focus, select:focus, textarea:focus {
   max-width: 100%;
   overscroll-behavior: contain;
 }
+.so-listing .txn-summary-scroll,
+.pl-by-project .txn-summary-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(197 220 233 / 90%) transparent;
+}
+.so-listing .txn-summary-scroll::-webkit-scrollbar,
+.pl-by-project .txn-summary-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.so-listing .txn-summary-scroll::-webkit-scrollbar-track,
+.pl-by-project .txn-summary-scroll::-webkit-scrollbar-track,
+.so-listing .txn-summary-scroll::-webkit-scrollbar-corner,
+.pl-by-project .txn-summary-scroll::-webkit-scrollbar-corner {
+  background: transparent;
+}
+.so-listing .txn-summary-scroll::-webkit-scrollbar-thumb,
+.pl-by-project .txn-summary-scroll::-webkit-scrollbar-thumb {
+  background: rgb(184 212 232 / 75%);
+  border-radius: 999px;
+}
+.so-listing .txn-summary-scroll::-webkit-scrollbar-thumb:hover,
+.pl-by-project .txn-summary-scroll::-webkit-scrollbar-thumb:hover {
+  background: #8fb8d4;
+}
+.so-listing .txn-summary-scroll::-webkit-scrollbar-button,
+.pl-by-project .txn-summary-scroll::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
 .so-listing .so-matrix {
   --so-head-1: 46px;
   width: max-content;
