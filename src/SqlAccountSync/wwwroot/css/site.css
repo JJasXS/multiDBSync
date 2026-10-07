@@ -3979,5 +3979,3 @@ input:focus, select:focus, textarea:focus {
   max-width: none;
 }
 .so-filter-company { flex: 0 1 240px; min-width: 180px; }
-.so-filter-column { flex: 0 1 220px; min-width: 180px; }
-.so-filter-value { flex: 1 1 240px; min-width: min(100%, 200px); }
