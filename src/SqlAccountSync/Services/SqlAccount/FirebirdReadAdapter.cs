@@ -657,7 +657,7 @@ ORDER BY CODE";
     {
         ["properties"] = "UPPER(TRIM(P.UDF_PROJECTDESC))",
         ["type"] = "UPPER(TRIM(P.UDF_PROPTYPE))",
-        ["projectCode"] = "UPPER(TRIM(P.DESCRIPTION2))",
+        ["projectCode"] = "UPPER(TRIM(P.CODE))",
         ["soNo"] = "UPPER(TRIM(S.DOCNO))",
         ["tenantName"] = "UPPER(TRIM(S.COMPANYNAME))",
         ["tradeName"] = "UPPER(TRIM(S.UDF_CUSTOMERNAME2))",
@@ -691,7 +691,7 @@ ORDER BY CODE";
                 var soCols = await Columns(conn, tx, "SL_SO", cancellationToken).ConfigureAwait(false);
                 var customerCols = await Columns(conn, tx, "AR_CUSTOMER", cancellationToken).ConfigureAwait(false);
                 var branchCols = await Columns(conn, tx, "AR_CUSTOMERBRANCH", cancellationToken).ConfigureAwait(false);
-                string[] projectRequired = ["CODE", "DESCRIPTION2", "UDF_PROJECTDESC", "UDF_PROPTYPE", "UDF_DEPOSIT01", "UDF_DEPOSIT02", "UDF_DEPOSIT03", "UDF_DEPOSIT04", "UDF_DEPOSIT05", "UDF_DATEFROM", "UDF_DATETO", "UDF_UNITPRICE", "UDF_SERVICECHARGE"];
+                string[] projectRequired = ["CODE", "UDF_PROJECTDESC", "UDF_PROPTYPE", "UDF_DEPOSIT01", "UDF_DEPOSIT02", "UDF_DEPOSIT03", "UDF_DEPOSIT04", "UDF_DEPOSIT05", "UDF_DATEFROM", "UDF_DATETO", "UDF_UNITPRICE", "UDF_SERVICECHARGE"];
                 string[] soRequired = ["PROJECT", "CODE", "DOCNO", "COMPANYNAME", "UDF_CUSTOMERNAME2", "IDNO", "TIN", "ADDRESS1", "ADDRESS2", "ADDRESS3", "ADDRESS4", "POSTCODE", "CITY", "PHONE1"];
                 if (projectRequired.Any(name => !projectCols.Contains(name, StringComparer.OrdinalIgnoreCase))
                     || soRequired.Any(name => !soCols.Contains(name, StringComparer.OrdinalIgnoreCase))
@@ -709,7 +709,7 @@ ORDER BY CODE";
                     SELECT
                         TRIM(P.UDF_PROJECTDESC) AS UDF_PROJECTDESC,
                         TRIM(P.UDF_PROPTYPE) AS UDF_PROPTYPE,
-                        TRIM(P.DESCRIPTION2) AS DESCRIPTION2,
+                        TRIM(P.CODE) AS CODE,
                         TRIM(S.DOCNO) AS DOCNO,
                         P.UDF_DEPOSIT01 AS UDF_DEPOSIT01,
                         P.UDF_DEPOSIT02 AS UDF_DEPOSIT02,
@@ -756,11 +756,15 @@ ORDER BY CODE";
                 var list = new List<SoListingRow>();
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
+                    var properties = ReadText(reader, "UDF_PROJECTDESC");
+                    var projectCode = ShownProjectCode(ReadText(reader, "CODE"));
+                    if (projectCode.Length == 0 || IsPlaceholderProject(properties))
+                        continue;
                     list.Add(new SoListingRow
                     {
-                        Properties = ReadText(reader, "UDF_PROJECTDESC"),
+                        Properties = properties,
                         Type = ReadText(reader, "UDF_PROPTYPE"),
-                        ProjectCode = ReadText(reader, "DESCRIPTION2"),
+                        ProjectCode = projectCode,
                         SoNo = ReadText(reader, "DOCNO"),
                         SecurityDeposit = ReadNullableDecimal(reader, "UDF_DEPOSIT01"),
                         UtilitiesDeposit = ReadNullableDecimal(reader, "UDF_DEPOSIT02"),
@@ -821,6 +825,15 @@ ORDER BY CODE";
         var ordinal = reader.GetOrdinal(name);
         return reader.IsDBNull(ordinal) ? "" : (Convert.ToString(reader.GetValue(ordinal))?.Trim() ?? "");
     }
+
+    private static string ShownProjectCode(string code) =>
+        code.Length == 0 || IsPlaceholderProject(code) ? "" : code;
+
+    private static bool IsPlaceholderProject(string value) =>
+        string.Equals(value, "----", StringComparison.Ordinal)
+        || string.Equals(value, "NON-PROJECT", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(value, "PROJECT1", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(value, "PROJECT2", StringComparison.OrdinalIgnoreCase);
 
     private static string JoinAddress(params string[] lines) =>
         string.Join(", ", lines.Where(line => !string.IsNullOrWhiteSpace(line)));
