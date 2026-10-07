@@ -17,6 +17,7 @@ public sealed class MomCollectionSourceRow
     public string Properties { get; init; } = "";
     public string Type { get; init; } = "";
     public string ProjectCode { get; init; } = "";
+    public decimal DocAmount { get; init; }
     public DateTime? OrDate { get; init; }
     public string OrNo { get; init; } = "";
     public decimal OrAmount { get; init; }
@@ -25,6 +26,7 @@ public sealed class MomCollectionSourceRow
 public sealed class MomCollectionReceipt
 {
     public string OrNo { get; init; } = "";
+    public decimal InvoiceAmount { get; init; }
     public decimal Amount { get; init; }
 }
 

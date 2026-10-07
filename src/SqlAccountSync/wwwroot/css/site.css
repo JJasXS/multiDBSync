@@ -3615,6 +3615,7 @@ input:focus, select:focus, textarea:focus {
 .txn-db-name { color: var(--ice-heading); font-weight: 600; }
 .txn-summary-status { padding: 16px 4px 8px; }
 .mom-collection {
+  --mom-database: 180px;
   --mom-entities: 160px;
   --mom-properties: 220px;
   --mom-type: 120px;
@@ -3623,7 +3624,7 @@ input:focus, select:focus, textarea:focus {
   --mom-head-1: 34px;
   --mom-head-2: 32px;
 }
-.mom-collection .txn-filter-actions { margin-left: 0; }
+.mom-collection .txn-filter-actions { margin-left: auto; }
 .mom-collection .txn-filter-columns .txn-col-panel {
   max-height: 320px;
   overflow: auto;
@@ -3691,29 +3692,40 @@ input:focus, select:focus, textarea:focus {
   text-overflow: clip;
   vertical-align: top;
 }
-.mom-collection .mom-lines .mom-col-entities {
+.mom-collection .mom-lines .mom-col-database {
   left: 0;
+  width: var(--mom-database);
+  min-width: var(--mom-database);
+  max-width: var(--mom-database);
+}
+.mom-collection .mom-lines .mom-col-entities {
+  left: var(--mom-database);
   width: var(--mom-entities);
   min-width: var(--mom-entities);
   max-width: var(--mom-entities);
 }
 .mom-collection .mom-lines .mom-col-properties {
-  left: var(--mom-entities);
   width: var(--mom-properties);
   min-width: var(--mom-properties);
   max-width: var(--mom-properties);
 }
 .mom-collection .mom-lines .mom-col-type {
-  left: calc(var(--mom-entities) + var(--mom-properties));
   width: var(--mom-type);
   min-width: var(--mom-type);
   max-width: var(--mom-type);
 }
 .mom-collection .mom-lines .mom-col-project {
-  left: calc(var(--mom-entities) + var(--mom-properties) + var(--mom-type));
   width: var(--mom-project);
   min-width: var(--mom-project);
   max-width: var(--mom-project);
+}
+.mom-collection .mom-lines tbody td.mom-col-properties,
+.mom-collection .mom-lines tbody td.mom-col-type,
+.mom-collection .mom-lines tbody td.mom-col-project {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  vertical-align: middle;
 }
 .mom-collection .mom-lines thead th.mom-sticky {
   z-index: 5;
@@ -3769,7 +3781,8 @@ input:focus, select:focus, textarea:focus {
   padding-right: 8px;
 }
 .mom-collection .mom-lines .mom-money {
-  text-align: right;
+  text-align: center;
+  vertical-align: middle;
   font-variant-numeric: tabular-nums;
 }
 .mom-collection .mom-lines thead th.mom-sub-receipt,
@@ -3778,8 +3791,8 @@ input:focus, select:focus, textarea:focus {
   min-width: 128px;
   max-width: none;
   white-space: normal;
-  text-align: left;
-  vertical-align: top;
+  text-align: center;
+  vertical-align: middle;
 }
 .mom-collection .mom-lines .mom-receipt-day + .mom-receipt-day { margin-top: 8px; }
 .mom-collection .mom-lines .mom-receipt-date {
@@ -3799,6 +3812,7 @@ input:focus, select:focus, textarea:focus {
 }
 @media (max-width: 1200px) {
   .mom-collection {
+    --mom-database: 148px;
     --mom-entities: 128px;
     --mom-properties: 168px;
     --mom-type: 88px;
@@ -3807,6 +3821,7 @@ input:focus, select:focus, textarea:focus {
 }
 @media (max-width: 900px) {
   .mom-collection {
+    --mom-database: 120px;
     --mom-entities: 104px;
     --mom-properties: 136px;
     --mom-type: 72px;
