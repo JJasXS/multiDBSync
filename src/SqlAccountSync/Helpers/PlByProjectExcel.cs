@@ -36,6 +36,27 @@ public static class PlByProjectExcel
             WriteAmount(sheet.Cell(excelRow, totalColumn), row.Total);
         }
 
+        if (matrix.Rows.Count > 0)
+        {
+            var columnTotals = new decimal[companyCount];
+            decimal grandTotal = 0m;
+            foreach (var row in matrix.Rows)
+            {
+                for (var companyIndex = 0; companyIndex < companyCount; companyIndex++)
+                    columnTotals[companyIndex] += row.Amounts[companyIndex];
+                grandTotal += row.Total;
+            }
+
+            var totalRow = matrix.Rows.Count + 2;
+            var totalLabel = sheet.Cell(totalRow, 1);
+            totalLabel.Value = "TOTAL";
+            totalLabel.Style.Font.Bold = true;
+            totalLabel.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            for (var companyIndex = 0; companyIndex < companyCount; companyIndex++)
+                WriteTotal(sheet.Cell(totalRow, 3 + companyIndex), columnTotals[companyIndex]);
+            WriteTotal(sheet.Cell(totalRow, totalColumn), grandTotal);
+        }
+
         sheet.Column(1).Width = 16;
         sheet.Column(2).Width = 36;
         for (var column = 3; column <= totalColumn; column++)
@@ -52,5 +73,11 @@ public static class PlByProjectExcel
         cell.Value = amount;
         cell.Style.NumberFormat.Format = "#,##0.00";
         cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+    }
+
+    private static void WriteTotal(IXLCell cell, decimal amount)
+    {
+        WriteAmount(cell, amount);
+        cell.Style.Font.Bold = true;
     }
 }

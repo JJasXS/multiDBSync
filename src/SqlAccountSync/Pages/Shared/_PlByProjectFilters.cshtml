@@ -26,7 +26,7 @@
                 @foreach (var db in Model.Databases)
                 {
                     var selected = Model.AllDatabases || Model.SelectedDbCodes.Contains(db.DbCode);
-                    var companyLabel = ReportCompanyName.Label(db.DisplayName);
+                    var companyLabel = (db.DisplayName ?? "").Trim();
                     <label class="txn-col-option">
                         <input type="checkbox" name="db" value="@db.DbCode" data-txn-db data-txn-db-label="@companyLabel" @(selected ? "checked" : null) />
                         <span>@companyLabel</span>

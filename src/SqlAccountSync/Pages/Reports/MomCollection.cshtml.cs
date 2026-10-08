@@ -8,6 +8,9 @@ namespace SqlAccountSync.Pages.Reports;
 
 public class MomCollectionModel : SyncPageModel
 {
+    private const int CompanyBatchSize = 3;
+    private static readonly SemaphoreSlim CollectionLoad = new(1, 1);
+
     private readonly IDatabaseRegistry _registry;
     private readonly ISqlAccountReadAdapter _companyRead;
 
@@ -129,26 +132,34 @@ public class MomCollectionModel : SyncPageModel
     {
         if (!CentralConfigured || databases.Count == 0)
             return [];
-        using var gate = new SemaphoreSlim(3);
-        var loaded = await Task.WhenAll(databases.Select(async db =>
+        // One Monthly Collection load at a time. A later filter change waits until the
+        // active Firebird reads finish, then starts its own load.
+        await CollectionLoad.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            await gate.WaitAsync(cancellationToken);
-            try
+            var loaded = new List<(RegisteredDatabase Db, List<MomCollectionSourceRow>? Lines)>(databases.Count);
+            for (var index = 0; index < databases.Count; index += CompanyBatchSize)
             {
-                List<MomCollectionSourceRow>? lines = null;
-                for (var attempt = 0; attempt < 2 && lines is null; attempt++)
+                var batch = databases.Skip(index).Take(CompanyBatchSize).ToArray();
+                var batchRows = await Task.WhenAll(batch.Select(async db =>
                 {
-                    if (attempt > 0)
-                        await Task.Delay(250, cancellationToken);
-                    lines = await _companyRead.ListMomCollectionAsync(db, dateFrom, dateTo, null, cancellationToken);
-                }
-                return (db, lines);
+                    var lines = await _companyRead.ListMomCollectionAsync(db, dateFrom, dateTo, null, CancellationToken.None)
+                        .ConfigureAwait(false);
+                    return (db, lines);
+                })).ConfigureAwait(false);
+                loaded.AddRange(batchRows);
             }
-            finally
-            {
-                gate.Release();
-            }
-        }));
+            return BuildCollectionRows(loaded);
+        }
+        finally
+        {
+            CollectionLoad.Release();
+        }
+    }
+
+    private static List<DashboardDetailRow> BuildCollectionRows(
+        IReadOnlyList<(RegisteredDatabase Db, List<MomCollectionSourceRow>? Lines)> loaded)
+    {
         var rows = new List<DashboardDetailRow>();
         foreach (var (db, lines) in loaded)
         {
@@ -156,7 +167,7 @@ public class MomCollectionModel : SyncPageModel
             {
                 rows.Add(new DashboardDetailRow
                 {
-                    DatabaseName = ReportCompanyName.Label(db.DisplayName),
+                    DatabaseName = (db.DisplayName ?? "").Trim(),
                     Role = db.DbRole,
                     LoadFailed = true
                 });
@@ -174,7 +185,7 @@ public class MomCollectionModel : SyncPageModel
             }
             rows.Add(new DashboardDetailRow
             {
-                DatabaseName = ReportCompanyName.Label(db.DisplayName),
+                DatabaseName = (db.DisplayName ?? "").Trim(),
                 Role = db.DbRole,
                 CollectionLines = collection,
                 TotalAmount = total

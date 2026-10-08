@@ -15,7 +15,7 @@
         new { Key = "nov", Label = "Nov" },
         new { Key = "dec", Label = "Dec" },
     };
-    var hasRows = Model.Any(row => row.LoadFailed || row.CollectionLines.Count > 0);
+    var hasRows = Model.Any(row => !row.LoadFailed && row.CollectionLines.Count > 0);
     var invoiceTotals = new decimal[months.Length];
     var receiptTotals = new decimal[months.Length];
     var columnCount = 5 + (months.Length * 2) + 2;
@@ -50,30 +50,18 @@
                 <th class="mom-total mom-total-group mom-group-edge" colspan="2" scope="colgroup">Total</th>
             </tr>
             <tr>
-                <th class="mom-sticky mom-col-database" data-txn-col="database" scope="col">
-                    <span class="mom-col-source" title="SYNC_DATABASE.DISPLAYNAME">SYNC_DATABASE.DISPLAYNAME</span>
-                </th>
-                <th class="mom-sticky mom-col-entities mom-sticky-edge" data-txn-col="entities" scope="col">
-                    <span class="mom-col-source" title="SL_IV.COMPANYNAME">SL_IV.COMPANYNAME</span>
-                </th>
-                <th class="mom-col-properties" data-txn-col="properties" scope="col">
-                    <span class="mom-col-source" title="SL_IV.UDF_PROJECTDESC">SL_IV.UDF_PROJECTDESC</span>
-                </th>
-                <th class="mom-col-type" data-txn-col="type" scope="col">
-                    <span class="mom-col-source" title="SL_IV.UDF_PROPTYPE">SL_IV.UDF_PROPTYPE</span>
-                </th>
-                <th class="mom-col-project" data-txn-col="project" scope="col">
-                    <span class="mom-col-source" title="SL_IV.DOCNOEX">SL_IV.DOCNOEX</span>
-                </th>
+                <th class="mom-sticky mom-col-database" data-txn-col="database" scope="col"></th>
+                <th class="mom-sticky mom-col-entities mom-sticky-edge" data-txn-col="entities" scope="col"></th>
+                <th class="mom-col-properties" data-txn-col="properties" scope="col"></th>
+                <th class="mom-col-type" data-txn-col="type" scope="col"></th>
+                <th class="mom-col-project" data-txn-col="project" scope="col"></th>
                 @foreach (var month in months)
                 {
                     <th class="mom-sub mom-sub-invoice mom-group-edge" data-txn-col="@month.Key" scope="col">
                         <span class="mom-col-title">Invoice</span>
-                        <span class="mom-col-source" title="SL_IV.DOCAMT">SL_IV.DOCAMT</span>
                     </th>
                     <th class="mom-sub mom-sub-receipt" data-txn-col="@month.Key" scope="col">
                         <span class="mom-col-title">Receipt</span>
-                        <span class="mom-col-source" title="SL_IV.UDF_ORAMT">SL_IV.UDF_ORAMT</span>
                     </th>
                 }
                 <th class="mom-sub mom-sub-invoice mom-total mom-total-invoice mom-group-edge" scope="col">
@@ -95,26 +83,10 @@
             {
                 foreach (var row in Model)
                 {
-                    var project = Text(row.DatabaseName);
                     if (row.LoadFailed)
-                    {
-                        <tr>
-                            <td class="mom-sticky mom-col-database" data-txn-col="database" title="@project">@project</td>
-                            <td class="mom-sticky mom-col-entities mom-sticky-edge" data-txn-col="entities">Could not load this company.</td>
-                            <td class="mom-col-properties" data-txn-col="properties"></td>
-                            <td class="mom-col-type" data-txn-col="type"></td>
-                            <td class="mom-col-project" data-txn-col="project"></td>
-                            @foreach (var month in months)
-                            {
-                                <td class="mom-money mom-invoice mom-group-edge" data-txn-col="@month.Key"></td>
-                                <td class="mom-receipt" data-txn-col="@month.Key"></td>
-                            }
-                            <td class="mom-money mom-invoice mom-total mom-total-invoice mom-group-edge"></td>
-                            <td class="mom-receipt mom-total mom-total-receipt"></td>
-                        </tr>
                         continue;
-                    }
 
+                    var project = Text(row.DatabaseName);
                     foreach (var line in row.CollectionLines)
                     {
                         var entities = Text(line.Entities);

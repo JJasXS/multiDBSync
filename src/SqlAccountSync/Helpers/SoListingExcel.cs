@@ -31,7 +31,8 @@ public static class SoListingExcel
         "Tenant Start",
         "Tenant End",
         "Monthly Rental",
-        "Service Charge"
+        "Service Charge",
+        "TOTAL AMOUNT"
     ];
 
     public static byte[] Build(IReadOnlyList<SoListingRow> rows)
@@ -73,6 +74,35 @@ public static class SoListingExcel
             WriteDate(sheet.Cell(excelRow, 21), row.TenantEnd);
             WriteAmount(sheet.Cell(excelRow, 22), row.MonthlyRental);
             WriteAmount(sheet.Cell(excelRow, 23), row.ServiceCharge);
+            WriteAmount(sheet.Cell(excelRow, 24), RowAmount(row));
+        }
+
+        if (rows.Count > 0)
+        {
+            var totalRow = rows.Count + 2;
+            var totals = new decimal[7];
+            foreach (var row in rows)
+            {
+                totals[0] += Amount(row.SecurityDeposit);
+                totals[1] += Amount(row.UtilitiesDeposit);
+                totals[2] += Amount(row.FitOutDeposits);
+                totals[3] += Amount(row.AccessCard);
+                totals[4] += Amount(row.BookingDeposits);
+                totals[5] += Amount(row.MonthlyRental);
+                totals[6] += Amount(row.ServiceCharge);
+            }
+
+            var label = sheet.Cell(totalRow, 1);
+            label.Value = "TOTAL";
+            label.Style.Font.Bold = true;
+            WriteTotal(sheet.Cell(totalRow, 6), totals[0]);
+            WriteTotal(sheet.Cell(totalRow, 7), totals[1]);
+            WriteTotal(sheet.Cell(totalRow, 8), totals[2]);
+            WriteTotal(sheet.Cell(totalRow, 9), totals[3]);
+            WriteTotal(sheet.Cell(totalRow, 10), totals[4]);
+            WriteTotal(sheet.Cell(totalRow, 22), totals[5]);
+            WriteTotal(sheet.Cell(totalRow, 23), totals[6]);
+            WriteTotal(sheet.Cell(totalRow, 24), totals.Sum());
         }
 
         sheet.Columns().AdjustToContents(1, 40);
@@ -82,12 +112,35 @@ public static class SoListingExcel
         return stream.ToArray();
     }
 
+    private static decimal Amount(decimal? amount) => amount ?? 0m;
+
+    private static decimal RowAmount(SoListingRow row) =>
+        Amount(row.SecurityDeposit)
+        + Amount(row.UtilitiesDeposit)
+        + Amount(row.FitOutDeposits)
+        + Amount(row.AccessCard)
+        + Amount(row.BookingDeposits)
+        + Amount(row.MonthlyRental)
+        + Amount(row.ServiceCharge);
+
     private static void WriteAmount(IXLCell cell, decimal? amount)
     {
         if (amount is not decimal value)
             return;
-        cell.Value = value;
+        WriteAmount(cell, value);
+    }
+
+    private static void WriteAmount(IXLCell cell, decimal amount)
+    {
+        cell.Value = amount;
         cell.Style.NumberFormat.Format = "#,##0.00";
+        cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+    }
+
+    private static void WriteTotal(IXLCell cell, decimal amount)
+    {
+        WriteAmount(cell, amount);
+        cell.Style.Font.Bold = true;
     }
 
     private static void WriteDate(IXLCell cell, DateTime? value)

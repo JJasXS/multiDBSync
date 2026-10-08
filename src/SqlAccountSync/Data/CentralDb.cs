@@ -237,4 +237,15 @@ public sealed class CompanyConnectionFactory
         await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
         return conn;
     }
+
+    /// <summary>
+    /// Drop pooled connections for this company database. The next <see cref="OpenAsync"/>
+    /// opens a new physical connection instead of reusing one that just failed.
+    /// </summary>
+    public async Task DiscardPooledConnectionAsync(RegisteredDatabase db, CancellationToken cancellationToken = default)
+    {
+        var cs = await BuildAsync(db, cancellationToken).ConfigureAwait(false);
+        using var pooled = new FbConnection(cs);
+        FbConnection.ClearPool(pooled);
+    }
 }

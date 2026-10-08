@@ -3695,6 +3695,56 @@ input:focus, select:focus, textarea:focus {
 }
 .txn-db-name { color: var(--ice-heading); font-weight: 600; }
 .txn-summary-status { padding: 16px 4px 8px; }
+.report-load-warning-slot {
+  position: sticky;
+  left: 0;
+  z-index: 6;
+  flex: 0 0 auto;
+  width: fit-content;
+  min-width: 100%;
+  max-width: 100%;
+  margin: 0 0 10px;
+  box-sizing: border-box;
+}
+.report-load-warning {
+  border: 1px solid #ead7a8;
+  border-radius: 8px;
+  background: var(--ice-warn-soft);
+  color: var(--ice-heading);
+}
+.report-load-warning summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 12px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.report-load-warning summary::-webkit-details-marker { display: none; }
+.report-load-warning summary::marker { content: ""; }
+.report-load-warning-text { min-width: 0; }
+.report-load-warning-action {
+  flex: 0 0 auto;
+  color: var(--ice-accent-hover);
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.report-load-warning-open { display: none; }
+.report-load-warning[open] .report-load-warning-closed { display: none; }
+.report-load-warning[open] .report-load-warning-open { display: inline; }
+.report-load-warning ul {
+  margin: 0;
+  padding: 0 12px 8px 28px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+.report-load-warning li { margin: 2px 0; }
 .mom-collection {
   --mom-database: 180px;
   --mom-entities: 160px;
@@ -4214,7 +4264,6 @@ input:focus, select:focus, textarea:focus {
 .so-listing .so-col-reg { width: 160px; min-width: 160px; max-width: 160px; }
 .so-listing .so-col-tin { width: 140px; min-width: 140px; max-width: 140px; }
 .so-listing .so-col-address { width: 420px; min-width: 420px; max-width: 420px; }
-.so-listing .so-read-warning { padding: 8px 4px 0; }
 .so-listing .so-col-postal { width: 120px; min-width: 120px; max-width: 120px; }
 .so-listing .so-col-city { width: 130px; min-width: 130px; max-width: 130px; }
 .so-listing .so-col-email { width: 240px; min-width: 240px; max-width: 240px; }
