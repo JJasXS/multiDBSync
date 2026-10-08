@@ -4106,6 +4106,22 @@ input:focus, select:focus, textarea:focus {
   max-width: 100%;
   overscroll-behavior: contain;
 }
+.so-listing .txn-summary-scroll > [data-so-results] {
+  display: contents;
+}
+.so-listing .report-load-warning-slot {
+  position: sticky;
+  top: auto;
+  left: 0;
+  right: auto;
+  z-index: 1;
+  width: 100%;
+  min-width: 100%;
+  max-width: 100%;
+}
+.so-listing .report-load-warning {
+  width: 100%;
+}
 .so-listing .txn-summary-scroll,
 .pl-by-project .txn-summary-scroll {
   scrollbar-width: thin;
