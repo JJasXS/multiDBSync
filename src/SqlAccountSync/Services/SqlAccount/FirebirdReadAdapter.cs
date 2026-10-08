@@ -484,82 +484,116 @@ ORDER BY CODE";
         string? companySearch = null,
         CancellationToken cancellationToken = default)
     {
+        // The company read runs to completion. Cancelling it mid-command leaves the
+        // Firebird connection unusable for the next company.
+        _ = cancellationToken;
         try
         {
-            return await WithReadTx(db, async (conn, tx) =>
+            return await ReadMomCollectionOnceAsync(db, dateFrom, dateTo, companySearch).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            await DiscardFailedConnectionAsync(db).ConfigureAwait(false);
+            _logger.LogWarning(ex,
+                "Monthly Collection SL_IV read failed for {Company} ({Db}) at {Host} path {Path}. Opening a new connection and retrying once. {Error}",
+                db.DisplayName, db.DbCode, _factory.EffectiveHost(db), db.FbPath, CredentialRedactor.Redact(ex.Message));
+            try
             {
-                if (!await TableExistsConn(conn, tx, "SL_IV", cancellationToken).ConfigureAwait(false))
-                {
-                    _logger.LogWarning(
-                        "SL_IV is missing for {Company} ({Db}) at {Host} path {Path}",
-                        db.DisplayName, db.DbCode, _factory.EffectiveHost(db), db.FbPath);
-                    return null;
-                }
+                await Task.Delay(250, CancellationToken.None).ConfigureAwait(false);
+                return await ReadMomCollectionOnceAsync(db, dateFrom, dateTo, companySearch).ConfigureAwait(false);
+            }
+            catch (Exception retryEx)
+            {
+                await DiscardFailedConnectionAsync(db).ConfigureAwait(false);
+                _logger.LogWarning(retryEx,
+                    "Monthly Collection SL_IV read failed again for {Company} ({Db}) at {Host} path {Path} after a fresh connection. {Error}",
+                    db.DisplayName, db.DbCode, _factory.EffectiveHost(db), db.FbPath, CredentialRedactor.Redact(retryEx.Message));
+                return null;
+            }
+        }
+    }
 
-                var cols = await Columns(conn, tx, "SL_IV", cancellationToken).ConfigureAwait(false);
-                string[] required =
-                [
-                    "DOCKEY", "DOCNOEX", "COMPANYNAME", "UDF_PROJECTDESC", "UDF_PROPTYPE", "DOCAMT",
-                    "UDF_ORDATE", "UDF_ORNO", "UDF_ORAMT"
-                ];
-                if (required.Any(name => !cols.Contains(name, StringComparer.OrdinalIgnoreCase)))
-                {
-                    _logger.LogWarning(
-                        "SL_IV collection columns are incomplete for {Company} ({Db}) at {Host} path {Path}",
-                        db.DisplayName, db.DbCode, _factory.EffectiveHost(db), db.FbPath);
-                    return null;
-                }
+    private Task<List<MomCollectionSourceRow>?> ReadMomCollectionOnceAsync(
+        RegisteredDatabase db, DateTime dateFrom, DateTime dateTo, string? companySearch) =>
+        WithReadTx(db, async (conn, tx) =>
+        {
+            if (!await TableExistsConn(conn, tx, "SL_IV", CancellationToken.None).ConfigureAwait(false))
+            {
+                _logger.LogWarning(
+                    "Monthly Collection SL_IV is missing for {Company} ({Db}) at {Host} path {Path}",
+                    db.DisplayName, db.DbCode, _factory.EffectiveHost(db), db.FbPath);
+                return null;
+            }
 
-                var sql = """
-                    SELECT DOCKEY, DOCNOEX, COMPANYNAME, UDF_PROJECTDESC, UDF_PROPTYPE, DOCAMT,
-                           UDF_ORDATE, UDF_ORNO, UDF_ORAMT
-                    FROM SL_IV
-                    WHERE UDF_ORDATE >= @DATEFROM
-                      AND UDF_ORDATE < @DATETOEXCL
-                    """;
-                var args = new Dictionary<string, object?>
+            var cols = await Columns(conn, tx, "SL_IV", CancellationToken.None).ConfigureAwait(false);
+            string[] required =
+            [
+                "DOCKEY", "DOCNOEX", "COMPANYNAME", "UDF_PROJECTDESC", "UDF_PROPTYPE", "DOCAMT",
+                "UDF_ORDATE", "UDF_ORNO", "UDF_ORAMT"
+            ];
+            if (required.Any(name => !cols.Contains(name, StringComparer.OrdinalIgnoreCase)))
+            {
+                _logger.LogWarning(
+                    "Monthly Collection SL_IV columns are incomplete for {Company} ({Db}) at {Host} path {Path}",
+                    db.DisplayName, db.DbCode, _factory.EffectiveHost(db), db.FbPath);
+                return null;
+            }
+
+            var sql = """
+                SELECT DOCKEY, DOCNOEX, COMPANYNAME, UDF_PROJECTDESC, UDF_PROPTYPE, DOCAMT,
+                       UDF_ORDATE, UDF_ORNO, UDF_ORAMT
+                FROM SL_IV
+                WHERE UDF_ORDATE >= @DATEFROM
+                  AND UDF_ORDATE < @DATETOEXCL
+                """;
+            var args = new Dictionary<string, object?>
+            {
+                ["DATEFROM"] = dateFrom.Date,
+                ["DATETOEXCL"] = dateTo.Date.AddDays(1)
+            };
+            var companyKey = (companySearch ?? "").Trim();
+            if (companyKey.Length > 0)
+            {
+                sql += "\nAND UPPER(TRIM(COMPANYNAME)) CONTAINING @COMPANY";
+                args["COMPANY"] = companyKey.ToUpperInvariant();
+            }
+            sql += "\nORDER BY COMPANYNAME, DOCNOEX, UDF_ORDATE, DOCKEY";
+            SqlGuard.EnsureSelectOnly(sql);
+            await using var cmd = conn.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = sql;
+            CentralDb.Bind(cmd, args);
+            await using var reader = await cmd.ExecuteReaderAsync(CancellationToken.None).ConfigureAwait(false);
+            var list = new List<MomCollectionSourceRow>();
+            while (await reader.ReadAsync(CancellationToken.None).ConfigureAwait(false))
+            {
+                list.Add(new MomCollectionSourceRow
                 {
-                    ["DATEFROM"] = dateFrom.Date,
-                    ["DATETOEXCL"] = dateTo.Date.AddDays(1)
-                };
-                var companyKey = (companySearch ?? "").Trim();
-                if (companyKey.Length > 0)
-                {
-                    sql += "\nAND UPPER(TRIM(COMPANYNAME)) CONTAINING @COMPANY";
-                    args["COMPANY"] = companyKey.ToUpperInvariant();
-                }
-                sql += "\nORDER BY COMPANYNAME, DOCNOEX, UDF_ORDATE, DOCKEY";
-                SqlGuard.EnsureSelectOnly(sql);
-                await using var cmd = conn.CreateCommand();
-                cmd.Transaction = tx;
-                cmd.CommandText = sql;
-                CentralDb.Bind(cmd, args);
-                await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-                var list = new List<MomCollectionSourceRow>();
-                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-                {
-                    list.Add(new MomCollectionSourceRow
-                    {
-                        DocKey = reader["DOCKEY"] is DBNull ? 0 : Convert.ToInt32(reader["DOCKEY"]),
-                        Entities = ReadText(reader, "COMPANYNAME"),
-                        Properties = ReadText(reader, "UDF_PROJECTDESC"),
-                        Type = ReadText(reader, "UDF_PROPTYPE"),
-                        ProjectCode = ReadText(reader, "DOCNOEX"),
-                        DocAmount = ReadDecimal(reader, "DOCAMT"),
-                        OrDate = ReadDate(reader, "UDF_ORDATE"),
-                        OrNo = ReadText(reader, "UDF_ORNO"),
-                        OrAmount = ReadDecimal(reader, "UDF_ORAMT")
-                    });
-                }
-                return list;
-            }, cancellationToken).ConfigureAwait(false);
+                    DocKey = reader["DOCKEY"] is DBNull ? 0 : Convert.ToInt32(reader["DOCKEY"]),
+                    Entities = ReadText(reader, "COMPANYNAME"),
+                    Properties = ReadText(reader, "UDF_PROJECTDESC"),
+                    Type = ReadText(reader, "UDF_PROPTYPE"),
+                    ProjectCode = ReadText(reader, "DOCNOEX"),
+                    DocAmount = ReadDecimal(reader, "DOCAMT"),
+                    OrDate = ReadDate(reader, "UDF_ORDATE"),
+                    OrNo = ReadText(reader, "UDF_ORNO"),
+                    OrAmount = ReadDecimal(reader, "UDF_ORAMT")
+                });
+            }
+            return list;
+        }, CancellationToken.None);
+
+    private async Task DiscardFailedConnectionAsync(RegisteredDatabase db)
+    {
+        try
+        {
+            await _factory.DiscardPooledConnectionAsync(db, CancellationToken.None).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex,
-                "SL_IV collection read failed for {Company} ({Db}) at {Host} path {Path}: {Error}",
-                db.DisplayName, db.DbCode, _factory.EffectiveHost(db), db.FbPath, CredentialRedactor.Redact(ex.Message));
-            return null;
+                "Could not discard the failed Firebird connection for {Company} ({Db}) path {Path}",
+                db.DisplayName, db.DbCode, db.FbPath);
         }
     }
 

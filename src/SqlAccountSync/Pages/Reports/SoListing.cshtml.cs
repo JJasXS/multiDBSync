@@ -96,7 +96,7 @@ public class SoListingModel : SyncPageModel
 
         var (rows, failures) = await ReadCompaniesAsync(targets, column, value, cancellationToken);
         if (failures.Count == targets.Count)
-            return Unavailable(string.Join(" ", failures), companyId);
+            return Unavailable("Company data could not be loaded.", companyId);
 
         return new SoListingDetails
         {
@@ -148,9 +148,9 @@ public class SoListingModel : SyncPageModel
     private static string CompanyLabel(RegisteredDatabase db)
     {
         if (!string.IsNullOrWhiteSpace(db.DisplayName))
-            return ReportCompanyName.Label(db.DisplayName);
+            return db.DisplayName.Trim();
         if (!string.IsNullOrWhiteSpace(db.CompanyName))
-            return ReportCompanyName.Label(db.CompanyName);
+            return db.CompanyName.Trim();
         if (!string.IsNullOrWhiteSpace(db.DbCode))
             return db.DbCode.Trim();
         return "Selected company";

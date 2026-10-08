@@ -3,8 +3,43 @@
     string Text(string? value) => string.IsNullOrWhiteSpace(value) ? "" : value;
     string Money(decimal? amount) =>
         amount?.ToString("N2", System.Globalization.CultureInfo.InvariantCulture) ?? "";
+    string TotalMoney(decimal amount) =>
+        amount.ToString("N2", System.Globalization.CultureInfo.InvariantCulture);
     string Day(DateTime? value) =>
         value?.ToString("dd-MM-yyyy", System.Globalization.CultureInfo.InvariantCulture) ?? "";
+    decimal Amount(decimal? amount) => amount ?? 0m;
+    decimal RowAmount(SoListingRow row) =>
+        Amount(row.SecurityDeposit)
+        + Amount(row.UtilitiesDeposit)
+        + Amount(row.FitOutDeposits)
+        + Amount(row.AccessCard)
+        + Amount(row.BookingDeposits)
+        + Amount(row.MonthlyRental)
+        + Amount(row.ServiceCharge);
+
+    var securityTotal = 0m;
+    var utilitiesTotal = 0m;
+    var fitOutTotal = 0m;
+    var accessTotal = 0m;
+    var bookingTotal = 0m;
+    var rentalTotal = 0m;
+    var serviceTotal = 0m;
+    var grandTotal = 0m;
+    var rowAmounts = new decimal[Model.Count];
+    for (var index = 0; index < Model.Count; index++)
+    {
+        var source = Model[index];
+        securityTotal += Amount(source.SecurityDeposit);
+        utilitiesTotal += Amount(source.UtilitiesDeposit);
+        fitOutTotal += Amount(source.FitOutDeposits);
+        accessTotal += Amount(source.AccessCard);
+        bookingTotal += Amount(source.BookingDeposits);
+        rentalTotal += Amount(source.MonthlyRental);
+        serviceTotal += Amount(source.ServiceCharge);
+        var rowAmount = RowAmount(source);
+        rowAmounts[index] = rowAmount;
+        grandTotal += rowAmount;
+    }
 }
 <table class="txn-matrix so-matrix" data-so-panel="ready" aria-label="SO Listing and Occupancy">
     <thead>
@@ -25,6 +60,7 @@
             <th class="so-col-email" rowspan="2" scope="col" data-sort="17" data-sort-type="text" tabindex="0" aria-sort="none">Email</th>
             <th class="so-col-contact" rowspan="2" scope="col" data-sort="18" data-sort-type="text" tabindex="0" aria-sort="none">Contact No</th>
             <th class="so-group so-group-edge" colspan="4" scope="colgroup">Term</th>
+            <th class="so-col-total" rowspan="2" scope="col" data-sort="23" data-sort-type="money" tabindex="0" aria-sort="none">TOTAL AMOUNT</th>
         </tr>
         <tr>
             <th class="so-col-money so-group-edge" scope="col" data-sort="5" data-sort-type="money" tabindex="0" aria-sort="none">Security Deposit</th>
@@ -42,13 +78,14 @@
         @if (Model.Count == 0)
         {
             <tr>
-                <td class="so-no-records" colspan="23">No records to display.</td>
+                <td class="so-no-records" colspan="24">No records to display.</td>
             </tr>
         }
         else
         {
-            foreach (var row in Model)
+            for (var index = 0; index < Model.Count; index++)
             {
+                var row = Model[index];
                 var company = Text(row.Company);
                 var properties = Text(row.Properties);
                 var type = Text(row.Type);
@@ -87,8 +124,40 @@
                     <td class="so-col-date">@Day(row.TenantEnd)</td>
                     <td class="so-col-money">@Money(row.MonthlyRental)</td>
                     <td class="so-col-money">@Money(row.ServiceCharge)</td>
+                    <td class="so-col-total">@TotalMoney(rowAmounts[index])</td>
                 </tr>
             }
         }
     </tbody>
+    @if (Model.Count > 0)
+    {
+        <tfoot>
+            <tr class="so-row-total">
+                <th class="so-col-entity" scope="row">TOTAL</th>
+                <td class="so-col-properties"></td>
+                <td class="so-col-type"></td>
+                <td class="so-col-code"></td>
+                <td class="so-col-so"></td>
+                <td class="so-col-money so-group-edge">@TotalMoney(securityTotal)</td>
+                <td class="so-col-money">@TotalMoney(utilitiesTotal)</td>
+                <td class="so-col-money">@TotalMoney(fitOutTotal)</td>
+                <td class="so-col-money">@TotalMoney(accessTotal)</td>
+                <td class="so-col-money">@TotalMoney(bookingTotal)</td>
+                <td class="so-col-tenant"></td>
+                <td class="so-col-trade"></td>
+                <td class="so-col-reg"></td>
+                <td class="so-col-tin"></td>
+                <td class="so-col-address"></td>
+                <td class="so-col-postal"></td>
+                <td class="so-col-city"></td>
+                <td class="so-col-email"></td>
+                <td class="so-col-contact"></td>
+                <td class="so-col-date so-group-edge"></td>
+                <td class="so-col-date"></td>
+                <td class="so-col-money">@TotalMoney(rentalTotal)</td>
+                <td class="so-col-money">@TotalMoney(serviceTotal)</td>
+                <td class="so-col-total">@TotalMoney(grandTotal)</td>
+            </tr>
+        </tfoot>
+    }
 </table>

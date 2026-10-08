@@ -3339,11 +3339,26 @@ input:focus, select:focus, textarea:focus {
   max-width: 100%;
   overflow: visible;
 }
+.main:has(.pl-by-project) {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+.main:has(.pl-by-project) > .topbar {
+  flex-shrink: 0;
+}
 .pl-by-project {
   --pl-code: 112px;
   --pl-desc: 210px;
   --pl-company: 168px;
   --pl-total: 152px;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
   max-width: 100%;
   min-width: 0;
   overflow: visible;
@@ -3362,9 +3377,19 @@ input:focus, select:focus, textarea:focus {
   max-height: min(420px, 70vh);
   overflow: auto;
 }
+.pl-by-project > .card-head,
+.pl-by-project > .txn-summary-filters {
+  flex-shrink: 0;
+}
 .pl-by-project .txn-summary-scroll {
-  overflow: auto;
+  flex: 0 0 auto;
+  width: 100%;
   max-width: 100%;
+  min-width: 0;
+  height: auto;
+  max-height: calc(100dvh - 17rem);
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 .pl-by-project .txn-summary-scroll table.txn-matrix {
   width: max(100%, max-content);
@@ -3378,6 +3403,16 @@ input:focus, select:focus, textarea:focus {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.pl-by-project .txn-matrix thead th,
+.pl-by-project .txn-matrix tfoot th,
+.pl-by-project .txn-matrix tfoot td,
+.pl-by-project .txn-matrix .pl-col-code,
+.pl-by-project .txn-matrix .pl-col-desc,
+.pl-by-project .txn-matrix .pl-col-total {
+  overflow: clip;
+  background-clip: border-box;
+  transform: translateZ(0);
 }
 .pl-by-project .txn-matrix tbody td.pl-col-code,
 .pl-by-project .txn-matrix tbody td.pl-col-desc {
@@ -3405,7 +3440,8 @@ input:focus, select:focus, textarea:focus {
   left: var(--pl-code);
   width: auto;
   min-width: var(--pl-desc);
-  box-shadow: 1px 0 0 var(--ice-border);
+  border-right: 1px solid var(--ice-border);
+  box-shadow: 1px 0 0 var(--ice-surface);
 }
 .pl-by-project .pl-col-company {
   width: var(--pl-company);
@@ -3425,18 +3461,62 @@ input:focus, select:focus, textarea:focus {
   font-variant-numeric: tabular-nums;
   font-weight: 650;
   background: var(--ice-surface);
-  box-shadow: -1px 0 0 var(--ice-border);
+  border-left: 1px solid var(--ice-border);
+  box-shadow: -1px 0 0 var(--ice-surface);
 }
-.pl-by-project thead .pl-col-code,
-.pl-by-project thead .pl-col-desc,
-.pl-by-project thead .pl-col-total {
+.pl-by-project .txn-matrix thead th {
+  position: sticky;
+  top: 0;
   z-index: 4;
   background: var(--ice-surface-muted);
+  box-shadow: inset 0 -1px 0 var(--ice-border);
+  transform: translateZ(0);
+}
+.pl-by-project .txn-matrix thead th.pl-col-code,
+.pl-by-project .txn-matrix thead th.pl-col-desc,
+.pl-by-project .txn-matrix thead th.pl-col-total {
+  z-index: 6;
+  background: var(--ice-surface-muted);
+}
+.pl-by-project .txn-matrix thead th.pl-col-desc {
+  box-shadow: inset 0 -1px 0 var(--ice-border), 1px 0 0 var(--ice-surface-muted);
+}
+.pl-by-project .txn-matrix thead th.pl-col-total {
+  box-shadow: inset 0 -1px 0 var(--ice-border), -1px 0 0 var(--ice-surface-muted);
 }
 .pl-by-project tbody tr:hover .pl-col-code,
 .pl-by-project tbody tr:hover .pl-col-desc,
 .pl-by-project tbody tr:hover .pl-col-total {
   background: var(--ice-surface-alt);
+}
+.pl-by-project tbody tr:hover .pl-col-desc {
+  box-shadow: 1px 0 0 var(--ice-surface-alt);
+}
+.pl-by-project tbody tr:hover .pl-col-total {
+  box-shadow: -1px 0 0 var(--ice-surface-alt);
+}
+.pl-by-project tfoot .pl-row-total th,
+.pl-by-project tfoot .pl-row-total td {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  font-weight: 650;
+  color: var(--ice-heading);
+  background: var(--ice-surface-muted);
+  border-top: 1px solid var(--ice-border);
+  box-shadow: inset 0 1px 0 var(--ice-border);
+}
+.pl-by-project tfoot .pl-row-total > .pl-col-code,
+.pl-by-project tfoot .pl-row-total > .pl-col-desc,
+.pl-by-project tfoot .pl-row-total > .pl-col-total {
+  z-index: 6;
+  background: var(--ice-surface-muted);
+}
+.pl-by-project tfoot .pl-row-total > .pl-col-desc {
+  box-shadow: inset 0 1px 0 var(--ice-border), 1px 0 0 var(--ice-surface-muted);
+}
+.pl-by-project tfoot .pl-row-total > .pl-col-total {
+  box-shadow: inset 0 1px 0 var(--ice-border), -1px 0 0 var(--ice-surface-muted);
 }
 .pl-pager {
   display: flex;
@@ -3615,6 +3695,56 @@ input:focus, select:focus, textarea:focus {
 }
 .txn-db-name { color: var(--ice-heading); font-weight: 600; }
 .txn-summary-status { padding: 16px 4px 8px; }
+.report-load-warning-slot {
+  position: sticky;
+  left: 0;
+  z-index: 6;
+  flex: 0 0 auto;
+  width: fit-content;
+  min-width: 100%;
+  max-width: 100%;
+  margin: 0 0 10px;
+  box-sizing: border-box;
+}
+.report-load-warning {
+  border: 1px solid #ead7a8;
+  border-radius: 8px;
+  background: var(--ice-warn-soft);
+  color: var(--ice-heading);
+}
+.report-load-warning summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 12px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.report-load-warning summary::-webkit-details-marker { display: none; }
+.report-load-warning summary::marker { content: ""; }
+.report-load-warning-text { min-width: 0; }
+.report-load-warning-action {
+  flex: 0 0 auto;
+  color: var(--ice-accent-hover);
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.report-load-warning-open { display: none; }
+.report-load-warning[open] .report-load-warning-closed { display: none; }
+.report-load-warning[open] .report-load-warning-open { display: inline; }
+.report-load-warning ul {
+  margin: 0;
+  padding: 0 12px 8px 28px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+.report-load-warning li { margin: 2px 0; }
 .mom-collection {
   --mom-database: 180px;
   --mom-entities: 160px;
@@ -3622,6 +3752,8 @@ input:focus, select:focus, textarea:focus {
   --mom-type: 120px;
   --mom-project: 150px;
   --mom-month: 108px;
+  --mom-total-invoice: 108px;
+  --mom-total-receipt: 128px;
   --mom-head-1: 34px;
   --mom-head-2: 32px;
 }
@@ -3703,7 +3835,7 @@ input:focus, select:focus, textarea:focus {
   text-align: left;
   vertical-align: top;
 }
-.mom-collection .mom-lines thead th:not(.mom-sticky) {
+.mom-collection .mom-lines thead th:not(.mom-sticky):not(.mom-total) {
   overflow: hidden;
 }
 .mom-collection .mom-lines tbody td {
@@ -3773,14 +3905,14 @@ input:focus, select:focus, textarea:focus {
 }
 .mom-collection .mom-lines thead th.mom-sticky-edge {
   border-right: 2px solid var(--ice-border);
-  box-shadow: 1px 0 0 var(--ice-surface-muted), 3px 0 4px rgba(26, 77, 110, 0.12);
+  box-shadow: 1px 0 0 var(--ice-surface-muted);
 }
 .mom-collection .mom-lines tbody td.mom-sticky-edge {
   border-right: 2px solid var(--ice-border);
-  box-shadow: 1px 0 0 var(--ice-surface), 3px 0 4px rgba(26, 77, 110, 0.12);
+  box-shadow: 1px 0 0 var(--ice-surface);
 }
 .mom-collection .mom-lines tbody tr:hover td.mom-sticky-edge {
-  box-shadow: 1px 0 0 var(--ice-surface-alt), 3px 0 4px rgba(26, 77, 110, 0.12);
+  box-shadow: 1px 0 0 var(--ice-surface-alt);
 }
 .mom-collection .mom-lines .mom-col-title,
 .mom-collection .mom-lines .mom-col-source {
@@ -3840,6 +3972,84 @@ input:focus, select:focus, textarea:focus {
 .mom-collection .mom-lines .mom-group-edge {
   border-left: 2px solid var(--ice-border);
 }
+.mom-collection .mom-lines .mom-total-group,
+.mom-collection .mom-lines .mom-total-invoice,
+.mom-collection .mom-lines .mom-total-receipt {
+  position: sticky;
+  background-clip: border-box;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.mom-collection .mom-lines thead th.mom-sub-receipt.mom-total-receipt,
+.mom-collection .mom-lines tbody td.mom-receipt.mom-total-receipt,
+.mom-collection .mom-lines tfoot td.mom-receipt.mom-total-receipt {
+  right: 0;
+  width: var(--mom-total-receipt);
+  min-width: var(--mom-total-receipt);
+  max-width: var(--mom-total-receipt);
+  overflow: hidden;
+}
+.mom-collection .mom-lines thead th.mom-sub.mom-total-invoice,
+.mom-collection .mom-lines tbody td.mom-money.mom-total-invoice,
+.mom-collection .mom-lines tfoot td.mom-money.mom-total-invoice {
+  right: var(--mom-total-receipt);
+  width: var(--mom-total-invoice);
+  min-width: var(--mom-total-invoice);
+  max-width: var(--mom-total-invoice);
+  overflow: hidden;
+  box-shadow: none;
+}
+.mom-collection .mom-lines thead tr:first-child > th.mom-total-group {
+  top: 0;
+  right: 0;
+  z-index: 8;
+  height: var(--mom-head-1);
+  width: auto;
+  min-width: calc(var(--mom-total-invoice) + var(--mom-total-receipt));
+  max-width: none;
+  padding-top: 0;
+  padding-bottom: 0;
+  overflow: hidden;
+  text-align: center;
+  vertical-align: middle;
+  background-color: var(--ice-surface-muted);
+  color: var(--ice-heading);
+  box-shadow: none;
+}
+.mom-collection .mom-lines thead tr:nth-child(2) > th.mom-total {
+  top: var(--mom-head-1);
+  z-index: 7;
+  background-color: var(--ice-surface-muted);
+  color: var(--ice-heading);
+  box-shadow: none;
+}
+.mom-collection .mom-lines tbody td.mom-total {
+  z-index: 4;
+  background-color: var(--ice-surface);
+  color: var(--ice-heading);
+}
+.mom-collection .mom-lines tbody tr:hover td.mom-total {
+  background-color: var(--ice-surface-alt);
+}
+.mom-collection .mom-lines tbody tr:last-child td {
+  border-bottom: 1px solid var(--ice-border-soft);
+}
+.mom-collection .mom-lines tfoot .mom-row-total > th,
+.mom-collection .mom-lines tfoot .mom-row-total > td {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  font-weight: 650;
+  color: var(--ice-heading);
+  background-color: var(--ice-surface-muted);
+  border-top: 0;
+  box-shadow: none;
+}
+.mom-collection .mom-lines tfoot .mom-row-total > .mom-sticky,
+.mom-collection .mom-lines tfoot .mom-row-total > .mom-total {
+  z-index: 5;
+  background-color: var(--ice-surface-muted);
+}
 @media (max-width: 1200px) {
   .mom-collection {
     --mom-database: 148px;
@@ -3874,8 +4084,13 @@ input:focus, select:focus, textarea:focus {
   flex-direction: column;
   margin-bottom: 0;
 }
+.so-listing > .card-head,
+.so-listing > .txn-summary-filters {
+  flex-shrink: 0;
+}
 .so-listing .txn-summary-scroll {
   flex: 1 1 auto;
+  min-width: 0;
   min-height: 0;
   overflow: auto;
   max-width: 100%;
@@ -3918,6 +4133,10 @@ input:focus, select:focus, textarea:focus {
   min-width: 100%;
   border-collapse: separate;
   border-spacing: 0;
+}
+.so-listing .so-matrix th,
+.so-listing .so-matrix td {
+  position: static;
 }
 .so-listing .so-matrix td {
   white-space: nowrap;
@@ -4008,12 +4227,43 @@ input:focus, select:focus, textarea:focus {
   font-variant-numeric: tabular-nums;
 }
 .so-listing thead .so-col-money { text-align: left; }
+.so-listing .so-col-total {
+  width: 176px;
+  min-width: 176px;
+  max-width: 176px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  background: var(--ice-surface);
+}
+.so-listing .so-matrix thead tr:first-child > th.so-col-total {
+  text-align: left;
+  background: var(--ice-surface-muted);
+  border-left: 1px solid var(--ice-border-soft);
+  box-shadow: inset 0 -1px 0 var(--ice-border);
+}
+.so-listing .so-matrix thead tr:nth-child(2) > th:last-child {
+  z-index: 5;
+  border-right: 1px solid var(--ice-border-soft);
+}
+.so-listing tbody tr:hover .so-col-total {
+  background: var(--ice-surface-alt);
+}
+.so-listing tfoot .so-row-total th,
+.so-listing tfoot .so-row-total td {
+  font-weight: 650;
+  color: var(--ice-heading);
+  background: var(--ice-surface-muted);
+  border-top: 1px solid var(--ice-border);
+}
+.so-listing tfoot .so-col-total {
+  background: var(--ice-surface-muted);
+}
 .so-listing .so-col-tenant { width: 240px; min-width: 240px; max-width: 240px; }
 .so-listing .so-col-trade { width: 230px; min-width: 230px; max-width: 230px; }
 .so-listing .so-col-reg { width: 160px; min-width: 160px; max-width: 160px; }
 .so-listing .so-col-tin { width: 140px; min-width: 140px; max-width: 140px; }
 .so-listing .so-col-address { width: 420px; min-width: 420px; max-width: 420px; }
-.so-listing .so-read-warning { padding: 8px 4px 0; }
 .so-listing .so-col-postal { width: 120px; min-width: 120px; max-width: 120px; }
 .so-listing .so-col-city { width: 130px; min-width: 130px; max-width: 130px; }
 .so-listing .so-col-email { width: 240px; min-width: 240px; max-width: 240px; }

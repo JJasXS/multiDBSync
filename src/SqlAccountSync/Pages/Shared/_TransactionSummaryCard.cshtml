@@ -38,6 +38,91 @@
 
             const stickyKeys = ["database", "entities"];
 
+            const parseAmount = (raw) => {
+                const text = String(raw ?? "0").trim();
+                const negative = text.startsWith("-");
+                const unsigned = negative ? text.slice(1) : text;
+                const bits = unsigned.split(".");
+                const whole = (bits[0] || "0").replace(/[^\d]/g, "") || "0";
+                const frac = (bits[1] || "").replace(/[^\d]/g, "");
+                return { negative, whole, frac };
+            };
+
+            const sumAmounts = (cells) => {
+                const parts = [];
+                cells.forEach((cell) => {
+                    if (cell.hidden) return;
+                    parts.push(parseAmount(cell.getAttribute("data-mom-amount")));
+                });
+                const scale = parts.reduce((max, part) => Math.max(max, part.frac.length), 0);
+                let total = 0n;
+                parts.forEach((part) => {
+                    const digits = `${part.whole}${part.frac.padEnd(scale, "0")}` || "0";
+                    const value = BigInt(digits);
+                    total += part.negative ? -value : value;
+                });
+                return { total, scale };
+            };
+
+            const formatMoney = (scaled) => {
+                const negative = scaled.total < 0n;
+                let abs = negative ? -scaled.total : scaled.total;
+                const scale = scaled.scale;
+                if (scale > 2) {
+                    const factor = 10n ** BigInt(scale - 2);
+                    const base = abs / factor;
+                    const remainder = abs % factor;
+                    abs = remainder * 2n >= factor ? base + 1n : base;
+                } else if (scale < 2) {
+                    abs *= 10n ** BigInt(2 - scale);
+                }
+                const digits = abs.toString().padStart(3, "0");
+                const whole = digits.slice(0, -2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+                const frac = digits.slice(-2);
+                return `${negative && abs !== 0n ? "-" : ""}${whole}.${frac}`;
+            };
+
+            const applyMomTotals = () => {
+                root.querySelectorAll(".mom-lines").forEach((table) => {
+                    const rows = [...table.querySelectorAll("tbody tr")].filter((row) => row.querySelector("[data-mom-row-total]"));
+                    rows.forEach((row) => {
+                        const invoiceCell = row.querySelector("[data-mom-row-total='invoice']");
+                        const receiptCell = row.querySelector("[data-mom-row-total='receipt']");
+                        if (invoiceCell) invoiceCell.textContent = formatMoney(sumAmounts(row.querySelectorAll("td[data-mom-kind='invoice']")));
+                        if (receiptCell) receiptCell.textContent = formatMoney(sumAmounts(row.querySelectorAll("td[data-mom-kind='receipt']")));
+                    });
+                    const monthKeys = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+                    monthKeys.forEach((key) => {
+                        const invoiceCells = [];
+                        const receiptCells = [];
+                        rows.forEach((row) => {
+                            const invoice = row.querySelector(`td[data-mom-kind='invoice'][data-txn-col='${key}']`);
+                            const receipt = row.querySelector(`td[data-mom-kind='receipt'][data-txn-col='${key}']`);
+                            if (invoice) invoiceCells.push(invoice);
+                            if (receipt) receiptCells.push(receipt);
+                        });
+                        const invoiceFoot = table.querySelector(`tfoot [data-mom-foot='invoice'][data-txn-col='${key}']`);
+                        const receiptFoot = table.querySelector(`tfoot [data-mom-foot='receipt'][data-txn-col='${key}']`);
+                        if (invoiceFoot) invoiceFoot.textContent = formatMoney(sumAmounts(invoiceCells));
+                        if (receiptFoot) receiptFoot.textContent = formatMoney(sumAmounts(receiptCells));
+                    });
+                    const visibleInvoice = [];
+                    const visibleReceipt = [];
+                    rows.forEach((row) => {
+                        row.querySelectorAll("td[data-mom-kind='invoice']").forEach((cell) => visibleInvoice.push(cell));
+                        row.querySelectorAll("td[data-mom-kind='receipt']").forEach((cell) => visibleReceipt.push(cell));
+                    });
+                    const grandInvoice = table.querySelector("[data-mom-foot='invoice-grand']");
+                    const grandReceipt = table.querySelector("[data-mom-foot='receipt-grand']");
+                    if (grandInvoice) grandInvoice.textContent = formatMoney(sumAmounts(visibleInvoice));
+                    if (grandReceipt) grandReceipt.textContent = formatMoney(sumAmounts(visibleReceipt));
+                    const labels = [...table.querySelectorAll("tfoot [data-mom-label]")];
+                    labels.forEach((cell) => { cell.textContent = ""; });
+                    const firstLabel = labels.find((cell) => !cell.hidden);
+                    if (firstLabel) firstLabel.textContent = "TOTAL";
+                });
+            };
+
             const applyStickyColumns = (selected) => {
                 stickyKeys.forEach((key) => {
                     if (selected.has(key)) root.style.removeProperty(`--mom-${key}`);
@@ -51,11 +136,20 @@
                     });
                 }
                 root.querySelectorAll(".mom-lines").forEach((table) => {
-                    const month = [...table.querySelectorAll("thead tr:first-child th.mom-month")]
+                    const month = [...table.querySelectorAll("thead tr:first-child th.mom-month:not(.mom-total)")]
                         .find((cell) => !cell.hidden);
-                    if (!month) return;
-                    const height = Math.round(month.getBoundingClientRect().height);
-                    if (height > 0) table.style.setProperty("--mom-head-1", `${height}px`);
+                    if (month) {
+                        const height = Math.round(month.getBoundingClientRect().height);
+                        if (height > 0) table.style.setProperty("--mom-head-1", `${height}px`);
+                    }
+                    const invoice = table.querySelector("thead tr:nth-child(2) th.mom-total-invoice");
+                    const receipt = table.querySelector("thead tr:nth-child(2) th.mom-total-receipt");
+                    if (invoice && receipt) {
+                        const invoiceWidth = invoice.getBoundingClientRect().width;
+                        const receiptWidth = receipt.getBoundingClientRect().width;
+                        if (invoiceWidth > 0) table.style.setProperty("--mom-total-invoice", `${invoiceWidth}px`);
+                        if (receiptWidth > 0) table.style.setProperty("--mom-total-receipt", `${receiptWidth}px`);
+                    }
                 });
             };
 
@@ -65,6 +159,7 @@
                 root.querySelectorAll("[data-txn-col]").forEach((cell) => {
                     cell.hidden = !selected.has(cell.getAttribute("data-txn-col"));
                 });
+                applyMomTotals();
                 applyStickyColumns(selected);
                 const count = selected.size;
                 root.querySelectorAll("[data-txn-record], [data-txn-empty]").forEach((cell) => {

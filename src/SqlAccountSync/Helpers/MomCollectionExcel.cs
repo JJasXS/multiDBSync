@@ -17,22 +17,39 @@ public static class MomCollectionExcel
     {
         using var workbook = new XLWorkbook();
         var sheet = workbook.Worksheets.Add("Collection Report");
-        var headers = new List<string> { "Project", "Entities", "Properties", "Type", "Project Code" };
-        foreach (var month in Months)
+        var columnCount = 5 + (Months.Length * 2) + 2;
+        var identity = new[] { "PROJECT", "ENTITIES", "PROPERTIES", "TYPE", "PROJECT CODE" };
+        for (var column = 0; column < identity.Length; column++)
         {
-            headers.Add($"{month} Invoice");
-            headers.Add($"{month} Receipt");
+            sheet.Cell(1, column + 1).Value = identity[column];
+            sheet.Cell(2, column + 1).Value = identity[column];
         }
 
-        for (var column = 0; column < headers.Count; column++)
-            sheet.Cell(1, column + 1).Value = headers[column];
+        for (var month = 0; month < Months.Length; month++)
+        {
+            var start = 6 + (month * 2);
+            sheet.Cell(1, start).Value = Months[month];
+            sheet.Range(1, start, 1, start + 1).Merge();
+            sheet.Cell(2, start).Value = "Invoice";
+            sheet.Cell(2, start + 1).Value = "Receipt";
+        }
 
-        var header = sheet.Range(1, 1, 1, headers.Count);
+        var totalStart = 6 + (Months.Length * 2);
+        sheet.Cell(1, totalStart).Value = "Total";
+        sheet.Range(1, totalStart, 1, totalStart + 1).Merge();
+        sheet.Cell(2, totalStart).Value = "Invoice";
+        sheet.Cell(2, totalStart + 1).Value = "Receipt";
+
+        var header = sheet.Range(1, 1, 2, columnCount);
         header.Style.Font.Bold = true;
         header.Style.Fill.BackgroundColor = XLColor.FromHtml("#E6EEF5");
         header.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+        header.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
 
-        var excelRow = 2;
+        var invoiceTotals = new decimal[Months.Length];
+        var receiptTotals = new decimal[Months.Length];
+        var excelRow = 3;
+        var exportedLines = 0;
         foreach (var company in rows)
         {
             if (company.LoadFailed)
@@ -50,20 +67,49 @@ public static class MomCollectionExcel
                 sheet.Cell(excelRow, 3).Value = line.Properties;
                 sheet.Cell(excelRow, 4).Value = line.Type;
                 sheet.Cell(excelRow, 5).Value = line.ProjectCode;
+                decimal rowInvoice = 0m;
+                decimal rowReceipt = 0m;
                 for (var month = 0; month < Months.Length; month++)
                 {
                     var entries = line.ReceiptsByMonth[month].SelectMany(day => day.Receipts).ToList();
+                    var invoice = entries.Count > 0 ? entries.Sum(item => item.InvoiceAmount) : 0m;
+                    var receipt = entries.Count > 0 ? entries.Sum(item => item.Amount) : 0m;
+                    invoiceTotals[month] += invoice;
+                    receiptTotals[month] += receipt;
+                    rowInvoice += invoice;
+                    rowReceipt += receipt;
                     if (entries.Count == 0)
                         continue;
-                    WriteAmount(sheet.Cell(excelRow, 6 + (month * 2)), entries.Sum(item => item.InvoiceAmount));
-                    WriteAmount(sheet.Cell(excelRow, 7 + (month * 2)), entries.Sum(item => item.Amount));
+                    WriteAmount(sheet.Cell(excelRow, 6 + (month * 2)), invoice);
+                    WriteAmount(sheet.Cell(excelRow, 7 + (month * 2)), receipt);
                 }
+                WriteAmount(sheet.Cell(excelRow, totalStart), rowInvoice);
+                WriteAmount(sheet.Cell(excelRow, totalStart + 1), rowReceipt);
+                exportedLines++;
                 excelRow++;
             }
         }
 
-        sheet.Range(1, 1, Math.Max(excelRow - 1, 1), headers.Count).SetAutoFilter();
-        sheet.SheetView.FreezeRows(1);
+        if (exportedLines > 0)
+        {
+            decimal grandInvoice = 0m;
+            decimal grandReceipt = 0m;
+            sheet.Cell(excelRow, 1).Value = "TOTAL";
+            sheet.Cell(excelRow, 1).Style.Font.Bold = true;
+            for (var month = 0; month < Months.Length; month++)
+            {
+                grandInvoice += invoiceTotals[month];
+                grandReceipt += receiptTotals[month];
+                WriteTotal(sheet.Cell(excelRow, 6 + (month * 2)), invoiceTotals[month]);
+                WriteTotal(sheet.Cell(excelRow, 7 + (month * 2)), receiptTotals[month]);
+            }
+            WriteTotal(sheet.Cell(excelRow, totalStart), grandInvoice);
+            WriteTotal(sheet.Cell(excelRow, totalStart + 1), grandReceipt);
+        }
+
+        var lastFilterRow = exportedLines > 0 ? excelRow - 1 : Math.Max(excelRow - 1, 2);
+        sheet.Range(2, 1, lastFilterRow, columnCount).SetAutoFilter();
+        sheet.SheetView.FreezeRows(2);
         sheet.Columns().AdjustToContents(1, 40);
 
         using var stream = new MemoryStream();
@@ -75,5 +121,12 @@ public static class MomCollectionExcel
     {
         cell.Value = amount;
         cell.Style.NumberFormat.Format = "#,##0.00";
+        cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+    }
+
+    private static void WriteTotal(IXLCell cell, decimal amount)
+    {
+        WriteAmount(cell, amount);
+        cell.Style.Font.Bold = true;
     }
 }

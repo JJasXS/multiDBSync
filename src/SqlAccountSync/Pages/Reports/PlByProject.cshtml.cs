@@ -113,7 +113,7 @@ public class PlByProjectModel : SyncPageModel
                 continue;
             rows.Add(new DashboardDetailRow
             {
-                DatabaseName = ReportCompanyName.Label(db.DisplayName),
+                DatabaseName = (db.DisplayName ?? "").Trim(),
                 Role = db.DbRole,
                 Records = lines,
                 TotalAmount = SumAmounts(lines)

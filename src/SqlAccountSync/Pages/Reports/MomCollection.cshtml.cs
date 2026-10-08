@@ -8,6 +8,9 @@ namespace SqlAccountSync.Pages.Reports;
 
 public class MomCollectionModel : SyncPageModel
 {
+    private const int CompanyBatchSize = 3;
+    private static readonly SemaphoreSlim CollectionLoad = new(1, 1);
+
     private readonly IDatabaseRegistry _registry;
     private readonly ISqlAccountReadAdapter _companyRead;
 
@@ -129,11 +132,34 @@ public class MomCollectionModel : SyncPageModel
     {
         if (!CentralConfigured || databases.Count == 0)
             return [];
-        var loaded = await Task.WhenAll(databases.Select(async db =>
+        // One Monthly Collection load at a time. A later filter change waits until the
+        // active Firebird reads finish, then starts its own load.
+        await CollectionLoad.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            var lines = await _companyRead.ListMomCollectionAsync(db, dateFrom, dateTo, null, cancellationToken);
-            return (db, lines);
-        }));
+            var loaded = new List<(RegisteredDatabase Db, List<MomCollectionSourceRow>? Lines)>(databases.Count);
+            for (var index = 0; index < databases.Count; index += CompanyBatchSize)
+            {
+                var batch = databases.Skip(index).Take(CompanyBatchSize).ToArray();
+                var batchRows = await Task.WhenAll(batch.Select(async db =>
+                {
+                    var lines = await _companyRead.ListMomCollectionAsync(db, dateFrom, dateTo, null, CancellationToken.None)
+                        .ConfigureAwait(false);
+                    return (db, lines);
+                })).ConfigureAwait(false);
+                loaded.AddRange(batchRows);
+            }
+            return BuildCollectionRows(loaded);
+        }
+        finally
+        {
+            CollectionLoad.Release();
+        }
+    }
+
+    private static List<DashboardDetailRow> BuildCollectionRows(
+        IReadOnlyList<(RegisteredDatabase Db, List<MomCollectionSourceRow>? Lines)> loaded)
+    {
         var rows = new List<DashboardDetailRow>();
         foreach (var (db, lines) in loaded)
         {
@@ -141,7 +167,7 @@ public class MomCollectionModel : SyncPageModel
             {
                 rows.Add(new DashboardDetailRow
                 {
-                    DatabaseName = ReportCompanyName.Label(db.DisplayName),
+                    DatabaseName = (db.DisplayName ?? "").Trim(),
                     Role = db.DbRole,
                     LoadFailed = true
                 });
@@ -159,7 +185,7 @@ public class MomCollectionModel : SyncPageModel
             }
             rows.Add(new DashboardDetailRow
             {
-                DatabaseName = ReportCompanyName.Label(db.DisplayName),
+                DatabaseName = (db.DisplayName ?? "").Trim(),
                 Role = db.DbRole,
                 CollectionLines = collection,
                 TotalAmount = total
@@ -179,7 +205,7 @@ public class MomCollectionModel : SyncPageModel
             if (month is < 1 or > 12)
                 continue;
             var orNo = line.OrNo.Trim();
-            if (orNo.Length == 0 && line.OrAmount == 0m)
+            if (orNo.Length == 0 && line.OrAmount == 0m && line.DocAmount == 0m)
                 continue;
             var key = string.Join('\u001f', line.Entities, line.Properties, line.Type, line.ProjectCode);
             if (!groups.TryGetValue(key, out var group))

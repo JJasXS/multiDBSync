@@ -1,6 +1,19 @@
 @model SoListingDetails
-@if (Model.ReadFailures.Count > 0)
+@{
+    const string failureSuffix = " could not be read.";
+    var failedCompanies = Model.ReadFailures
+        .Select(item => (item ?? "").Trim())
+        .Select(item => item.EndsWith(failureSuffix, StringComparison.OrdinalIgnoreCase)
+            ? item[..^failureSuffix.Length].Trim()
+            : item)
+        .Where(name => name.Length > 0)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToList();
+}
+@if (failedCompanies.Count > 0)
 {
-    <p class="empty so-read-warning" data-so-panel="ready">@string.Join(" ", Model.ReadFailures)</p>
+    <div class="report-load-warning-slot" role="status" data-so-panel="ready">
+        <partial name="_ReportLoadWarning" model="failedCompanies" />
+    </div>
 }
 <partial name="_SoListingTable" model="Model.Rows" />
