@@ -7,11 +7,38 @@
         .Distinct(StringComparer.OrdinalIgnoreCase)
         .ToList();
     var reportRows = Model.Where(row => !row.LoadFailed).ToList();
+    var emptyCompanies = reportRows
+        .Where(row => row.CollectionLines.Count == 0)
+        .Select(row => (row.DatabaseName ?? "").Trim())
+        .Where(name => name.Length > 0)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToList();
 }
 @if (failedCompanies.Count > 0)
 {
     <div class="report-load-warning-slot" role="status" data-txn-panel="ready">
         <partial name="_ReportLoadWarning" model="failedCompanies" />
+    </div>
+}
+@if (emptyCompanies.Count > 0)
+{
+    var companyWord = emptyCompanies.Count == 1 ? "company has" : "companies have";
+    <div class="report-load-warning-slot" role="status" data-txn-panel="ready">
+        <details class="report-load-warning">
+            <summary>
+                <span class="report-load-warning-text">&#9888; No data — @emptyCompanies.Count @companyWord no rows for this year.</span>
+                <span class="report-load-warning-action">
+                    <span class="report-load-warning-closed">View details</span>
+                    <span class="report-load-warning-open">Hide details</span>
+                </span>
+            </summary>
+            <ul>
+                @foreach (var company in emptyCompanies)
+                {
+                    <li>@company</li>
+                }
+            </ul>
+        </details>
     </div>
 }
 @if (reportRows.Count == 0)

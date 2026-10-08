@@ -8,6 +8,10 @@ namespace SqlAccountSync.Pages.Reports;
 
 public class SoListingModel : SyncPageModel
 {
+    // One SO load at a time, and one company at a time. Overlapping Firebird
+    // reads on these company files are what makes the listing fail intermittently.
+    private static readonly SemaphoreSlim SoLoad = new(1, 1);
+
     private readonly IDatabaseRegistry _registry;
     private readonly ISqlAccountReadAdapter _companyRead;
 
@@ -24,7 +28,7 @@ public class SoListingModel : SyncPageModel
 
     public async Task OnGetAsync()
     {
-        Details = await LoadAsync(CompanyId, FilterColumn, FilterValue, CancellationToken.None);
+        Details = await DescribeAsync(CompanyId, FilterColumn, FilterValue, CancellationToken.None);
     }
 
     public async Task<IActionResult> OnGetDetailsAsync()
@@ -54,39 +58,34 @@ public class SoListingModel : SyncPageModel
         return File(SoListingExcel.Build(details.Rows), SoListingExcel.ContentType, "SO-Listing-All.xlsx");
     }
 
+    private async Task<SoListingDetails> DescribeAsync(
+        int companyId, string? filterColumn, string? filterValue, CancellationToken cancellationToken)
+    {
+        var (column, value, companies, _, error) = await CompanyListAsync(companyId, filterColumn, filterValue, cancellationToken);
+        if (error is not null)
+            return error;
+        return new SoListingDetails
+        {
+            CompanyId = companyId > 0 ? companyId : 0,
+            Companies = companies,
+            FilterColumn = column,
+            FilterValue = value
+        };
+    }
+
     private async Task<SoListingDetails> LoadAsync(
         int companyId, string? filterColumn, string? filterValue, CancellationToken cancellationToken)
     {
-        var column = (filterColumn ?? "").Trim();
-        var value = (filterValue ?? "").Trim();
-        var registry = await _registry.ReadDashboardRegistryAsync(cancellationToken);
-        var subs = registry.Databases
-            .Where(db => string.Equals(db.DbRole, "SUB", StringComparison.OrdinalIgnoreCase))
-            .ToList();
-        var companies = subs
-            .Select(db => new SoListingCompanyOption { DbId = db.DbId, Label = CompanyLabel(db) })
-            .ToList();
-
-        SoListingDetails Unavailable(string message, int selectedCompanyId = 0) => new()
-        {
-            CompanyId = selectedCompanyId,
-            Companies = companies,
-            FilterColumn = column,
-            FilterValue = value,
-            ErrorMessage = message
-        };
-
-        if (!registry.Configured)
-            return Unavailable("The company registry is not available.");
-        if (companies.Count == 0)
-            return Unavailable("No active sub companies are in the registry.");
+        var (column, value, companies, subs, error) = await CompanyListAsync(companyId, filterColumn, filterValue, cancellationToken);
+        if (error is not null)
+            return error;
 
         IReadOnlyList<RegisteredDatabase> targets;
         if (companyId > 0)
         {
             var database = subs.FirstOrDefault(db => db.DbId == companyId);
             if (database is null)
-                return Unavailable("The selected company is not an active sub company.", companyId);
+                return Unavailable(companies, column, value, "The selected company is not an active sub company.", companyId);
             targets = [database];
         }
         else
@@ -96,7 +95,7 @@ public class SoListingModel : SyncPageModel
 
         var (rows, failures) = await ReadCompaniesAsync(targets, column, value, cancellationToken);
         if (failures.Count == targets.Count)
-            return Unavailable("Company data could not be loaded.", companyId);
+            return Unavailable(companies, column, value, "Company data could not be loaded.", companyId);
 
         return new SoListingDetails
         {
@@ -116,27 +115,64 @@ public class SoListingModel : SyncPageModel
         string value,
         CancellationToken cancellationToken)
     {
-        var loaded = await Task.WhenAll(databases.Select(async db =>
+        _ = cancellationToken;
+        await SoLoad.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        try
         {
-            var rows = await _companyRead.ListSoListingAsync(db, column, value, cancellationToken);
-            return (db, rows);
-        }));
-        var rows = new List<SoListingRow>();
-        var failures = new List<string>();
-        foreach (var (db, result) in loaded)
-        {
-            if (result is null)
+            var rows = new List<SoListingRow>();
+            var failures = new List<string>();
+            foreach (var db in databases)
             {
-                failures.Add($"{CompanyLabel(db)} could not be read.");
-                continue;
+                var result = await _companyRead.ListSoListingAsync(db, column, value, CancellationToken.None)
+                    .ConfigureAwait(false);
+                if (result is null)
+                {
+                    failures.Add($"{CompanyLabel(db)} could not be read.");
+                    continue;
+                }
+                var label = CompanyLabel(db);
+                foreach (var row in result)
+                    row.Company = label;
+                rows.AddRange(result);
             }
-            var label = CompanyLabel(db);
-            foreach (var row in result)
-                row.Company = label;
-            rows.AddRange(result);
+            return (rows, failures);
         }
-        return (rows, failures);
+        finally
+        {
+            SoLoad.Release();
+        }
     }
+
+    private async Task<(string Column, string Value, List<SoListingCompanyOption> Companies, List<RegisteredDatabase> Subs, SoListingDetails? Error)> CompanyListAsync(
+        int companyId, string? filterColumn, string? filterValue, CancellationToken cancellationToken)
+    {
+        var column = (filterColumn ?? "").Trim();
+        var value = (filterValue ?? "").Trim();
+        var registry = await _registry.ReadDashboardRegistryAsync(cancellationToken).ConfigureAwait(false);
+        var subs = registry.Databases
+            .Where(db => string.Equals(db.DbRole, "SUB", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var companies = subs
+            .Select(db => new SoListingCompanyOption { DbId = db.DbId, Label = CompanyLabel(db) })
+            .ToList();
+        if (!registry.Configured)
+            return (column, value, companies, subs, Unavailable(companies, column, value, "The company registry is not available."));
+        if (companies.Count == 0)
+            return (column, value, companies, subs, Unavailable(companies, column, value, "No active sub companies are in the registry."));
+        if (companyId > 0 && subs.All(db => db.DbId != companyId))
+            return (column, value, companies, subs, Unavailable(companies, column, value, "The selected company is not an active sub company.", companyId));
+        return (column, value, companies, subs, null);
+    }
+
+    private static SoListingDetails Unavailable(
+        List<SoListingCompanyOption> companies, string column, string value, string message, int selectedCompanyId = 0) => new()
+    {
+        CompanyId = selectedCompanyId,
+        Companies = companies,
+        FilterColumn = column,
+        FilterValue = value,
+        ErrorMessage = message
+    };
 
     private static ContentResult Plain(int statusCode, string? message) => new()
     {

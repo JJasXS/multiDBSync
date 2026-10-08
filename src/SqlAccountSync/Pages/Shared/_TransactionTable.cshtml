@@ -28,19 +28,19 @@
     <table class="txn-lines mom-lines" aria-label="Collection Report">
         <thead>
             <tr>
-                <th class="mom-sticky mom-col-database" data-txn-col="database" scope="col">
+                <th class="mom-sticky mom-col-database" data-txn-col="database" scope="col" rowspan="2">
                     <span class="mom-col-title">PROJECT</span>
                 </th>
-                <th class="mom-sticky mom-col-entities mom-sticky-edge" data-txn-col="entities" scope="col">
+                <th class="mom-sticky mom-col-entities mom-sticky-edge" data-txn-col="entities" scope="col" rowspan="2">
                     <span class="mom-col-title">ENTITIES</span>
                 </th>
-                <th class="mom-col-properties" data-txn-col="properties" scope="col">
+                <th class="mom-col-properties" data-txn-col="properties" scope="col" rowspan="2">
                     <span class="mom-col-title">PROPERTIES</span>
                 </th>
-                <th class="mom-col-type" data-txn-col="type" scope="col">
+                <th class="mom-col-type" data-txn-col="type" scope="col" rowspan="2">
                     <span class="mom-col-title">TYPE</span>
                 </th>
-                <th class="mom-col-project" data-txn-col="project" scope="col">
+                <th class="mom-col-project" data-txn-col="project" scope="col" rowspan="2">
                     <span class="mom-col-title">PROJECT CODE</span>
                 </th>
                 @foreach (var month in months)
@@ -50,11 +50,6 @@
                 <th class="mom-total mom-total-group mom-group-edge" colspan="2" scope="colgroup">Total</th>
             </tr>
             <tr>
-                <th class="mom-sticky mom-col-database" data-txn-col="database" scope="col"></th>
-                <th class="mom-sticky mom-col-entities mom-sticky-edge" data-txn-col="entities" scope="col"></th>
-                <th class="mom-col-properties" data-txn-col="properties" scope="col"></th>
-                <th class="mom-col-type" data-txn-col="type" scope="col"></th>
-                <th class="mom-col-project" data-txn-col="project" scope="col"></th>
                 @foreach (var month in months)
                 {
                     <th class="mom-sub mom-sub-invoice mom-group-edge" data-txn-col="@month.Key" scope="col">
@@ -87,17 +82,29 @@
                         continue;
 
                     var project = Text(row.DatabaseName);
-                    foreach (var line in row.CollectionLines)
+                    var lines = row.CollectionLines;
+                    for (var lineIndex = 0; lineIndex < lines.Count; lineIndex++)
                     {
+                        var line = lines[lineIndex];
                         var entities = Text(line.Entities);
                         var properties = Text(line.Properties);
                         var type = Text(line.Type);
                         var projectCode = Text(line.ProjectCode);
+                        var entitySpan = 0;
+                        if (lineIndex == 0 || !string.Equals(entities, Text(lines[lineIndex - 1].Entities), StringComparison.Ordinal))
+                        {
+                            entitySpan = 1;
+                            for (var next = lineIndex + 1; next < lines.Count && string.Equals(Text(lines[next].Entities), entities, StringComparison.Ordinal); next++)
+                                entitySpan++;
+                        }
                         decimal rowInvoice = 0m;
                         decimal rowReceipt = 0m;
                         <tr>
                             <td class="mom-sticky mom-col-database" data-txn-col="database" title="@project">@project</td>
-                            <td class="mom-sticky mom-col-entities mom-sticky-edge" data-txn-col="entities" title="@entities">@entities</td>
+                            @if (entitySpan > 0)
+                            {
+                                <td class="mom-sticky mom-col-entities mom-sticky-edge" data-txn-col="entities" title="@entities" rowspan="@entitySpan">@entities</td>
+                            }
                             <td class="mom-col-properties" data-txn-col="properties" title="@properties">@properties</td>
                             <td class="mom-col-type" data-txn-col="type" title="@type">@type</td>
                             <td class="mom-col-project" data-txn-col="project" title="@projectCode">@projectCode</td>

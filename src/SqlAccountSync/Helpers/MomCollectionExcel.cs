@@ -22,7 +22,7 @@ public static class MomCollectionExcel
         for (var column = 0; column < identity.Length; column++)
         {
             sheet.Cell(1, column + 1).Value = identity[column];
-            sheet.Cell(2, column + 1).Value = identity[column];
+            sheet.Range(1, column + 1, 2, column + 1).Merge();
         }
 
         for (var month = 0; month < Months.Length; month++)
@@ -53,12 +53,7 @@ public static class MomCollectionExcel
         foreach (var company in rows)
         {
             if (company.LoadFailed)
-            {
-                sheet.Cell(excelRow, 1).Value = company.DatabaseName;
-                sheet.Cell(excelRow, 2).Value = "Could not load this company.";
-                excelRow++;
                 continue;
-            }
 
             foreach (var line in company.CollectionLines)
             {
@@ -105,6 +100,17 @@ public static class MomCollectionExcel
             }
             WriteTotal(sheet.Cell(excelRow, totalStart), grandInvoice);
             WriteTotal(sheet.Cell(excelRow, totalStart + 1), grandReceipt);
+            var lastDataRow = excelRow - 1;
+            sheet.Range(3, totalStart, lastDataRow, totalStart + 1).Style.Fill.BackgroundColor = RowTotalFill;
+            var totalRange = sheet.Range(excelRow, 1, excelRow, columnCount);
+            totalRange.Style.Fill.BackgroundColor = BottomTotalFill;
+            totalRange.Style.Font.Bold = true;
+            totalRange.Style.Border.TopBorder = XLBorderStyleValues.Medium;
+            totalRange.Style.Border.TopBorderColor = TotalBorder;
+            var grand = sheet.Range(excelRow, totalStart, excelRow, totalStart + 1);
+            grand.Style.Fill.BackgroundColor = GrandTotalFill;
+            grand.Style.Border.OutsideBorder = XLBorderStyleValues.Medium;
+            grand.Style.Border.OutsideBorderColor = TotalBorder;
         }
 
         var lastFilterRow = exportedLines > 0 ? excelRow - 1 : Math.Max(excelRow - 1, 2);
@@ -116,6 +122,11 @@ public static class MomCollectionExcel
         workbook.SaveAs(stream);
         return stream.ToArray();
     }
+
+    private static readonly XLColor RowTotalFill = XLColor.FromHtml("#F4F8FB");
+    private static readonly XLColor BottomTotalFill = XLColor.FromHtml("#E6EEF5");
+    private static readonly XLColor GrandTotalFill = XLColor.FromHtml("#D5E4F0");
+    private static readonly XLColor TotalBorder = XLColor.FromHtml("#8AA8BC");
 
     private static void WriteAmount(IXLCell cell, decimal amount)
     {

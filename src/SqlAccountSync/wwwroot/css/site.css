@@ -3823,11 +3823,17 @@ input:focus, select:focus, textarea:focus {
   z-index: 5;
   background-color: var(--ice-surface-muted);
 }
+.mom-collection .mom-lines thead tr:first-child > th.mom-col-properties,
+.mom-collection .mom-lines thead tr:first-child > th.mom-col-type,
+.mom-collection .mom-lines thead tr:first-child > th.mom-col-project {
+  vertical-align: middle;
+  text-align: left;
+}
 .mom-collection .mom-lines thead tr:first-child > th.mom-sticky {
-  z-index: 5;
-  border-bottom-color: var(--ice-surface-muted);
-  padding-bottom: 1px;
-  vertical-align: bottom;
+  z-index: 6;
+  vertical-align: middle;
+  text-align: left;
+  background-color: var(--ice-surface-muted);
 }
 .mom-collection .mom-lines thead tr:nth-child(2) > th.mom-sticky {
   z-index: 5;
@@ -3880,6 +3886,10 @@ input:focus, select:focus, textarea:focus {
   width: var(--mom-project);
   min-width: var(--mom-project);
   max-width: var(--mom-project);
+}
+.mom-collection .mom-lines tbody td.mom-col-database,
+.mom-collection .mom-lines tbody td.mom-col-entities {
+  vertical-align: middle;
 }
 .mom-collection .mom-lines tbody td.mom-col-properties,
 .mom-collection .mom-lines tbody td.mom-col-type,

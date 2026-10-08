@@ -142,6 +142,12 @@
                         const height = Math.round(month.getBoundingClientRect().height);
                         if (height > 0) table.style.setProperty("--mom-head-1", `${height}px`);
                     }
+                    // Total cells stretch to fill the table while other columns are hidden.
+                    // Saving that width keeps them covering the columns after they are shown again.
+                    table.style.removeProperty("--mom-total-invoice");
+                    table.style.removeProperty("--mom-total-receipt");
+                    if (selected.size !== toggles().length) return;
+                    void table.offsetWidth;
                     const invoice = table.querySelector("thead tr:nth-child(2) th.mom-total-invoice");
                     const receipt = table.querySelector("thead tr:nth-child(2) th.mom-total-receipt");
                     if (invoice && receipt) {
