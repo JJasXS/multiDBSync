@@ -8,6 +8,10 @@ namespace SqlAccountSync.Pages.Reports;
 
 public class PlByProjectModel : SyncPageModel
 {
+    // One PL load at a time, and one company at a time. A Firebird command that is
+    // cancelled or overlapped leaves that connection unusable for the next company.
+    private static readonly SemaphoreSlim PlLoad = new(1, 1);
+
     private readonly IDatabaseRegistry _registry;
     private readonly ISqlAccountReadAdapter _companyRead;
 
@@ -32,11 +36,10 @@ public class PlByProjectModel : SyncPageModel
         var dateTo = (DateTo ?? DefaultDateTo).Date;
         var subs = DetailDatabases();
         var selected = SelectedDatabases();
-        var rows = await LoadRowsAsync(selected, dateFrom, dateTo, "", CancellationToken.None);
         var selectedCodes = selected.Select(db => db.DbCode).ToHashSet(StringComparer.OrdinalIgnoreCase);
         Details = new DashboardDetailsModel
         {
-            Rows = rows,
+            Rows = [],
             Databases = subs,
             SelectedDbCodes = selectedCodes,
             AllDatabases = !DbFilter || (subs.Count > 0 && selected.Count == subs.Count),
@@ -101,25 +104,32 @@ public class PlByProjectModel : SyncPageModel
     {
         if (!CentralConfigured || databases.Count == 0)
             return [];
-        var loaded = await Task.WhenAll(databases.Select(async db =>
+        // Ignore the page token. Cancelling this read mid-command breaks the pooled connection.
+        _ = cancellationToken;
+        await PlLoad.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        try
         {
-            var lines = await _companyRead.ListPlByProjectLinesAsync(db, dateFrom, dateTo, customer, cancellationToken);
-            return (db, lines);
-        }));
-        var rows = new List<DashboardDetailRow>();
-        foreach (var (db, lines) in loaded)
-        {
-            if (lines is null)
-                continue;
-            rows.Add(new DashboardDetailRow
+            var rows = new List<DashboardDetailRow>();
+            foreach (var db in databases)
             {
-                DatabaseName = (db.DisplayName ?? "").Trim(),
-                Role = db.DbRole,
-                Records = lines,
-                TotalAmount = SumAmounts(lines)
-            });
+                var lines = await _companyRead.ListPlByProjectLinesAsync(db, dateFrom, dateTo, customer, CancellationToken.None)
+                    .ConfigureAwait(false);
+                if (lines is null)
+                    continue;
+                rows.Add(new DashboardDetailRow
+                {
+                    DatabaseName = (db.DisplayName ?? "").Trim(),
+                    Role = db.DbRole,
+                    Records = lines,
+                    TotalAmount = SumAmounts(lines)
+                });
+            }
+            return rows;
         }
-        return rows;
+        finally
+        {
+            PlLoad.Release();
+        }
     }
 
     private static decimal SumAmounts(IReadOnlyList<GlTransLine> lines)
