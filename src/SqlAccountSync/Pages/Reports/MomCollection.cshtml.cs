@@ -129,10 +129,25 @@ public class MomCollectionModel : SyncPageModel
     {
         if (!CentralConfigured || databases.Count == 0)
             return [];
+        using var gate = new SemaphoreSlim(3);
         var loaded = await Task.WhenAll(databases.Select(async db =>
         {
-            var lines = await _companyRead.ListMomCollectionAsync(db, dateFrom, dateTo, null, cancellationToken);
-            return (db, lines);
+            await gate.WaitAsync(cancellationToken);
+            try
+            {
+                List<MomCollectionSourceRow>? lines = null;
+                for (var attempt = 0; attempt < 2 && lines is null; attempt++)
+                {
+                    if (attempt > 0)
+                        await Task.Delay(250, cancellationToken);
+                    lines = await _companyRead.ListMomCollectionAsync(db, dateFrom, dateTo, null, cancellationToken);
+                }
+                return (db, lines);
+            }
+            finally
+            {
+                gate.Release();
+            }
         }));
         var rows = new List<DashboardDetailRow>();
         foreach (var (db, lines) in loaded)
@@ -179,7 +194,7 @@ public class MomCollectionModel : SyncPageModel
             if (month is < 1 or > 12)
                 continue;
             var orNo = line.OrNo.Trim();
-            if (orNo.Length == 0 && line.OrAmount == 0m)
+            if (orNo.Length == 0 && line.OrAmount == 0m && line.DocAmount == 0m)
                 continue;
             var key = string.Join('\u001f', line.Entities, line.Properties, line.Type, line.ProjectCode);
             if (!groups.TryGetValue(key, out var group))

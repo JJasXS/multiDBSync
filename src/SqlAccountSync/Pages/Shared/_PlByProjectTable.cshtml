@@ -1,6 +1,14 @@
 @model IReadOnlyList<DashboardDetailRow>
 @{
     var matrix = PlByProjectMatrix.From(Model);
+    var columnTotals = new decimal[matrix.Companies.Count];
+    decimal grandTotal = 0m;
+    foreach (var row in matrix.Rows)
+    {
+        for (var companyIndex = 0; companyIndex < columnTotals.Length; companyIndex++)
+            columnTotals[companyIndex] += row.Amounts[companyIndex];
+        grandTotal += row.Total;
+    }
     string Money(decimal amount) => amount.ToString("N2", System.Globalization.CultureInfo.InvariantCulture);
     string Text(string? value) => string.IsNullOrWhiteSpace(value) ? "---" : value;
 }
@@ -39,4 +47,18 @@
             }
         }
     </tbody>
+    @if (matrix.Rows.Count > 0)
+    {
+        <tfoot>
+            <tr class="pl-row-total">
+                <th class="pl-col-code" scope="row">TOTAL</th>
+                <td class="pl-col-desc"></td>
+                @foreach (var amount in columnTotals)
+                {
+                    <td class="pl-col-company">@Money(amount)</td>
+                }
+                <td class="pl-col-total">@Money(grandTotal)</td>
+            </tr>
+        </tfoot>
+    }
 </table>

@@ -16,9 +16,13 @@
         new { Key = "dec", Label = "Dec" },
     };
     var hasRows = Model.Any(row => row.LoadFailed || row.CollectionLines.Count > 0);
+    var invoiceTotals = new decimal[months.Length];
+    var receiptTotals = new decimal[months.Length];
+    var columnCount = 5 + (months.Length * 2) + 2;
 
     string Text(string? value) => string.IsNullOrWhiteSpace(value) ? "" : value;
     string ReceiptAmount(decimal amount) => amount.ToString("N2", System.Globalization.CultureInfo.InvariantCulture);
+    string RawAmount(decimal amount) => amount.ToString(System.Globalization.CultureInfo.InvariantCulture);
 }
 <div class="txn-lines-scroll" data-txn-panel="ready">
     <table class="txn-lines mom-lines" aria-label="Collection Report">
@@ -43,6 +47,7 @@
                 {
                     <th class="mom-month mom-group-edge" colspan="2" data-txn-col="@month.Key" scope="colgroup">@month.Label</th>
                 }
+                <th class="mom-total mom-total-group mom-group-edge" colspan="2" scope="colgroup">Total</th>
             </tr>
             <tr>
                 <th class="mom-sticky mom-col-database" data-txn-col="database" scope="col">
@@ -71,13 +76,19 @@
                         <span class="mom-col-source" title="SL_IV.UDF_ORAMT">SL_IV.UDF_ORAMT</span>
                     </th>
                 }
+                <th class="mom-sub mom-sub-invoice mom-total mom-total-invoice mom-group-edge" scope="col">
+                    <span class="mom-col-title">Invoice</span>
+                </th>
+                <th class="mom-sub mom-sub-receipt mom-total mom-total-receipt" scope="col">
+                    <span class="mom-col-title">Receipt</span>
+                </th>
             </tr>
         </thead>
         <tbody>
             @if (!hasRows)
             {
                 <tr>
-                    <td class="txn-tree-empty" colspan="@(5 + (months.Length * 2))">No data found</td>
+                    <td class="txn-tree-empty" colspan="@columnCount">No data found</td>
                 </tr>
             }
             else
@@ -98,6 +109,8 @@
                                 <td class="mom-money mom-invoice mom-group-edge" data-txn-col="@month.Key"></td>
                                 <td class="mom-receipt" data-txn-col="@month.Key"></td>
                             }
+                            <td class="mom-money mom-invoice mom-total mom-total-invoice mom-group-edge"></td>
+                            <td class="mom-receipt mom-total mom-total-receipt"></td>
                         </tr>
                         continue;
                     }
@@ -108,6 +121,8 @@
                         var properties = Text(line.Properties);
                         var type = Text(line.Type);
                         var projectCode = Text(line.ProjectCode);
+                        decimal rowInvoice = 0m;
+                        decimal rowReceipt = 0m;
                         <tr>
                             <td class="mom-sticky mom-col-database" data-txn-col="database" title="@project">@project</td>
                             <td class="mom-sticky mom-col-entities mom-sticky-edge" data-txn-col="entities" title="@entities">@entities</td>
@@ -119,23 +134,57 @@
                                 var entries = line.ReceiptsByMonth[monthIndex]
                                     .SelectMany(item => item.Receipts)
                                     .ToList();
-                                <td class="mom-money mom-invoice mom-group-edge" data-txn-col="@months[monthIndex].Key">
+                                var invoice = entries.Count > 0 ? entries.Sum(item => item.InvoiceAmount) : 0m;
+                                var receipt = entries.Count > 0 ? entries.Sum(item => item.Amount) : 0m;
+                                invoiceTotals[monthIndex] += invoice;
+                                receiptTotals[monthIndex] += receipt;
+                                rowInvoice += invoice;
+                                rowReceipt += receipt;
+                                <td class="mom-money mom-invoice mom-group-edge" data-txn-col="@months[monthIndex].Key" data-mom-kind="invoice" data-mom-amount="@RawAmount(invoice)">
                                     @if (entries.Count > 0)
                                     {
-                                        <div class="mom-receipt-amt">@ReceiptAmount(entries.Sum(item => item.InvoiceAmount))</div>
+                                        <div class="mom-receipt-amt">@ReceiptAmount(invoice)</div>
                                     }
                                 </td>
-                                <td class="mom-receipt" data-txn-col="@months[monthIndex].Key">
+                                <td class="mom-receipt" data-txn-col="@months[monthIndex].Key" data-mom-kind="receipt" data-mom-amount="@RawAmount(receipt)">
                                     @if (entries.Count > 0)
                                     {
-                                        <div class="mom-receipt-amt">@ReceiptAmount(entries.Sum(item => item.Amount))</div>
+                                        <div class="mom-receipt-amt">@ReceiptAmount(receipt)</div>
                                     }
                                 </td>
                             }
+                            <td class="mom-money mom-invoice mom-total mom-total-invoice mom-group-edge" data-mom-row-total="invoice">@ReceiptAmount(rowInvoice)</td>
+                            <td class="mom-receipt mom-total mom-total-receipt" data-mom-row-total="receipt">@ReceiptAmount(rowReceipt)</td>
                         </tr>
                     }
                 }
             }
         </tbody>
+        @if (hasRows)
+        {
+            decimal grandInvoice = 0m;
+            decimal grandReceipt = 0m;
+            for (var monthIndex = 0; monthIndex < months.Length; monthIndex++)
+            {
+                grandInvoice += invoiceTotals[monthIndex];
+                grandReceipt += receiptTotals[monthIndex];
+            }
+            <tfoot>
+                <tr class="mom-row-total">
+                    <th class="mom-sticky mom-col-database" data-txn-col="database" data-mom-label scope="row">TOTAL</th>
+                    <td class="mom-sticky mom-col-entities mom-sticky-edge" data-txn-col="entities" data-mom-label></td>
+                    <td class="mom-col-properties" data-txn-col="properties" data-mom-label></td>
+                    <td class="mom-col-type" data-txn-col="type" data-mom-label></td>
+                    <td class="mom-col-project" data-txn-col="project" data-mom-label></td>
+                    @for (var monthIndex = 0; monthIndex < months.Length; monthIndex++)
+                    {
+                        <td class="mom-money mom-invoice mom-group-edge" data-txn-col="@months[monthIndex].Key" data-mom-foot="invoice">@ReceiptAmount(invoiceTotals[monthIndex])</td>
+                        <td class="mom-receipt" data-txn-col="@months[monthIndex].Key" data-mom-foot="receipt">@ReceiptAmount(receiptTotals[monthIndex])</td>
+                    }
+                    <td class="mom-money mom-invoice mom-total mom-total-invoice mom-group-edge" data-mom-foot="invoice-grand">@ReceiptAmount(grandInvoice)</td>
+                    <td class="mom-receipt mom-total mom-total-receipt" data-mom-foot="receipt-grand">@ReceiptAmount(grandReceipt)</td>
+                </tr>
+            </tfoot>
+        }
     </table>
 </div>
