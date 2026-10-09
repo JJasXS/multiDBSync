@@ -55,6 +55,17 @@ public static class PlByProjectExcel
             for (var companyIndex = 0; companyIndex < companyCount; companyIndex++)
                 WriteTotal(sheet.Cell(totalRow, 3 + companyIndex), columnTotals[companyIndex]);
             WriteTotal(sheet.Cell(totalRow, totalColumn), grandTotal);
+            var lastDataRow = totalRow - 1;
+            sheet.Range(2, totalColumn, lastDataRow, totalColumn).Style.Fill.BackgroundColor = RowTotalFill;
+            var totalRange = sheet.Range(totalRow, 1, totalRow, totalColumn);
+            totalRange.Style.Fill.BackgroundColor = BottomTotalFill;
+            totalRange.Style.Font.Bold = true;
+            totalRange.Style.Border.TopBorder = XLBorderStyleValues.Medium;
+            totalRange.Style.Border.TopBorderColor = TotalBorder;
+            var grand = sheet.Cell(totalRow, totalColumn);
+            grand.Style.Fill.BackgroundColor = GrandTotalFill;
+            grand.Style.Border.OutsideBorder = XLBorderStyleValues.Medium;
+            grand.Style.Border.OutsideBorderColor = TotalBorder;
         }
 
         sheet.Column(1).Width = 16;
@@ -67,6 +78,11 @@ public static class PlByProjectExcel
         workbook.SaveAs(stream);
         return stream.ToArray();
     }
+
+    private static readonly XLColor RowTotalFill = XLColor.FromHtml("#F4F8FB");
+    private static readonly XLColor BottomTotalFill = XLColor.FromHtml("#E6EEF5");
+    private static readonly XLColor GrandTotalFill = XLColor.FromHtml("#D5E4F0");
+    private static readonly XLColor TotalBorder = XLColor.FromHtml("#8AA8BC");
 
     private static void WriteAmount(IXLCell cell, decimal amount)
     {

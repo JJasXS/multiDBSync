@@ -20,7 +20,7 @@
             // status accepts "ready", "empty", "loading", or "error".
             const txnPreview = {
                 showEmpty: false,
-                status: "ready"
+                status: "loading"
             };
 
             const filters = root.querySelector("[data-txn-filters]");
@@ -83,8 +83,7 @@
             const results = root.querySelector("[data-txn-results]");
             const refreshDelayMs = 300;
             let refreshTimer = 0;
-            let refreshInFlight = false;
-            let refreshAgain = false;
+            let requestSeq = 0;
 
             const showLoading = () => {
                 txnPreview.status = "loading";
@@ -94,11 +93,7 @@
 
             const refreshDetails = async () => {
                 if (!filters || !results) return;
-                if (refreshInFlight) {
-                    refreshAgain = true;
-                    return;
-                }
-                refreshInFlight = true;
+                const seq = ++requestSeq;
                 showLoading();
                 const query = new URLSearchParams(new FormData(filters));
                 query.set("handler", "Details");
@@ -106,6 +101,7 @@
                     const response = await fetch(`${filters.getAttribute("action")}?${query}`, {
                         headers: { "X-Requested-With": "fetch" }
                     });
+                    if (seq !== requestSeq) return;
                     if (!response.ok) throw new Error(String(response.status));
                     results.innerHTML = await response.text();
                     txnPreview.status = "ready";
@@ -117,15 +113,10 @@
                     pageUrl.search = pageQuery.toString();
                     history.replaceState(null, "", pageUrl);
                 } catch {
+                    if (seq !== requestSeq) return;
                     txnPreview.status = "error";
                     applyStatus();
                     root.removeAttribute("aria-busy");
-                } finally {
-                    refreshInFlight = false;
-                    if (refreshAgain) {
-                        refreshAgain = false;
-                        refreshDetails();
-                    }
                 }
             };
 
@@ -199,6 +190,7 @@
             applyColumns();
             applyDatabases();
             applyStatus();
+            refreshDetails();
         })();
     </script>
 </section>

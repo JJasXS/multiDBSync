@@ -103,6 +103,17 @@ public static class SoListingExcel
             WriteTotal(sheet.Cell(totalRow, 22), totals[5]);
             WriteTotal(sheet.Cell(totalRow, 23), totals[6]);
             WriteTotal(sheet.Cell(totalRow, 24), totals.Sum());
+            var lastDataRow = totalRow - 1;
+            sheet.Range(2, 24, lastDataRow, 24).Style.Fill.BackgroundColor = RowTotalFill;
+            var totalRange = sheet.Range(totalRow, 1, totalRow, Headers.Length);
+            totalRange.Style.Fill.BackgroundColor = BottomTotalFill;
+            totalRange.Style.Font.Bold = true;
+            totalRange.Style.Border.TopBorder = XLBorderStyleValues.Medium;
+            totalRange.Style.Border.TopBorderColor = TotalBorder;
+            var grand = sheet.Cell(totalRow, 24);
+            grand.Style.Fill.BackgroundColor = GrandTotalFill;
+            grand.Style.Border.OutsideBorder = XLBorderStyleValues.Medium;
+            grand.Style.Border.OutsideBorderColor = TotalBorder;
         }
 
         sheet.Columns().AdjustToContents(1, 40);
@@ -111,6 +122,11 @@ public static class SoListingExcel
         workbook.SaveAs(stream);
         return stream.ToArray();
     }
+
+    private static readonly XLColor RowTotalFill = XLColor.FromHtml("#F4F8FB");
+    private static readonly XLColor BottomTotalFill = XLColor.FromHtml("#E6EEF5");
+    private static readonly XLColor GrandTotalFill = XLColor.FromHtml("#D5E4F0");
+    private static readonly XLColor TotalBorder = XLColor.FromHtml("#8AA8BC");
 
     private static decimal Amount(decimal? amount) => amount ?? 0m;
 

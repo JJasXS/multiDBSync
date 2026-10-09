@@ -526,12 +526,9 @@ ORDER BY CODE";
             }
 
             var cols = await Columns(conn, tx, "SL_IV", CancellationToken.None).ConfigureAwait(false);
-            string[] required =
-            [
-                "DOCKEY", "DOCNOEX", "COMPANYNAME", "UDF_PROJECTDESC", "UDF_PROPTYPE", "DOCAMT",
-                "UDF_ORDATE", "UDF_ORNO", "UDF_ORAMT"
-            ];
-            if (required.Any(name => !cols.Contains(name, StringComparer.OrdinalIgnoreCase)))
+            if (!cols.Contains("DOCKEY", StringComparer.OrdinalIgnoreCase)
+                || !cols.Contains("COMPANYNAME", StringComparer.OrdinalIgnoreCase)
+                || !cols.Contains("DOCAMT", StringComparer.OrdinalIgnoreCase))
             {
                 _logger.LogWarning(
                     "Monthly Collection SL_IV columns are incomplete for {Company} ({Db}) at {Host} path {Path}",
@@ -539,13 +536,86 @@ ORDER BY CODE";
                 return null;
             }
 
-            var sql = """
-                SELECT DOCKEY, DOCNOEX, COMPANYNAME, UDF_PROJECTDESC, UDF_PROPTYPE, DOCAMT,
-                       UDF_ORDATE, UDF_ORNO, UDF_ORAMT
-                FROM SL_IV
-                WHERE UDF_ORDATE >= @DATEFROM
-                  AND UDF_ORDATE < @DATETOEXCL
-                """;
+            var hasReceiptFields = cols.Contains("UDF_ORDATE", StringComparer.OrdinalIgnoreCase)
+                && cols.Contains("UDF_ORNO", StringComparer.OrdinalIgnoreCase)
+                && cols.Contains("UDF_ORAMT", StringComparer.OrdinalIgnoreCase);
+            string sql;
+            if (hasReceiptFields)
+            {
+                sql = """
+                    SELECT DOCKEY, DOCNOEX, COMPANYNAME, UDF_PROJECTDESC, UDF_PROPTYPE, DOCAMT,
+                           UDF_ORDATE, UDF_ORNO, UDF_ORAMT
+                    FROM SL_IV
+                    WHERE UDF_ORDATE >= @DATEFROM
+                      AND UDF_ORDATE < @DATETOEXCL
+                    """;
+            }
+            else
+            {
+                if (!cols.Contains("DOCDATE", StringComparer.OrdinalIgnoreCase))
+                {
+                    _logger.LogWarning(
+                        "Monthly Collection SL_IV columns are incomplete for {Company} ({Db}) at {Host} path {Path}",
+                        db.DisplayName, db.DbCode, _factory.EffectiveHost(db), db.FbPath);
+                    return null;
+                }
+
+                var pmCols = await TableExistsConn(conn, tx, "AR_PM", CancellationToken.None).ConfigureAwait(false)
+                    ? await Columns(conn, tx, "AR_PM", CancellationToken.None).ConfigureAwait(false)
+                    : [];
+                var koCols = await TableExistsConn(conn, tx, "AR_KNOCKOFF", CancellationToken.None).ConfigureAwait(false)
+                    ? await Columns(conn, tx, "AR_KNOCKOFF", CancellationToken.None).ConfigureAwait(false)
+                    : [];
+                var canApplyPayment = pmCols.Contains("DOCKEY", StringComparer.OrdinalIgnoreCase)
+                    && pmCols.Contains("DOCNO", StringComparer.OrdinalIgnoreCase)
+                    && pmCols.Contains("DOCDATE", StringComparer.OrdinalIgnoreCase)
+                    && koCols.Contains("FROMDOCKEY", StringComparer.OrdinalIgnoreCase)
+                    && koCols.Contains("FROMDOCTYPE", StringComparer.OrdinalIgnoreCase)
+                    && koCols.Contains("TODOCKEY", StringComparer.OrdinalIgnoreCase)
+                    && koCols.Contains("TODOCTYPE", StringComparer.OrdinalIgnoreCase)
+                    && koCols.Contains("KOAMT", StringComparer.OrdinalIgnoreCase);
+                var projectCode = cols.Contains("DOCNOEX", StringComparer.OrdinalIgnoreCase)
+                    ? "TRIM(i.DOCNOEX)"
+                    : "CAST(NULL AS VARCHAR(40))";
+                var projectDesc = cols.Contains("UDF_PROJECTDESC", StringComparer.OrdinalIgnoreCase)
+                    ? "TRIM(i.UDF_PROJECTDESC)"
+                    : "CAST(NULL AS VARCHAR(200))";
+                var propType = cols.Contains("UDF_PROPTYPE", StringComparer.OrdinalIgnoreCase)
+                    ? "TRIM(i.UDF_PROPTYPE)"
+                    : "CAST(NULL AS VARCHAR(40))";
+                var paymentJoin = canApplyPayment
+                    ? """
+                      LEFT JOIN AR_KNOCKOFF k ON k.TODOCKEY = i.DOCKEY AND k.TODOCTYPE = 'IV' AND k.FROMDOCTYPE = 'PM'
+                      LEFT JOIN AR_PM p ON p.DOCKEY = k.FROMDOCKEY
+                        AND p.DOCDATE >= @DATEFROM AND p.DOCDATE < @DATETOEXCL
+                      """
+                    : "";
+                var receiptDate = canApplyPayment ? "COALESCE(MAX(p.DOCDATE), i.DOCDATE)" : "i.DOCDATE";
+                var receiptNo = canApplyPayment ? "MAX(TRIM(p.DOCNO))" : "CAST(NULL AS VARCHAR(40))";
+                var receiptAmt = canApplyPayment ? "COALESCE(SUM(k.KOAMT), 0)" : "CAST(0 AS DECIMAL(18,2))";
+                var receiptFilter = canApplyPayment
+                    ? "OR (p.DOCDATE >= @DATEFROM AND p.DOCDATE < @DATETOEXCL)"
+                    : "";
+                sql = $"""
+                    SELECT i.DOCKEY AS DOCKEY,
+                           {projectCode} AS DOCNOEX,
+                           TRIM(i.COMPANYNAME) AS COMPANYNAME,
+                           {projectDesc} AS UDF_PROJECTDESC,
+                           {propType} AS UDF_PROPTYPE,
+                           i.DOCAMT AS DOCAMT,
+                           {receiptDate} AS UDF_ORDATE,
+                           {receiptNo} AS UDF_ORNO,
+                           {receiptAmt} AS UDF_ORAMT
+                    FROM SL_IV i
+                    {paymentJoin}
+                    WHERE (i.DOCDATE >= @DATEFROM AND i.DOCDATE < @DATETOEXCL)
+                      {receiptFilter}
+                    GROUP BY i.DOCKEY, {projectCode}, TRIM(i.COMPANYNAME), {projectDesc}, {propType}, i.DOCAMT, i.DOCDATE
+                    """;
+                _logger.LogInformation(
+                    "Monthly Collection for {Company} ({Db}) has no invoice receipt fields, so receipts come from applied payments.",
+                    db.DisplayName, db.DbCode);
+            }
             var args = new Dictionary<string, object?>
             {
                 ["DATEFROM"] = dateFrom.Date,
@@ -554,10 +624,16 @@ ORDER BY CODE";
             var companyKey = (companySearch ?? "").Trim();
             if (companyKey.Length > 0)
             {
-                sql += "\nAND UPPER(TRIM(COMPANYNAME)) CONTAINING @COMPANY";
+                var companyColumn = hasReceiptFields ? "COMPANYNAME" : "i.COMPANYNAME";
+                var companyFilter = $"\nAND UPPER(TRIM({companyColumn})) CONTAINING @COMPANY";
+                sql = hasReceiptFields
+                    ? sql + companyFilter
+                    : sql.Replace("GROUP BY", companyFilter + "\nGROUP BY", StringComparison.Ordinal);
                 args["COMPANY"] = companyKey.ToUpperInvariant();
             }
-            sql += "\nORDER BY COMPANYNAME, DOCNOEX, UDF_ORDATE, DOCKEY";
+            sql += hasReceiptFields
+                ? "\nORDER BY COMPANYNAME, DOCNOEX, UDF_ORDATE, DOCKEY"
+                : "\nORDER BY 3, 2, 7, 1";
             SqlGuard.EnsureSelectOnly(sql);
             await using var cmd = conn.CreateCommand();
             cmd.Transaction = tx;
@@ -709,14 +785,42 @@ ORDER BY CODE";
         string? filterValue = null,
         CancellationToken cancellationToken = default)
     {
+        // A failed command leaves the pooled connection unusable. Do not cancel it mid-read.
+        _ = cancellationToken;
         try
         {
-            return await WithReadTx(db, async (conn, tx) =>
+            return await ReadSoListingOnceAsync(db, filterColumn, filterValue).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            await DiscardFailedConnectionAsync(db).ConfigureAwait(false);
+            _logger.LogWarning(ex,
+                "SO listing read failed for {Company} ({Db}) at {Host} path {Path}. Opening a new connection and retrying once. {Error}",
+                db.DisplayName, db.DbCode, _factory.EffectiveHost(db), db.FbPath, CredentialRedactor.Redact(ex.Message));
+            try
             {
-                if (!await TableExistsConn(conn, tx, "PROJECT", cancellationToken).ConfigureAwait(false)
-                    || !await TableExistsConn(conn, tx, "SL_SO", cancellationToken).ConfigureAwait(false)
-                    || !await TableExistsConn(conn, tx, "AR_CUSTOMER", cancellationToken).ConfigureAwait(false)
-                    || !await TableExistsConn(conn, tx, "AR_CUSTOMERBRANCH", cancellationToken).ConfigureAwait(false))
+                await Task.Delay(250, CancellationToken.None).ConfigureAwait(false);
+                return await ReadSoListingOnceAsync(db, filterColumn, filterValue).ConfigureAwait(false);
+            }
+            catch (Exception retryEx)
+            {
+                await DiscardFailedConnectionAsync(db).ConfigureAwait(false);
+                _logger.LogWarning(retryEx,
+                    "SO listing read failed again for {Company} ({Db}) at {Host} path {Path} after a fresh connection. {Error}",
+                    db.DisplayName, db.DbCode, _factory.EffectiveHost(db), db.FbPath, CredentialRedactor.Redact(retryEx.Message));
+                return null;
+            }
+        }
+    }
+
+    private Task<List<SoListingRow>?> ReadSoListingOnceAsync(
+        RegisteredDatabase db, string? filterColumn, string? filterValue) =>
+        WithReadTx(db, async (conn, tx) =>
+            {
+                if (!await TableExistsConn(conn, tx, "PROJECT", CancellationToken.None).ConfigureAwait(false)
+                    || !await TableExistsConn(conn, tx, "SL_SO", CancellationToken.None).ConfigureAwait(false)
+                    || !await TableExistsConn(conn, tx, "AR_CUSTOMER", CancellationToken.None).ConfigureAwait(false)
+                    || !await TableExistsConn(conn, tx, "AR_CUSTOMERBRANCH", CancellationToken.None).ConfigureAwait(false))
                 {
                     _logger.LogWarning(
                         "SO listing tables are missing for {Company} ({Db}) at {Host} path {Path}",
@@ -724,10 +828,10 @@ ORDER BY CODE";
                     return null;
                 }
 
-                var projectCols = await Columns(conn, tx, "PROJECT", cancellationToken).ConfigureAwait(false);
-                var soCols = await Columns(conn, tx, "SL_SO", cancellationToken).ConfigureAwait(false);
-                var customerCols = await Columns(conn, tx, "AR_CUSTOMER", cancellationToken).ConfigureAwait(false);
-                var branchCols = await Columns(conn, tx, "AR_CUSTOMERBRANCH", cancellationToken).ConfigureAwait(false);
+                var projectCols = await Columns(conn, tx, "PROJECT", CancellationToken.None).ConfigureAwait(false);
+                var soCols = await Columns(conn, tx, "SL_SO", CancellationToken.None).ConfigureAwait(false);
+                var customerCols = await Columns(conn, tx, "AR_CUSTOMER", CancellationToken.None).ConfigureAwait(false);
+                var branchCols = await Columns(conn, tx, "AR_CUSTOMERBRANCH", CancellationToken.None).ConfigureAwait(false);
                 string[] projectRequired = ["CODE", "UDF_PROJECTDESC", "UDF_PROPTYPE", "UDF_DEPOSIT01", "UDF_DEPOSIT02", "UDF_DEPOSIT03", "UDF_DEPOSIT04", "UDF_DEPOSIT05", "UDF_DATEFROM", "UDF_DATETO", "UDF_UNITPRICE", "UDF_SERVICECHARGE"];
                 string[] soRequired = ["PROJECT", "CODE", "DOCNO", "COMPANYNAME", "UDF_CUSTOMERNAME2", "IDNO", "TIN", "ADDRESS1", "ADDRESS2", "ADDRESS3", "ADDRESS4", "POSTCODE", "CITY", "PHONE1"];
                 if (projectRequired.Any(name => !projectCols.Contains(name, StringComparer.OrdinalIgnoreCase))
@@ -789,9 +893,9 @@ ORDER BY CODE";
                 cmd.Transaction = tx;
                 cmd.CommandText = sql;
                 CentralDb.Bind(cmd, args);
-                await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                await using var reader = await cmd.ExecuteReaderAsync(CancellationToken.None).ConfigureAwait(false);
                 var list = new List<SoListingRow>();
-                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                while (await reader.ReadAsync(CancellationToken.None).ConfigureAwait(false))
                 {
                     var properties = ReadText(reader, "UDF_PROJECTDESC");
                     var projectCode = ShownProjectCode(ReadText(reader, "CODE"));
@@ -828,16 +932,7 @@ ORDER BY CODE";
                     });
                 }
                 return list;
-            }, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex,
-                "SO listing read failed for {Company} ({Db}) at {Host} path {Path}: {Error}",
-                db.DisplayName, db.DbCode, _factory.EffectiveHost(db), db.FbPath, CredentialRedactor.Redact(ex.Message));
-            return null;
-        }
-    }
+            }, CancellationToken.None);
 
     private static decimal ReadDecimal(FbDataReader reader, string name)
     {
