@@ -3751,6 +3751,7 @@ input:focus, select:focus, textarea:focus {
   --mom-properties: 220px;
   --mom-type: 120px;
   --mom-project: 150px;
+  --mom-lot: 150px;
   --mom-month: 108px;
   --mom-total-invoice: 108px;
   --mom-total-receipt: 128px;
@@ -3825,7 +3826,8 @@ input:focus, select:focus, textarea:focus {
 }
 .mom-collection .mom-lines thead tr:first-child > th.mom-col-properties,
 .mom-collection .mom-lines thead tr:first-child > th.mom-col-type,
-.mom-collection .mom-lines thead tr:first-child > th.mom-col-project {
+.mom-collection .mom-lines thead tr:first-child > th.mom-col-project,
+.mom-collection .mom-lines thead tr:first-child > th.mom-col-lot {
   vertical-align: middle;
   text-align: left;
 }
@@ -3887,13 +3889,19 @@ input:focus, select:focus, textarea:focus {
   min-width: var(--mom-project);
   max-width: var(--mom-project);
 }
+.mom-collection .mom-lines .mom-col-lot {
+  width: var(--mom-lot);
+  min-width: var(--mom-lot);
+  max-width: var(--mom-lot);
+}
 .mom-collection .mom-lines tbody td.mom-col-database,
 .mom-collection .mom-lines tbody td.mom-col-entities {
   vertical-align: middle;
 }
 .mom-collection .mom-lines tbody td.mom-col-properties,
 .mom-collection .mom-lines tbody td.mom-col-type,
-.mom-collection .mom-lines tbody td.mom-col-project {
+.mom-collection .mom-lines tbody td.mom-col-project,
+.mom-collection .mom-lines tbody td.mom-col-lot {
   white-space: normal;
   overflow-wrap: anywhere;
   word-break: break-word;
@@ -4067,6 +4075,7 @@ input:focus, select:focus, textarea:focus {
     --mom-properties: 168px;
     --mom-type: 88px;
     --mom-project: 112px;
+    --mom-lot: 112px;
   }
 }
 @media (max-width: 900px) {
@@ -4076,6 +4085,7 @@ input:focus, select:focus, textarea:focus {
     --mom-properties: 136px;
     --mom-type: 72px;
     --mom-project: 96px;
+    --mom-lot: 96px;
   }
 }
 

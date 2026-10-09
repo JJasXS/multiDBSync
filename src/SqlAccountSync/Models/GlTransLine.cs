@@ -17,7 +17,9 @@ public sealed class MomCollectionSourceRow
     public string Properties { get; init; } = "";
     public string Type { get; init; } = "";
     public string ProjectCode { get; init; } = "";
+    public string LotNumber { get; init; } = "";
     public decimal DocAmount { get; init; }
+    public DateTime? DocDate { get; init; }
     public DateTime? OrDate { get; init; }
     public string OrNo { get; init; } = "";
     public decimal OrAmount { get; init; }
@@ -39,9 +41,10 @@ public sealed class MomCollectionReceiptDay
 public sealed class MomCollectionLine
 {
     public string Entities { get; init; } = "";
-    public string Properties { get; init; } = "";
-    public string Type { get; init; } = "";
+    public string Properties { get; set; } = "";
+    public string Type { get; set; } = "";
     public string ProjectCode { get; init; } = "";
+    public string LotNumber { get; set; } = "";
     public List<MomCollectionReceiptDay>[] ReceiptsByMonth { get; init; } = CreateReceiptMonths();
 
     private static List<MomCollectionReceiptDay>[] CreateReceiptMonths()
@@ -60,6 +63,7 @@ public sealed class DashboardDetailRow
     public IReadOnlyList<GlTransLine> Records { get; init; } = [];
     public IReadOnlyList<MomCollectionLine> CollectionLines { get; init; } = [];
     public bool LoadFailed { get; init; }
+    public IReadOnlyList<string> LoadErrors { get; init; } = [];
     public decimal TotalAmount { get; init; }
 }
 

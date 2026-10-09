@@ -55,7 +55,11 @@ public class PlByProjectModel : SyncPageModel
         await LoadRegistryAsync(CancellationToken.None);
         var dateFrom = (DateFrom ?? DefaultDateFrom).Date;
         var dateTo = (DateTo ?? DefaultDateTo).Date;
-        var rows = await LoadRowsAsync(SelectedDatabases(), dateFrom, dateTo, "", CancellationToken.None);
+        var selected = SelectedDatabases();
+        var (rows, failures) = await LoadRowsAsync(selected, dateFrom, dateTo, "", CancellationToken.None);
+        if (selected.Count > 0 && failures.Count == selected.Count)
+            return Plain(StatusCodes.Status503ServiceUnavailable, "Transaction data could not be loaded.");
+        ViewData["PlLoadFailures"] = failures;
         return Partial("_PlByProjectResults", rows);
     }
 
@@ -64,7 +68,7 @@ public class PlByProjectModel : SyncPageModel
         await LoadRegistryAsync(CancellationToken.None);
         var dateFrom = (DateFrom ?? DefaultDateFrom).Date;
         var dateTo = (DateTo ?? DefaultDateTo).Date;
-        var rows = await LoadRowsAsync(SelectedDatabases(), dateFrom, dateTo, "", CancellationToken.None);
+        var (rows, _) = await LoadRowsAsync(SelectedDatabases(), dateFrom, dateTo, "", CancellationToken.None);
         var bytes = PlByProjectExcel.Build(PlByProjectMatrix.From(rows));
         return File(bytes, PlByProjectExcel.ContentType, $"PL-by-Project-{dateFrom:yyyy-MM-dd}-to-{dateTo:yyyy-MM-dd}.xlsx");
     }
@@ -95,7 +99,7 @@ public class PlByProjectModel : SyncPageModel
         return subs.Where(db => wanted.Contains(db.DbCode)).ToList();
     }
 
-    private async Task<List<DashboardDetailRow>> LoadRowsAsync(
+    private async Task<(List<DashboardDetailRow> Rows, List<string> Failures)> LoadRowsAsync(
         IReadOnlyList<RegisteredDatabase> databases,
         DateTime? dateFrom,
         DateTime? dateTo,
@@ -103,19 +107,24 @@ public class PlByProjectModel : SyncPageModel
         CancellationToken cancellationToken)
     {
         if (!CentralConfigured || databases.Count == 0)
-            return [];
+            return ([], []);
         // Ignore the page token. Cancelling this read mid-command breaks the pooled connection.
         _ = cancellationToken;
         await PlLoad.WaitAsync(CancellationToken.None).ConfigureAwait(false);
         try
         {
             var rows = new List<DashboardDetailRow>();
+            var failures = new List<string>();
             foreach (var db in databases)
             {
                 var lines = await _companyRead.ListPlByProjectLinesAsync(db, dateFrom, dateTo, customer, CancellationToken.None)
                     .ConfigureAwait(false);
                 if (lines is null)
+                {
+                    var name = (db.DisplayName ?? "").Trim();
+                    failures.Add(name.Length > 0 ? name : (db.DbCode ?? "").Trim());
                     continue;
+                }
                 rows.Add(new DashboardDetailRow
                 {
                     DatabaseName = (db.DisplayName ?? "").Trim(),
@@ -124,13 +133,20 @@ public class PlByProjectModel : SyncPageModel
                     TotalAmount = SumAmounts(lines)
                 });
             }
-            return rows;
+            return (rows, failures);
         }
         finally
         {
             PlLoad.Release();
         }
     }
+
+    private static ContentResult Plain(int statusCode, string message) => new()
+    {
+        StatusCode = statusCode,
+        Content = message,
+        ContentType = "text/plain; charset=utf-8"
+    };
 
     private static decimal SumAmounts(IReadOnlyList<GlTransLine> lines)
     {

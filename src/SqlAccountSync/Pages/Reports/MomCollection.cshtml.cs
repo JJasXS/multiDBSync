@@ -137,15 +137,22 @@ public class MomCollectionModel : SyncPageModel
         await CollectionLoad.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var loaded = new List<(RegisteredDatabase Db, List<MomCollectionSourceRow>? Lines)>(databases.Count);
+            var loaded = new List<(RegisteredDatabase Db, List<MomCollectionSourceRow>? Lines, IReadOnlyList<string> MissingColumns)>(databases.Count);
             for (var index = 0; index < databases.Count; index += CompanyBatchSize)
             {
                 var batch = databases.Skip(index).Take(CompanyBatchSize).ToArray();
                 var batchRows = await Task.WhenAll(batch.Select(async db =>
                 {
-                    var lines = await _companyRead.ListMomCollectionAsync(db, dateFrom, dateTo, null, CancellationToken.None)
-                        .ConfigureAwait(false);
-                    return (db, lines);
+                    try
+                    {
+                        var lines = await _companyRead.ListMomCollectionAsync(db, dateFrom, dateTo, null, CancellationToken.None)
+                            .ConfigureAwait(false);
+                        return (db, lines, (IReadOnlyList<string>)Array.Empty<string>());
+                    }
+                    catch (MomCollectionColumnException ex)
+                    {
+                        return (db, (List<MomCollectionSourceRow>?)null, ex.Columns);
+                    }
                 })).ConfigureAwait(false);
                 loaded.AddRange(batchRows);
             }
@@ -158,16 +165,32 @@ public class MomCollectionModel : SyncPageModel
     }
 
     private static List<DashboardDetailRow> BuildCollectionRows(
-        IReadOnlyList<(RegisteredDatabase Db, List<MomCollectionSourceRow>? Lines)> loaded)
+        IReadOnlyList<(RegisteredDatabase Db, List<MomCollectionSourceRow>? Lines, IReadOnlyList<string> MissingColumns)> loaded)
     {
         var rows = new List<DashboardDetailRow>();
-        foreach (var (db, lines) in loaded)
+        foreach (var (db, lines, missingColumns) in loaded)
         {
+            var databaseName = (db.DisplayName ?? "").Trim();
+            if (databaseName.Length == 0)
+                databaseName = (db.DbCode ?? "").Trim();
+            if (missingColumns.Count > 0)
+            {
+                rows.Add(new DashboardDetailRow
+                {
+                    DatabaseName = databaseName,
+                    Role = db.DbRole,
+                    LoadFailed = true,
+                    LoadErrors = missingColumns
+                        .Select(column => $"Column not found: SL_IV.{column} (Database: {databaseName})")
+                        .ToList()
+                });
+                continue;
+            }
             if (lines is null)
             {
                 rows.Add(new DashboardDetailRow
                 {
-                    DatabaseName = (db.DisplayName ?? "").Trim(),
+                    DatabaseName = databaseName,
                     Role = db.DbRole,
                     LoadFailed = true
                 });
@@ -185,7 +208,7 @@ public class MomCollectionModel : SyncPageModel
             }
             rows.Add(new DashboardDetailRow
             {
-                DatabaseName = (db.DisplayName ?? "").Trim(),
+                DatabaseName = databaseName,
                 Role = db.DbRole,
                 CollectionLines = collection,
                 TotalAmount = total
@@ -199,15 +222,12 @@ public class MomCollectionModel : SyncPageModel
         var groups = new Dictionary<string, MomCollectionLine>(StringComparer.OrdinalIgnoreCase);
         foreach (var line in lines)
         {
-            if (line.OrDate is not DateTime orDate)
+            if (line.DocDate is not DateTime docDate)
                 continue;
-            var month = orDate.Month;
+            var month = docDate.Month;
             if (month is < 1 or > 12)
                 continue;
-            var orNo = line.OrNo.Trim();
-            if (orNo.Length == 0 && line.OrAmount == 0m && line.DocAmount == 0m)
-                continue;
-            var key = string.Join('\u001f', line.Entities, line.Properties, line.Type, line.ProjectCode);
+            var key = string.Join('\u001f', line.Entities, line.ProjectCode);
             if (!groups.TryGetValue(key, out var group))
             {
                 group = new MomCollectionLine
@@ -215,11 +235,21 @@ public class MomCollectionModel : SyncPageModel
                     Entities = line.Entities,
                     Properties = line.Properties,
                     Type = line.Type,
-                    ProjectCode = line.ProjectCode
+                    ProjectCode = line.ProjectCode,
+                    LotNumber = line.LotNumber
                 };
                 groups[key] = group;
             }
-            var date = orDate.Date;
+            else
+            {
+                if (string.IsNullOrWhiteSpace(group.Properties) && !string.IsNullOrWhiteSpace(line.Properties))
+                    group.Properties = line.Properties;
+                if (string.IsNullOrWhiteSpace(group.Type) && !string.IsNullOrWhiteSpace(line.Type))
+                    group.Type = line.Type;
+                if (string.IsNullOrWhiteSpace(group.LotNumber) && !string.IsNullOrWhiteSpace(line.LotNumber))
+                    group.LotNumber = line.LotNumber;
+            }
+            var date = docDate.Date;
             var days = group.ReceiptsByMonth[month - 1];
             var day = days.Find(item => item.Date == date);
             if (day is null)
@@ -229,7 +259,7 @@ public class MomCollectionModel : SyncPageModel
             }
             day.Receipts.Add(new MomCollectionReceipt
             {
-                OrNo = orNo,
+                OrNo = line.OrNo.Trim(),
                 InvoiceAmount = line.DocAmount,
                 Amount = line.OrAmount
             });

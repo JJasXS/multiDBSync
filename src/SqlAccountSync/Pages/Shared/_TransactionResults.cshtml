@@ -16,17 +16,40 @@
 }
 @if (failedCompanies.Count > 0)
 {
+    var failureMessages = new List<string>();
+    foreach (var row in Model.Where(row => row.LoadFailed))
+    {
+        if (row.LoadErrors.Count > 0)
+            failureMessages.AddRange(row.LoadErrors);
+        else if (!string.IsNullOrWhiteSpace(row.DatabaseName))
+            failureMessages.Add(row.DatabaseName.Trim());
+    }
+    var failedWord = failedCompanies.Count == 1 ? "company" : "companies";
     <div class="report-load-warning-slot" role="status" data-txn-panel="ready">
-        <partial name="_ReportLoadWarning" model="failedCompanies" />
+        <details class="report-load-warning">
+            <summary>
+                <span class="report-load-warning-text">&#9888; Partial data shown — @failedCompanies.Count @failedWord could not be loaded.</span>
+                <span class="report-load-warning-action">
+                    <span class="report-load-warning-closed">View details</span>
+                    <span class="report-load-warning-open">Hide details</span>
+                </span>
+            </summary>
+            <ul>
+                @foreach (var message in failureMessages)
+                {
+                    <li>@message</li>
+                }
+            </ul>
+        </details>
     </div>
 }
 @if (emptyCompanies.Count > 0)
 {
-    var companyWord = emptyCompanies.Count == 1 ? "company has" : "companies have";
+    var emptyWord = emptyCompanies.Count == 1 ? "company has" : "companies have";
     <div class="report-load-warning-slot" role="status" data-txn-panel="ready">
         <details class="report-load-warning">
             <summary>
-                <span class="report-load-warning-text">&#9888; No data — @emptyCompanies.Count @companyWord no rows for this year.</span>
+                <span class="report-load-warning-text">&#9888; No data — @emptyCompanies.Count @emptyWord no rows for this year.</span>
                 <span class="report-load-warning-action">
                     <span class="report-load-warning-closed">View details</span>
                     <span class="report-load-warning-open">Hide details</span>
