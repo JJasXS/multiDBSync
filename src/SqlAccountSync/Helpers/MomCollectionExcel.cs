@@ -17,8 +17,8 @@ public static class MomCollectionExcel
     {
         using var workbook = new XLWorkbook();
         var sheet = workbook.Worksheets.Add("Collection Report");
-        var columnCount = 5 + (Months.Length * 2) + 2;
-        var identity = new[] { "PROJECT", "ENTITIES", "PROPERTIES", "TYPE", "PROJECT CODE" };
+        var columnCount = 6 + (Months.Length * 2) + 2;
+        var identity = new[] { "PROJECT", "ENTITIES", "PROPERTIES", "TYPE", "PROJECT CODE", "LOT NUMBER" };
         for (var column = 0; column < identity.Length; column++)
         {
             sheet.Cell(1, column + 1).Value = identity[column];
@@ -27,14 +27,14 @@ public static class MomCollectionExcel
 
         for (var month = 0; month < Months.Length; month++)
         {
-            var start = 6 + (month * 2);
+            var start = 7 + (month * 2);
             sheet.Cell(1, start).Value = Months[month];
             sheet.Range(1, start, 1, start + 1).Merge();
             sheet.Cell(2, start).Value = "Invoice";
             sheet.Cell(2, start + 1).Value = "Receipt";
         }
 
-        var totalStart = 6 + (Months.Length * 2);
+        var totalStart = 7 + (Months.Length * 2);
         sheet.Cell(1, totalStart).Value = "Total";
         sheet.Range(1, totalStart, 1, totalStart + 1).Merge();
         sheet.Cell(2, totalStart).Value = "Invoice";
@@ -62,6 +62,7 @@ public static class MomCollectionExcel
                 sheet.Cell(excelRow, 3).Value = line.Properties;
                 sheet.Cell(excelRow, 4).Value = line.Type;
                 sheet.Cell(excelRow, 5).Value = line.ProjectCode;
+                sheet.Cell(excelRow, 6).Value = line.LotNumber;
                 decimal rowInvoice = 0m;
                 decimal rowReceipt = 0m;
                 for (var month = 0; month < Months.Length; month++)
@@ -75,8 +76,8 @@ public static class MomCollectionExcel
                     rowReceipt += receipt;
                     if (entries.Count == 0)
                         continue;
-                    WriteAmount(sheet.Cell(excelRow, 6 + (month * 2)), invoice);
-                    WriteAmount(sheet.Cell(excelRow, 7 + (month * 2)), receipt);
+                    WriteAmount(sheet.Cell(excelRow, 7 + (month * 2)), invoice);
+                    WriteAmount(sheet.Cell(excelRow, 8 + (month * 2)), receipt);
                 }
                 WriteAmount(sheet.Cell(excelRow, totalStart), rowInvoice);
                 WriteAmount(sheet.Cell(excelRow, totalStart + 1), rowReceipt);
@@ -95,8 +96,8 @@ public static class MomCollectionExcel
             {
                 grandInvoice += invoiceTotals[month];
                 grandReceipt += receiptTotals[month];
-                WriteTotal(sheet.Cell(excelRow, 6 + (month * 2)), invoiceTotals[month]);
-                WriteTotal(sheet.Cell(excelRow, 7 + (month * 2)), receiptTotals[month]);
+                WriteTotal(sheet.Cell(excelRow, 7 + (month * 2)), invoiceTotals[month]);
+                WriteTotal(sheet.Cell(excelRow, 8 + (month * 2)), receiptTotals[month]);
             }
             WriteTotal(sheet.Cell(excelRow, totalStart), grandInvoice);
             WriteTotal(sheet.Cell(excelRow, totalStart + 1), grandReceipt);

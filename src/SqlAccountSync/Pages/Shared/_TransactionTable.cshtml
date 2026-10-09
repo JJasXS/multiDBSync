@@ -18,7 +18,7 @@
     var hasRows = Model.Any(row => !row.LoadFailed && row.CollectionLines.Count > 0);
     var invoiceTotals = new decimal[months.Length];
     var receiptTotals = new decimal[months.Length];
-    var columnCount = 5 + (months.Length * 2) + 2;
+    var columnCount = 6 + (months.Length * 2) + 2;
 
     string Text(string? value) => string.IsNullOrWhiteSpace(value) ? "" : value;
     string ReceiptAmount(decimal amount) => amount.ToString("N2", System.Globalization.CultureInfo.InvariantCulture);
@@ -42,6 +42,9 @@
                 </th>
                 <th class="mom-col-project" data-txn-col="project" scope="col" rowspan="2">
                     <span class="mom-col-title">PROJECT CODE</span>
+                </th>
+                <th class="mom-col-lot" data-txn-col="lot" scope="col" rowspan="2">
+                    <span class="mom-col-title">LOT NUMBER</span>
                 </th>
                 @foreach (var month in months)
                 {
@@ -108,6 +111,7 @@
                             <td class="mom-col-properties" data-txn-col="properties" title="@properties">@properties</td>
                             <td class="mom-col-type" data-txn-col="type" title="@type">@type</td>
                             <td class="mom-col-project" data-txn-col="project" title="@projectCode">@projectCode</td>
+                            <td class="mom-col-lot" data-txn-col="lot" title="@Text(line.LotNumber)">@Text(line.LotNumber)</td>
                             @for (var monthIndex = 0; monthIndex < months.Length; monthIndex++)
                             {
                                 var entries = line.ReceiptsByMonth[monthIndex]
@@ -155,6 +159,7 @@
                     <td class="mom-col-properties" data-txn-col="properties" data-mom-label></td>
                     <td class="mom-col-type" data-txn-col="type" data-mom-label></td>
                     <td class="mom-col-project" data-txn-col="project" data-mom-label></td>
+                    <td class="mom-col-lot" data-txn-col="lot" data-mom-label></td>
                     @for (var monthIndex = 0; monthIndex < months.Length; monthIndex++)
                     {
                         <td class="mom-money mom-invoice mom-group-edge" data-txn-col="@months[monthIndex].Key" data-mom-foot="invoice">@ReceiptAmount(invoiceTotals[monthIndex])</td>
