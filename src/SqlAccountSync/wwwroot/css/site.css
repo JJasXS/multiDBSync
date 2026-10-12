@@ -4179,6 +4179,9 @@ input:focus, select:focus, textarea:focus {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.so-listing .so-matrix tbody td {
+  vertical-align: middle;
+}
 .so-listing .so-matrix tbody td.so-col-entity,
 .so-listing .so-matrix tbody td.so-col-properties,
 .so-listing .so-matrix tbody td.so-col-type,
@@ -4198,7 +4201,7 @@ input:focus, select:focus, textarea:focus {
   overflow-wrap: break-word;
   word-break: normal;
   text-overflow: clip;
-  vertical-align: top;
+  vertical-align: middle;
 }
 .so-listing .so-matrix thead th {
   position: sticky;
