@@ -274,6 +274,9 @@ public class ItemDestCodeLinkTests
         public Task<List<RegisteredDatabase>> ListAsync(bool includeInactive = false, CancellationToken cancellationToken = default) => Task.FromResult(new List<RegisteredDatabase> { source, dest });
         public Task<int> SaveAsync(RegisteredDatabase db, string user, CancellationToken cancellationToken = default) => Task.FromResult(db.DbId);
         public Task DeactivateAsync(int dbId, string user, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task DeleteAsync(int dbId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task SetActiveAsync(int dbId, bool active, string user, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task PointSqlApiCredRefsAtBundleAsync(string tenantCode, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task UpdateStatusAsync(int dbId, string status, bool success, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task<List<DatabaseLink>> ListLinksAsync(CancellationToken cancellationToken = default) => Task.FromResult(new List<DatabaseLink>());
         public Task<int> AddLinkAsync(int masterId, int subId, string user, CancellationToken cancellationToken = default) => Task.FromResult(0);
@@ -307,6 +310,7 @@ public class ItemDestCodeLinkTests
         public Task<List<SyncJob>> ListAsync(string? status = null, int take = 200, CancellationToken cancellationToken = default) => Task.FromResult(new List<SyncJob>());
         public Task<SyncJob?> GetAsync(int jobId, CancellationToken cancellationToken = default) => Task.FromResult<SyncJob?>(null);
         public Task CancelAsync(int jobId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<int> CancelUnstartedWaitingAsync(CancellationToken cancellationToken = default) => Task.FromResult(0);
         public Task<int> ReclaimStaleProcessingAsync(CancellationToken cancellationToken = default) => Task.FromResult(0);
         public Task UnlockProcessingAsync(int jobId, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task<QueueHealthSnapshot> GetHealthAsync(CancellationToken cancellationToken = default) =>
