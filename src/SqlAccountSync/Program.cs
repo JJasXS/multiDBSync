@@ -128,6 +128,8 @@ builder.Services.AddScoped<ISyncOrchestrator, SyncOrchestrator>();
 builder.Services.AddScoped<ITransferMasterEnsure, TransferMasterEnsure>();
 builder.Services.AddScoped<ITransactionEngine, TransactionEngine>();
 builder.Services.AddScoped<IAccountAutoPushService, AccountAutoPushService>();
+builder.Services.AddScoped<IAutoPushSettings, AutoPushSettings>();
+builder.Services.AddScoped<IMasterMissingAutoPushService, MasterMissingAutoPushService>();
 builder.Services.AddHostedService<TenantConfigRefreshWorker>();
 builder.Services.AddHostedService<SyncWorker>();
 builder.Services.AddHostedService<AccountAutoPushWorker>();

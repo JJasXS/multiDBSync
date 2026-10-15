@@ -1517,6 +1517,28 @@ code {
 .sync-page-card .push-workspace {
   padding-top: 12px;
 }
+.auto-push-panel {
+  min-width: 280px;
+  padding: 8px 10px 10px;
+}
+.auto-push-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 6px 4px;
+}
+.auto-push-row-label {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--ice-heading);
+}
+.auto-push-panel .auto-push-hint {
+  margin: 8px 4px 2px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--ice-text-muted);
+}
 .multi-push .push-source-form { margin: 0 0 10px; }
 .multi-push .push-route-fields {
   padding: 6px 10px;

@@ -14,17 +14,20 @@ public class IndexModel : SyncPageModel
     private readonly ISqlAccountReadAdapter _read;
     private readonly ISqlAccountWriteAdapter _write;
     private readonly ISyncOrchestrator _sync;
+    private readonly IAutoPushSettings _autoPush;
 
     public IndexModel(
         IDatabaseRegistry registry,
         ISqlAccountReadAdapter read,
         ISqlAccountWriteAdapter write,
-        ISyncOrchestrator sync)
+        ISyncOrchestrator sync,
+        IAutoPushSettings autoPush)
     {
         _registry = registry;
         _read = read;
         _write = write;
         _sync = sync;
+        _autoPush = autoPush;
     }
 
     [BindProperty(SupportsGet = true)] public string Tab { get; set; } = "push";
@@ -42,6 +45,10 @@ public class IndexModel : SyncPageModel
     [BindProperty] public string EditTax { get; set; } = "";
     [BindProperty] public int EditCashFlowType { get; set; }
     [BindProperty] public string EditSic { get; set; } = "";
+    [BindProperty] public bool AutoPushCustomer { get; set; }
+    [BindProperty] public bool AutoPushSupplier { get; set; }
+    [BindProperty] public bool AutoPushAccount { get; set; }
+    public bool AutoPushPanelOpen { get; set; }
 
     public List<RegisteredDatabase> SourceDatabases { get; set; } = [];
     public List<RegisteredDatabase> TargetSubs { get; set; } = [];
@@ -105,6 +112,30 @@ public class IndexModel : SyncPageModel
         return Page();
     }
 
+    public async Task<IActionResult> OnPostSaveAutoPushAsync()
+    {
+        if (!CanOperate) return Forbid();
+        Tab = "push";
+        try
+        {
+            await _autoPush.SaveAsync(new AutoPushFlags
+            {
+                Customer = AutoPushCustomer,
+                Supplier = AutoPushSupplier,
+                Account = AutoPushAccount
+            });
+            FlashToast = FlashToasts.Ok("Auto-push settings saved.");
+        }
+        catch (Exception ex)
+        {
+            FlashToast = FlashToasts.Fail("Could not save auto-push settings.", [ex.Message]);
+        }
+
+        AutoPushPanelOpen = true;
+        await LoadPushAsync();
+        return Page();
+    }
+
     public async Task<IActionResult> OnPostSaveEditAsync()
     {
         if (!CanOperate) return Forbid();
@@ -125,6 +156,7 @@ public class IndexModel : SyncPageModel
 
     private async Task LoadPushAsync()
     {
+        await LoadAutoPushAsync();
         EntityCode = NormalizeEntity(EntityCode);
         var databases = await _registry.ListAsync();
         SourceDatabases = ListSources(databases);
@@ -138,6 +170,14 @@ public class IndexModel : SyncPageModel
             return;
 
         Records = await LoadRecordsAsync(SelectedSource, EntityCode);
+    }
+
+    private async Task LoadAutoPushAsync()
+    {
+        var flags = await _autoPush.GetAsync();
+        AutoPushCustomer = flags.Customer;
+        AutoPushSupplier = flags.Supplier;
+        AutoPushAccount = flags.Account;
     }
 
     private async Task<List<RegisteredDatabase>> ResolveTargetsAsync(int sourceDbId, List<RegisteredDatabase> databases)
