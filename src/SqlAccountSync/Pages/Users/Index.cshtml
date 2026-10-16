@@ -47,8 +47,12 @@
                     @foreach (var u in Model.Users)
                     {
                         var isAdminRole = AppRoles.Rank(u.Role) >= AppRoles.Rank(AppRoles.Admin);
-                        var isSelf = u.UserId == Model.CurrentUserId
-                            || string.Equals(u.Email.Trim(), Model.CurrentEmail.Trim(), StringComparison.OrdinalIgnoreCase);
+                        var currentEmail = (Model.CurrentEmail ?? "").Trim();
+                        var rowEmail = (u.Email ?? "").Trim();
+                        var isSelf = (Model.CurrentUserId > 0 && u.UserId == Model.CurrentUserId)
+                            || (currentEmail.Length > 0 && rowEmail.Length > 0
+                                && string.Equals(rowEmail, currentEmail, StringComparison.OrdinalIgnoreCase));
+                        // Only the sole remaining active admin is locked — another admin can turn this one off.
                         var isLastAdmin = u.IsActive && isAdminRole && activeAdminCount <= 1;
                         var locked = u.IsActive && (isSelf || isLastAdmin);
                         var lockNote = isSelf ? "Your account" : "Last admin";

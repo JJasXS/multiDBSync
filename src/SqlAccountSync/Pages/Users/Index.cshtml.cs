@@ -90,9 +90,15 @@ public class IndexModel : SyncPageModel
         });
     }
 
-    private bool IsCurrentUser(AppUser target) =>
-        target.UserId == CurrentUserId
-        || string.Equals(target.Email.Trim(), CurrentEmail.Trim(), StringComparison.OrdinalIgnoreCase);
+    private bool IsCurrentUser(AppUser target)
+    {
+        if (CurrentUserId > 0 && target.UserId == CurrentUserId)
+            return true;
+        var me = CurrentEmail.Trim();
+        var them = (target.Email ?? "").Trim();
+        return me.Length > 0 && them.Length > 0
+            && string.Equals(them, me, StringComparison.OrdinalIgnoreCase);
+    }
 
     private async Task LoadAsync() => Users = await _users.ListAsync();
 }

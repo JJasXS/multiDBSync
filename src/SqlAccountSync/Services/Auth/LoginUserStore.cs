@@ -323,17 +323,25 @@ public sealed class LoginUserStore : ILoginUserStore
         ExecuteAsync(conn, $"UPDATE SY_USER SET {RoleColumn} = @Role WHERE AUTOKEY = @Id", cancellationToken,
             ("@Role", role), ("@Id", id));
 
-    private static async Task<int> CountOtherActiveAdminsAsync(FbConnection conn, int userId, CancellationToken cancellationToken)
+    /// <summary>
+    /// Counts other active admins using the same role resolution as <see cref="ListAsync"/>
+    /// (UDF_SYNCROLE, with SYNC_USER fallback). Raw SQL on UDF_SYNCROLE alone under-counts
+    /// and wrongly blocks deactivating a second admin.
+    /// </summary>
+    private async Task<int> CountOtherActiveAdminsAsync(FbConnection conn, int userId, CancellationToken cancellationToken)
     {
-        var sql = $"""
-            SELECT COUNT(*) FROM SY_USER
-            WHERE AUTOKEY <> @Id
-              AND COALESCE(ISACTIVE, TRUE) = TRUE
-              AND TRIM(UPPER({RoleColumn})) = @Role
-            """;
-        var count = await ScalarAsync(conn, sql, cancellationToken, ("@Id", userId), ("@Role", AppRoles.Admin))
-            .ConfigureAwait(false);
-        return Convert.ToInt32(count ?? 0);
+        var rows = await ReadAllAsync(conn, cancellationToken).ConfigureAwait(false);
+        var count = 0;
+        foreach (var row in rows)
+        {
+            if (row.Id == userId || !row.Active)
+                continue;
+            var other = await ToUserAsync(conn, row, cancellationToken).ConfigureAwait(false);
+            if (AppRoles.Rank(other.Role) >= AppRoles.Rank(AppRoles.Admin))
+                count++;
+        }
+
+        return count;
     }
 
     private static async Task<object?> ScalarAsync(
