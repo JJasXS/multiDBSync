@@ -1,12 +1,13 @@
 using Microsoft.Extensions.Options;
 using SqlAccountSync.Options;
+using SqlAccountSync.Services.Accounts;
 using SqlAccountSync.Services.Sync;
 
 namespace SqlAccountSync.Services.Queue;
 
 /// <summary>
-/// Periodically queues missing CUSTOMER, SUPPLIER, and ACCOUNT codes from MASTER/BOTH to linked subs.
-/// A cycle runs only for entities whose auto-push checkbox is on.
+/// Periodically queues missing/changed/deleted CUSTOMER, SUPPLIER, and ACCOUNT codes
+/// from MASTER/BOTH to linked subs when the Push-page auto-push checkboxes are on.
 /// </summary>
 public sealed class AccountAutoPushWorker : BackgroundService
 {
@@ -47,8 +48,21 @@ public sealed class AccountAutoPushWorker : BackgroundService
         try
         {
             using var scope = _scopes.CreateScope();
-            var service = scope.ServiceProvider.GetRequiredService<IMasterMissingAutoPushService>();
-            var (queued, skipped, messages) = await service.RunOnceAsync(stoppingToken).ConfigureAwait(false);
+            var settings = scope.ServiceProvider.GetRequiredService<IAutoPushSettings>();
+            var flags = await settings.GetAsync(stoppingToken).ConfigureAwait(false);
+
+            var createService = scope.ServiceProvider.GetRequiredService<IMasterMissingAutoPushService>();
+            var (queued, skipped, messages) = await createService.RunOnceAsync(stoppingToken).ConfigureAwait(false);
+
+            if (flags.Account)
+            {
+                var accountUd = scope.ServiceProvider.GetRequiredService<IAccountAutoPushService>();
+                var (accQueued, accSkipped, accMsgs) = await accountUd.RunOnceAsync(stoppingToken).ConfigureAwait(false);
+                queued += accQueued;
+                skipped += accSkipped;
+                messages.AddRange(accMsgs);
+            }
+
             if (queued > 0)
             {
                 _logger.LogInformation(

@@ -106,33 +106,53 @@ public sealed class SqlAccountApiWriteAdapter : ISqlAccountWriteAdapter
 
     public Task<WriteResult> UpdateMasterAsync(
         RegisteredDatabase db, string targetEntityCode, MasterRecord record, string txnStamp,
-        int destDocKey, int destParentDocKey, CancellationToken cancellationToken = default)
+        int destDocKey, int destParentDocKey, CancellationToken cancellationToken = default,
+        RegisteredDatabase? sourceDb = null, string? sourceEntityCode = null)
     {
-        if (!string.Equals(targetEntityCode, EntityCodes.Account, StringComparison.OrdinalIgnoreCase))
-            return Task.FromResult(new WriteResult { Success = false, Message = "Update/delete is only supported for accounts." });
-
         var code = (record.Code ?? "").Trim();
         if (code.Length == 0)
-            return Task.FromResult(new WriteResult { Success = false, Message = "Account code is required for update." });
+            return Task.FromResult(new WriteResult { Success = false, Message = "Code is required for update." });
+
+        if (PartnerSyncRules.IsPartyEntity(targetEntityCode))
+        {
+            var pathPrefix = string.Equals(targetEntityCode, EntityCodes.Customer, StringComparison.OrdinalIgnoreCase)
+                ? "/customer/" : "/supplier/";
+            var sourceEntity = string.IsNullOrWhiteSpace(sourceEntityCode) ? targetEntityCode : sourceEntityCode!;
+            var source = sourceDb ?? db;
+            var partner = BusinessPartnerMapper.FromMasterRecord(record, source, sourceEntity);
+            var dict = BusinessPartnerMapper.ToApiPayload(partner, targetEntityCode, code, txnStamp);
+            var payload = BusinessPartnerMapper.SerializePayload(dict);
+            return SendAsync(db, HttpMethod.Put, pathPrefix + Uri.EscapeDataString(code), payload,
+                "Updated.", treatNotFoundAsSuccess: false, cancellationToken);
+        }
+
+        if (!string.Equals(targetEntityCode, EntityCodes.Account, StringComparison.OrdinalIgnoreCase))
+            return Task.FromResult(new WriteResult { Success = false, Message = $"Update is not supported for {targetEntityCode}." });
 
         var row = GlAccountMapper.FromMasterRecord(record);
-        var dict = GlAccountMapper.ToUpdatePayload(row, destParentDocKey, destDocKey);
-        var payload = GlAccountMapper.SerializePayload(dict);
-        var path = "/account/" + Uri.EscapeDataString(code);
-        return SendAsync(db, HttpMethod.Put, path, payload, "Updated.", treatNotFoundAsSuccess: false, cancellationToken);
+        var dictAcc = GlAccountMapper.ToUpdatePayload(row, destParentDocKey, destDocKey);
+        var payloadAcc = GlAccountMapper.SerializePayload(dictAcc);
+        return SendAsync(db, HttpMethod.Put, "/account/" + Uri.EscapeDataString(code), payloadAcc,
+            "Updated.", treatNotFoundAsSuccess: false, cancellationToken);
     }
 
     public Task<WriteResult> DeleteMasterAsync(
         RegisteredDatabase db, string targetEntityCode, string code, CancellationToken cancellationToken = default)
     {
-        if (!string.Equals(targetEntityCode, EntityCodes.Account, StringComparison.OrdinalIgnoreCase))
-            return Task.FromResult(new WriteResult { Success = false, Message = "Update/delete is only supported for accounts." });
-
         var key = (code ?? "").Trim();
         if (key.Length == 0)
-            return Task.FromResult(new WriteResult { Success = false, Message = "Account code is required for delete." });
+            return Task.FromResult(new WriteResult { Success = false, Message = "Code is required for delete." });
 
-        var path = "/account/" + Uri.EscapeDataString(key);
+        var path = targetEntityCode.ToUpperInvariant() switch
+        {
+            EntityCodes.Customer => "/customer/" + Uri.EscapeDataString(key),
+            EntityCodes.Supplier => "/supplier/" + Uri.EscapeDataString(key),
+            EntityCodes.Account => "/account/" + Uri.EscapeDataString(key),
+            _ => ""
+        };
+        if (path.Length == 0)
+            return Task.FromResult(new WriteResult { Success = false, Message = $"Delete is not supported for {targetEntityCode}." });
+
         return SendAsync(db, HttpMethod.Delete, path, null, "Deleted.", treatNotFoundAsSuccess: true, cancellationToken);
     }
 
@@ -497,7 +517,8 @@ public sealed class DryRunWriteAdapter : ISqlAccountWriteAdapter
 
     public Task<WriteResult> UpdateMasterAsync(
         RegisteredDatabase db, string targetEntityCode, MasterRecord record, string txnStamp,
-        int destDocKey, int destParentDocKey, CancellationToken cancellationToken = default)
+        int destDocKey, int destParentDocKey, CancellationToken cancellationToken = default,
+        RegisteredDatabase? sourceDb = null, string? sourceEntityCode = null)
     {
         Actions.Add($"WOULD PUT {targetEntityCode} {record.Code} on {db.DisplayName} (dockey={destDocKey})");
         return Task.FromResult(new WriteResult { Success = true, Message = "Dry run: no data was modified.", DocNo = record.Code });

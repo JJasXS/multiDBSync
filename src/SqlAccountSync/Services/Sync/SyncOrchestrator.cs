@@ -93,6 +93,8 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
     private readonly IItemPrerequisiteService _itemPrereqs;
     private readonly IFirebirdPartyInsert _partyFirebirdInsert;
     private readonly IFirebirdAccountInsert _accountFirebirdInsert;
+    private readonly IFirebirdPartyMutate _partyFirebirdMutate;
+    private readonly IFirebirdAccountMutate _accountFirebirdMutate;
     private readonly SyncOptions _sync;
 
 
@@ -120,6 +122,8 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
         IItemPrerequisiteService itemPrereqs,
         IFirebirdPartyInsert partyFirebirdInsert,
         IFirebirdAccountInsert accountFirebirdInsert,
+        IFirebirdPartyMutate partyFirebirdMutate,
+        IFirebirdAccountMutate accountFirebirdMutate,
         IOptions<SyncOptions> sync)
 
     {
@@ -145,6 +149,8 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
         _itemPrereqs = itemPrereqs;
         _partyFirebirdInsert = partyFirebirdInsert;
         _accountFirebirdInsert = accountFirebirdInsert;
+        _partyFirebirdMutate = partyFirebirdMutate;
+        _accountFirebirdMutate = accountFirebirdMutate;
         _sync = sync.Value;
 
     }
@@ -567,8 +573,9 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
     {
         if (sourceDbId == destDbId)
             return (0, "Source and destination must be different databases.");
-        if (!string.Equals(entityCode, EntityCodes.Account, StringComparison.OrdinalIgnoreCase))
-            return (0, "Update is only supported for accounts.");
+        if (!PartnerSyncRules.IsPartyEntity(entityCode)
+            && !string.Equals(entityCode, EntityCodes.Account, StringComparison.OrdinalIgnoreCase))
+            return (0, "Update is only supported for customer, supplier, and account.");
 
         var source = await _registry.GetAsync(sourceDbId, cancellationToken).ConfigureAwait(false);
         var dest = await _registry.GetAsync(destDbId, cancellationToken).ConfigureAwait(false);
@@ -581,7 +588,7 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
         if (record is null)
             return (0, $"Source {entityCode} {masterCode} was not found.");
 
-        var destEntity = EntityCodes.Account;
+        var destEntity = PartnerSyncRules.ResolveTargetEntity(source, dest, entityCode);
         var payloadObj = new MasterSyncPayload
         {
             Record = record,
@@ -601,7 +608,8 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
             EntityCode = entityCode,
             PayloadJson = payload,
             IdemKey = idem,
-            CreatedBy = user
+            CreatedBy = user,
+            Priority = PartnerSyncRules.IsPartyEntity(entityCode) ? PartnerSyncRules.PartyPushPriority : 0
         }, cancellationToken).ConfigureAwait(false)).JobId;
 
         await _audit.WriteAsync(new AuditEntry
@@ -624,10 +632,11 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
     {
         if (sourceDbId == destDbId)
             return (0, "Source and destination must be different databases.");
-        if (!string.Equals(entityCode, EntityCodes.Account, StringComparison.OrdinalIgnoreCase))
-            return (0, "Delete is only supported for accounts.");
+        if (!PartnerSyncRules.IsPartyEntity(entityCode)
+            && !string.Equals(entityCode, EntityCodes.Account, StringComparison.OrdinalIgnoreCase))
+            return (0, "Delete is only supported for customer, supplier, and account.");
         if (mappingId <= 0)
-            return (0, "Mapping id is required for account delete.");
+            return (0, "Mapping id is required for delete.");
 
         var source = await _registry.GetAsync(sourceDbId, cancellationToken).ConfigureAwait(false);
         var dest = await _registry.GetAsync(destDbId, cancellationToken).ConfigureAwait(false);
@@ -638,12 +647,13 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
 
         var code = (masterCode ?? "").Trim();
         if (code.Length == 0)
-            return (0, "Account code is required for delete.");
+            return (0, "Code is required for delete.");
 
+        var destEntity = PartnerSyncRules.ResolveTargetEntity(source, dest, entityCode);
         var payloadObj = new MasterDeletePayload { Code = code, MappingId = mappingId };
         var payload = JsonSerializer.Serialize(payloadObj);
         var idem = IdempotencyKey.ForMasterData(
-            source!.DbCode, dest!.DbCode, entityCode, EntityCodes.Account, code,
+            source!.DbCode, dest!.DbCode, entityCode, destEntity, code,
             IdempotencyKey.ContentHash(payload + "|DEL"));
 
         var jobId = (await _queue.EnqueueAsync(new SyncJob
@@ -654,7 +664,8 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
             EntityCode = entityCode,
             PayloadJson = payload,
             IdemKey = idem,
-            CreatedBy = user
+            CreatedBy = user,
+            Priority = PartnerSyncRules.IsPartyEntity(entityCode) ? PartnerSyncRules.PartyPushPriority : 0
         }, cancellationToken).ConfigureAwait(false)).JobId;
 
         await _audit.WriteAsync(new AuditEntry
@@ -1268,7 +1279,10 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
     {
         var payload = ParsePayload(job.PayloadJson);
         var record = payload.Record;
+        var sourceEntity = string.IsNullOrWhiteSpace(payload.SourceEntity) ? job.EntityCode : payload.SourceEntity;
+        var destEntity = string.IsNullOrWhiteSpace(payload.DestEntity) ? sourceEntity : payload.DestEntity;
         var dest = await _registry.GetAsync(job.DestDbId, cancellationToken).ConfigureAwait(false);
+        var source = await _registry.GetAsync(job.SourceDbId, cancellationToken).ConfigureAwait(false);
         var v = _validation.ValidateDatabase(dest, "Destination");
         if (!v.Ok)
         {
@@ -1277,23 +1291,37 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
             return;
         }
 
-        var destChart = await _read.GetGlChartAsync(dest!, cancellationToken).ConfigureAwait(false);
-        var destRow = destChart.FirstOrDefault(a =>
-            string.Equals((a.Code ?? "").Trim(), (record.Code ?? "").Trim(), StringComparison.OrdinalIgnoreCase));
-        if (destRow is null)
+        var stamp = $"JOB-{job.JobId}";
+        var destDocKey = 0;
+        var destParent = 0;
+        if (string.Equals(destEntity, EntityCodes.Account, StringComparison.OrdinalIgnoreCase))
+        {
+            var destChart = await _read.GetGlChartAsync(dest!, cancellationToken).ConfigureAwait(false);
+            var destRow = destChart.FirstOrDefault(a =>
+                string.Equals((a.Code ?? "").Trim(), (record.Code ?? "").Trim(), StringComparison.OrdinalIgnoreCase));
+            if (destRow is null)
+            {
+                await _queue.CompleteAsync(job.JobId, JobStatuses.Failed,
+                    $"Account {record.Code} is missing on destination; create pass will handle it.",
+                    cancellationToken).ConfigureAwait(false);
+                return;
+            }
+            destDocKey = destRow.DocKey;
+            destParent = GlAccountMapper.ResolveDestParentDocKey(GlAccountMapper.ParentCodeOf(record), destChart);
+            record.Fields[GlAccountMapper.FieldDestParent] = destParent.ToString(CultureInfo.InvariantCulture);
+        }
+        else if (!await _read.MasterExistsByCodeAsync(dest!, destEntity, record.Code, cancellationToken).ConfigureAwait(false))
         {
             await _queue.CompleteAsync(job.JobId, JobStatuses.Failed,
-                $"Account {record.Code} is missing on destination; create pass will handle it.",
+                $"{destEntity} {record.Code} is missing on destination; create pass will handle it.",
                 cancellationToken).ConfigureAwait(false);
             return;
         }
 
-        var parentCode = GlAccountMapper.ParentCodeOf(record);
-        var destParent = GlAccountMapper.ResolveDestParentDocKey(parentCode, destChart);
-        var stamp = $"JOB-{job.JobId}";
-        var write = await _write.UpdateMasterAsync(
-            dest!, EntityCodes.Account, record, stamp, destRow.DocKey, destParent, cancellationToken)
-            .ConfigureAwait(false);
+        var write = await WriteWithFirebirdFallbackAsync(
+            () => _write.UpdateMasterAsync(dest!, destEntity, record, stamp, destDocKey, destParent, cancellationToken, source, sourceEntity),
+            () => UpdateViaFirebirdAsync(dest!, destEntity, record, stamp, source, sourceEntity, cancellationToken),
+            job, destEntity, record.Code, cancellationToken).ConfigureAwait(false);
 
         if (!write.Success)
         {
@@ -1303,7 +1331,7 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
         }
 
         var mapping = await _mapping.FindBySourceAsync(
-            job.SourceDbId, job.DestDbId, EntityCodes.Account, record.Code, cancellationToken)
+            job.SourceDbId, job.DestDbId, sourceEntity, record.Code, cancellationToken)
             .ConfigureAwait(false);
         if (mapping is not null)
             await _mapping.TouchLastSyncAtAsync(mapping.MappingId, cancellationToken).ConfigureAwait(false);
@@ -1316,7 +1344,7 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
             UserEmail = job.CreatedBy,
             Action = "MASTER_UPDATE_DONE",
             DbId = job.DestDbId,
-            Entity = EntityCodes.Account,
+            Entity = destEntity,
             RecordId = record.Code,
             Result = "SUCCESS"
         }, cancellationToken).ConfigureAwait(false);
@@ -1344,6 +1372,7 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
         }
 
         var dest = await _registry.GetAsync(job.DestDbId, cancellationToken).ConfigureAwait(false);
+        var source = await _registry.GetAsync(job.SourceDbId, cancellationToken).ConfigureAwait(false);
         var v = _validation.ValidateDatabase(dest, "Destination");
         if (!v.Ok)
         {
@@ -1352,8 +1381,14 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
             return;
         }
 
-        var write = await _write.DeleteMasterAsync(dest!, EntityCodes.Account, code, cancellationToken)
-            .ConfigureAwait(false);
+        var sourceEntity = string.IsNullOrWhiteSpace(job.EntityCode) ? EntityCodes.Account : job.EntityCode;
+        var destEntity = PartnerSyncRules.ResolveTargetEntity(source, dest, sourceEntity);
+
+        var write = await WriteWithFirebirdFallbackAsync(
+            () => _write.DeleteMasterAsync(dest!, destEntity, code, cancellationToken),
+            () => DeleteViaFirebirdAsync(dest!, destEntity, code, cancellationToken),
+            job, destEntity, code, cancellationToken).ConfigureAwait(false);
+
         if (!write.Success)
         {
             await _queue.CompleteAsync(job.JobId, JobStatuses.Failed, write.Message, cancellationToken)
@@ -1370,7 +1405,7 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
             UserEmail = job.CreatedBy,
             Action = "MASTER_DELETE_DONE",
             DbId = job.DestDbId,
-            Entity = EntityCodes.Account,
+            Entity = destEntity,
             RecordId = code,
             Result = "SUCCESS"
         }, cancellationToken).ConfigureAwait(false);
@@ -1387,32 +1422,61 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
         RegisteredDatabase? source,
         string sourceEntity,
         SyncJob job,
+        CancellationToken cancellationToken) =>
+        await WriteWithFirebirdFallbackAsync(
+            () => writer.CreateMasterAsync(dest, destEntity, record, stamp, source, sourceEntity, cancellationToken),
+            () => CreateViaFirebirdAsync(dest, destEntity, record, stamp, source, sourceEntity, cancellationToken),
+            job, destEntity, record.Code, cancellationToken).ConfigureAwait(false);
+
+    private Task<WriteResult> CreateViaFirebirdAsync(
+        RegisteredDatabase dest, string destEntity, MasterRecord record, string stamp,
+        RegisteredDatabase? source, string sourceEntity, CancellationToken cancellationToken)
+    {
+        if (PartnerSyncRules.IsPartyEntity(destEntity))
+            return _partyFirebirdInsert.CreateAsync(dest, destEntity, record, stamp, source, sourceEntity, cancellationToken);
+        if (string.Equals(destEntity, EntityCodes.Account, StringComparison.OrdinalIgnoreCase))
+            return _accountFirebirdInsert.CreateAsync(dest, record, cancellationToken);
+        return Task.FromResult(new WriteResult { Success = false, Message = $"No Firebird create for {destEntity}." });
+    }
+
+    private Task<WriteResult> UpdateViaFirebirdAsync(
+        RegisteredDatabase dest, string destEntity, MasterRecord record, string stamp,
+        RegisteredDatabase? source, string sourceEntity, CancellationToken cancellationToken)
+    {
+        if (PartnerSyncRules.IsPartyEntity(destEntity))
+            return _partyFirebirdMutate.UpdateAsync(dest, destEntity, record, stamp, source, sourceEntity, cancellationToken);
+        if (string.Equals(destEntity, EntityCodes.Account, StringComparison.OrdinalIgnoreCase))
+            return _accountFirebirdMutate.UpdateAsync(dest, record, cancellationToken);
+        return Task.FromResult(new WriteResult { Success = false, Message = $"No Firebird update for {destEntity}." });
+    }
+
+    private Task<WriteResult> DeleteViaFirebirdAsync(
+        RegisteredDatabase dest, string destEntity, string code, CancellationToken cancellationToken)
+    {
+        if (PartnerSyncRules.IsPartyEntity(destEntity))
+            return _partyFirebirdMutate.DeleteAsync(dest, destEntity, code, cancellationToken);
+        if (string.Equals(destEntity, EntityCodes.Account, StringComparison.OrdinalIgnoreCase))
+            return _accountFirebirdMutate.DeleteAsync(dest, code, cancellationToken);
+        return Task.FromResult(new WriteResult { Success = false, Message = $"No Firebird delete for {destEntity}." });
+    }
+
+    private async Task<WriteResult> WriteWithFirebirdFallbackAsync(
+        Func<Task<WriteResult>> apiCall,
+        Func<Task<WriteResult>> firebirdCall,
+        SyncJob job,
+        string entity,
+        string? recordId,
         CancellationToken cancellationToken)
     {
-        var write = await writer.CreateMasterAsync(dest, destEntity, record, stamp, source, sourceEntity, cancellationToken)
-            .ConfigureAwait(false);
+        var write = await apiCall().ConfigureAwait(false);
         if (write.Success || !IsApiTimeout(write.Message) || job.DryRun)
             return write;
 
-        write = await writer.CreateMasterAsync(dest, destEntity, record, stamp, source, sourceEntity, cancellationToken)
-            .ConfigureAwait(false);
+        write = await apiCall().ConfigureAwait(false);
         if (write.Success || !IsApiTimeout(write.Message) || !_sync.PartyFirebirdInsertFallbackEnabled)
             return write;
 
-        if (PartnerSyncRules.IsPartyEntity(destEntity))
-        {
-            write = await _partyFirebirdInsert.CreateAsync(
-                dest, destEntity, record, stamp, source, sourceEntity, cancellationToken).ConfigureAwait(false);
-        }
-        else if (string.Equals(destEntity, EntityCodes.Account, StringComparison.OrdinalIgnoreCase))
-        {
-            write = await _accountFirebirdInsert.CreateAsync(dest, record, cancellationToken).ConfigureAwait(false);
-        }
-        else
-        {
-            return write;
-        }
-
+        write = await firebirdCall().ConfigureAwait(false);
         if (!write.Success)
             return write;
 
@@ -1420,9 +1484,9 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
         {
             UserEmail = job.CreatedBy,
             Action = "MASTER_FB_FALLBACK",
-            DbId = job.DestDbId > 0 ? job.DestDbId : dest.DbId,
-            Entity = destEntity,
-            RecordId = record.Code,
+            DbId = job.DestDbId,
+            Entity = entity,
+            RecordId = recordId ?? "",
             Result = "SUCCESS",
             RequestId = job.JobId.ToString(CultureInfo.InvariantCulture)
         }, cancellationToken).ConfigureAwait(false);

@@ -10,9 +10,8 @@ using SqlAccountSync.Services.Sync;
 namespace SqlAccountSync.Services.Accounts;
 
 /// <summary>
-/// Finds ACCOUNT codes present on MASTER/BOTH but missing on linked subs,
-/// then enqueues create-missing push jobs (parents-first). Also mirrors
-/// field updates and tracked deletes when enabled.
+/// Account auto update/delete only (creates are handled by MasterMissingAutoPushService).
+/// Mirrors field updates and tracked deletes when Sync options enable them.
 /// </summary>
 public interface IAccountAutoPushService
 {
@@ -123,8 +122,6 @@ public sealed class AccountAutoPushService : IAccountAutoPushService
         }
 
         var queued = 0;
-        queued += await PushMissingAsync(master, dest, masterChart, destChart, messages, cancellationToken)
-            .ConfigureAwait(false);
 
         if (_options.AccountAutoUpdateEnabled)
             queued += await PushChangedAsync(master, dest, masterChart, destChart, messages, cancellationToken)
@@ -135,48 +132,6 @@ public sealed class AccountAutoPushService : IAccountAutoPushService
                 .ConfigureAwait(false);
 
         return queued;
-    }
-
-    private async Task<int> PushMissingAsync(
-        RegisteredDatabase master,
-        RegisteredDatabase dest,
-        List<GlAccountRow> masterChart,
-        List<GlAccountRow> destChart,
-        List<string> messages,
-        CancellationToken cancellationToken)
-    {
-        var destCodes = destChart
-            .Select(a => (a.Code ?? "").Trim())
-            .Where(c => c.Length > 0)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        var missing = masterChart
-            .Select(a => (a.Code ?? "").Trim())
-            .Where(c => c.Length > 0 && !destCodes.Contains(c))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        if (missing.Count == 0)
-            return 0;
-
-        var ordered = GlAccountMapper.OrderCodesParentsFirst(missing, masterChart);
-        var (q, failed, batchMsgs) = await _sync.EnqueueMasterBatchAsync(
-            master.DbId,
-            [dest.DbId],
-            EntityCodes.Account,
-            ordered,
-            dryRun: false,
-            user: "system:account-auto-push",
-            cancellationToken,
-            reviveCancelled: false).ConfigureAwait(false);
-
-        messages.Add($"{master.DbCode}→{dest.DbCode}: missing={ordered.Count}, queued={q}, failed={failed}");
-        if (failed > 0)
-            messages.AddRange(batchMsgs.Take(5));
-
-        _logger.LogInformation(
-            "Account auto-push {Src}→{Dest}: {Missing} missing, queued {Queued}, failed {Failed}",
-            master.DbCode, dest.DbCode, ordered.Count, q, failed);
-        return q;
     }
 
     private async Task<int> PushChangedAsync(

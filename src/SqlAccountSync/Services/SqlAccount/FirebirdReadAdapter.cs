@@ -92,7 +92,10 @@ public interface ISqlAccountReadAdapter
 public interface ISqlAccountWriteAdapter
 {
     Task<WriteResult> CreateMasterAsync(RegisteredDatabase db, string targetEntityCode, MasterRecord record, string txnStamp, RegisteredDatabase? sourceDb = null, string? sourceEntityCode = null, CancellationToken cancellationToken = default);
-    Task<WriteResult> UpdateMasterAsync(RegisteredDatabase db, string targetEntityCode, MasterRecord record, string txnStamp, int destDocKey, int destParentDocKey, CancellationToken cancellationToken = default);
+    Task<WriteResult> UpdateMasterAsync(
+        RegisteredDatabase db, string targetEntityCode, MasterRecord record, string txnStamp,
+        int destDocKey, int destParentDocKey, CancellationToken cancellationToken = default,
+        RegisteredDatabase? sourceDb = null, string? sourceEntityCode = null);
     Task<WriteResult> DeleteMasterAsync(RegisteredDatabase db, string targetEntityCode, string code, CancellationToken cancellationToken = default);
     Task<WriteResult> CreateDocumentAsync(RegisteredDatabase db, string apiPath, DocumentHeader document, string txnStamp, CancellationToken cancellationToken = default);
 }
@@ -1191,6 +1194,7 @@ ORDER BY p.CODE";
                     ("creditterm", ["CREDITTERM"]),
                     ("creditlimit", ["CREDITLIMIT"]),
                     ("overduelimit", ["OVERDUELIMIT"]),
+                    ("outstanding", ["OUTSTANDING"]),
                     ("statementtype", ["STATEMENTTYPE"]),
                     ("currencycode", ["CURRENCYCODE", "CURRENCY"]),
                     ("agingon", ["AGINGON"]),

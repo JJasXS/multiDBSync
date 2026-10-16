@@ -1,12 +1,17 @@
+using System.Globalization;
+using Microsoft.Extensions.Options;
 using SqlAccountSync.Helpers;
 using SqlAccountSync.Models;
+using SqlAccountSync.Options;
 using SqlAccountSync.Services.Databases;
+using SqlAccountSync.Services.Mapping;
 using SqlAccountSync.Services.SqlAccount;
 
 namespace SqlAccountSync.Services.Sync;
 
 /// <summary>
-/// Queues create jobs for master codes that linked subs do not have yet.
+/// Queues create (and when enabled update/delete) jobs for master party/account codes
+/// that linked subs need, driven by Push-page auto-push checkboxes.
 /// </summary>
 public interface IMasterMissingAutoPushService
 {
@@ -20,6 +25,8 @@ public sealed class MasterMissingAutoPushService : IMasterMissingAutoPushService
     private readonly IDatabaseRegistry _registry;
     private readonly ISqlAccountReadAdapter _read;
     private readonly ISyncOrchestrator _sync;
+    private readonly IMappingService _mapping;
+    private readonly SyncOptions _options;
     private readonly ILogger<MasterMissingAutoPushService> _logger;
 
     public MasterMissingAutoPushService(
@@ -27,12 +34,16 @@ public sealed class MasterMissingAutoPushService : IMasterMissingAutoPushService
         IDatabaseRegistry registry,
         ISqlAccountReadAdapter read,
         ISyncOrchestrator sync,
+        IMappingService mapping,
+        IOptions<SyncOptions> options,
         ILogger<MasterMissingAutoPushService> logger)
     {
         _settings = settings;
         _registry = registry;
         _read = read;
         _sync = sync;
+        _mapping = mapping;
+        _options = options.Value;
         _logger = logger;
     }
 
@@ -106,8 +117,26 @@ public sealed class MasterMissingAutoPushService : IMasterMissingAutoPushService
         {
             if (!masterCodes.TryGetValue(entity, out var source) || source.Count == 0)
                 continue;
+
+            // Account create stays here; account update/delete runs in AccountAutoPushService.
+            if (string.Equals(entity, EntityCodes.Account, StringComparison.OrdinalIgnoreCase))
+            {
+                queued += await PushMissingAsync(master, dest, entity, source, messages, cancellationToken)
+                    .ConfigureAwait(false);
+                continue;
+            }
+
+            if (!PartnerSyncRules.IsPartyEntity(entity))
+                continue;
+
             queued += await PushMissingAsync(master, dest, entity, source, messages, cancellationToken)
                 .ConfigureAwait(false);
+            if (_options.AccountAutoUpdateEnabled)
+                queued += await PushPartyChangedAsync(master, dest, entity, source, messages, cancellationToken)
+                    .ConfigureAwait(false);
+            if (_options.AccountAutoDeleteEnabled)
+                queued += await PushPartyDeletedAsync(master, dest, entity, source, messages, cancellationToken)
+                    .ConfigureAwait(false);
         }
 
         return queued;
@@ -156,6 +185,125 @@ public sealed class MasterMissingAutoPushService : IMasterMissingAutoPushService
         return queued;
     }
 
+    private async Task<int> PushPartyChangedAsync(
+        RegisteredDatabase master,
+        RegisteredDatabase dest,
+        string entity,
+        HashSet<string> sourceCodes,
+        List<string> messages,
+        CancellationToken cancellationToken)
+    {
+        HashSet<string> destCodes;
+        try
+        {
+            destCodes = await ReadCodesAsync(dest, entity, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Auto-update: failed reading {Entity} from {Db}", entity, dest.DbCode);
+            return 0;
+        }
+
+        var shared = sourceCodes.Where(destCodes.Contains).Take(Math.Max(1, _options.AccountAutoDeleteMaxPerCycle * 4)).ToList();
+        if (shared.Count == 0)
+            return 0;
+
+        var sourceByCode = new Dictionary<string, MasterRecord>(StringComparer.OrdinalIgnoreCase);
+        var destByCode = new Dictionary<string, MasterRecord>(StringComparer.OrdinalIgnoreCase);
+        foreach (var code in shared)
+        {
+            var src = await _read.GetPartyDetailAsync(master, entity, code, cancellationToken).ConfigureAwait(false);
+            var dst = await _read.GetPartyDetailAsync(dest, entity, code, cancellationToken).ConfigureAwait(false);
+            if (src is not null)
+                sourceByCode[code] = src;
+            if (dst is not null)
+                destByCode[code] = dst;
+        }
+
+        var changed = PartyFieldComparer.CollectDifferingCodes(sourceByCode, destByCode)
+            .Take(Math.Max(1, _options.AccountAutoDeleteMaxPerCycle))
+            .ToList();
+        if (changed.Count == 0)
+            return 0;
+
+        var queued = 0;
+        var failed = 0;
+        foreach (var code in changed)
+        {
+            var (jobId, msg) = await _sync.EnqueueMasterUpdateAsync(
+                master.DbId, dest.DbId, entity, code, "system:auto-push", cancellationToken)
+                .ConfigureAwait(false);
+            if (jobId > 0)
+                queued++;
+            else
+            {
+                failed++;
+                if (failed <= 3)
+                    messages.Add($"{master.DbCode}→{dest.DbCode} update {code}: {msg}");
+            }
+        }
+
+        messages.Add($"{master.DbCode}→{dest.DbCode} {entity}: changed={changed.Count}, queued={queued}, failed={failed}");
+        return queued;
+    }
+
+    private async Task<int> PushPartyDeletedAsync(
+        RegisteredDatabase master,
+        RegisteredDatabase dest,
+        string entity,
+        HashSet<string> masterCodes,
+        List<string> messages,
+        CancellationToken cancellationToken)
+    {
+        var maps = await _mapping.ListAsync(master.DbId, dest.DbId, entity, cancellationToken).ConfigureAwait(false);
+        var candidates = maps
+            .Where(m => string.Equals(m.Status, MappingStatuses.Mapped, StringComparison.OrdinalIgnoreCase))
+            .Where(m => !string.IsNullOrWhiteSpace(m.SubKey))
+            .Where(m => !masterCodes.Contains((m.MasterCode ?? "").Trim()))
+            .Take(Math.Max(1, _options.AccountAutoDeleteMaxPerCycle))
+            .ToList();
+        if (candidates.Count == 0)
+            return 0;
+
+        var queued = 0;
+        var failed = 0;
+        var skipped = 0;
+        foreach (var map in candidates)
+        {
+            var code = (map.MasterCode ?? "").Trim();
+            if (await _read.GlAccountHasActivityAsync(dest, code, cancellationToken).ConfigureAwait(false))
+            {
+                skipped++;
+                messages.Add($"{master.DbCode}→{dest.DbCode} delete {code}: skipped (GL has activity)");
+                continue;
+            }
+
+            var detail = await _read.GetPartyDetailAsync(dest, entity, code, cancellationToken).ConfigureAwait(false);
+            if (HasOutstandingBalance(detail))
+            {
+                skipped++;
+                messages.Add($"{master.DbCode}→{dest.DbCode} delete {code}: skipped (outstanding balance)");
+                continue;
+            }
+
+            var (jobId, msg) = await _sync.EnqueueMasterDeleteAsync(
+                master.DbId, dest.DbId, entity, code, map.MappingId, "system:auto-push", cancellationToken)
+                .ConfigureAwait(false);
+            if (jobId > 0)
+                queued++;
+            else
+            {
+                failed++;
+                if (failed <= 3)
+                    messages.Add($"{master.DbCode}→{dest.DbCode} delete {code}: {msg}");
+            }
+        }
+
+        messages.Add(
+            $"{master.DbCode}→{dest.DbCode} {entity}: delete-candidates={candidates.Count}, queued={queued}, skipped={skipped}, failed={failed}");
+        return queued;
+    }
+
     private async Task<Dictionary<string, HashSet<string>>> LoadCodesAsync(
         RegisteredDatabase db,
         IReadOnlyList<string> entities,
@@ -199,4 +347,14 @@ public sealed class MasterMissingAutoPushService : IMasterMissingAutoPushService
             .Select(code => (code ?? "").Trim())
             .Where(code => code.Length > 0)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    private static bool HasOutstandingBalance(MasterRecord? detail)
+    {
+        if (detail is null)
+            return false;
+        if (!detail.Fields.TryGetValue("outstanding", out var raw) || string.IsNullOrWhiteSpace(raw))
+            return false;
+        return decimal.TryParse(raw.Trim(), NumberStyles.Number, CultureInfo.InvariantCulture, out var amt)
+            && Math.Abs(amt) > 0.0001m;
+    }
 }

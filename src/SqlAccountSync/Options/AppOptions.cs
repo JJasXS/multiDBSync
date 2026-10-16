@@ -66,11 +66,14 @@ public sealed class SyncOptions
     /// Set 0 to disable. Default 120 (2 minutes).
     /// </summary>
     public int MaxQueueWaitSeconds { get; set; } = 120;
-    /// <summary>When true, auto-push also PUTs accounts whose syncable fields differ on the sub.</summary>
+    /// <summary>
+    /// When true, auto-push also PUTs customer/supplier/account rows whose syncable fields differ on the sub
+    /// (for entities whose Push checkbox is on).
+    /// </summary>
     public bool AccountAutoUpdateEnabled { get; set; } = true;
     /// <summary>
-    /// When true, auto-push DELETEs accounts on the sub that we previously created
-    /// (SYNC_MAPPING with SubKey set) and that no longer exist on master.
+    /// When true, auto-push DELETEs mapped customer/supplier/account rows on the sub that no longer
+    /// exist on master (for entities whose Push checkbox is on).
     /// </summary>
     public bool AccountAutoDeleteEnabled { get; set; } = true;
     /// <summary>Max delete jobs enqueued per master→sub pair per cycle.</summary>
@@ -82,8 +85,8 @@ public sealed class SyncOptions
     /// </summary>
     public int WriteHttpTimeoutSeconds { get; set; } = 30;
     /// <summary>
-    /// When true, after SQL Acc API create times out (and one immediate retry),
-    /// insert customer/supplier/account directly into the destination Firebird DB.
+    /// When true, after SQL Acc API create/update/delete times out (and one immediate retry),
+    /// write customer/supplier/account directly into the destination Firebird DB.
     /// </summary>
     public bool PartyFirebirdInsertFallbackEnabled { get; set; } = true;
     /// <summary>

@@ -125,6 +125,8 @@ builder.Services.AddScoped<ISqlAccountReadAdapter, FirebirdReadAdapter>();
 builder.Services.AddScoped<IItemPrerequisiteService, ItemPrerequisiteService>();
 builder.Services.AddScoped<IFirebirdPartyInsert, FirebirdPartyInsert>();
 builder.Services.AddScoped<IFirebirdAccountInsert, FirebirdAccountInsert>();
+builder.Services.AddScoped<IFirebirdPartyMutate, FirebirdPartyMutate>();
+builder.Services.AddScoped<IFirebirdAccountMutate, FirebirdAccountMutate>();
 builder.Services.AddScoped<ISqlAccountWriteAdapter>(sp => sp.GetRequiredService<SqlAccountApiWriteAdapter>());
 builder.Services.AddScoped<IMappingService, MappingService>();
 builder.Services.AddScoped<IValidationService, ValidationService>();
