@@ -1,5 +1,7 @@
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using SqlAccountSync.Data;
+using SqlAccountSync.Helpers;
 using SqlAccountSync.Models;
 using SqlAccountSync.Options;
 using SqlAccountSync.Services.Audit;
@@ -68,6 +70,9 @@ public class IndexModel : SyncPageModel
     public bool CentralConfigured { get; set; }
     public int? MaxDatabases { get; set; }
     public bool DatabaseCapReached => MaxDatabases is int cap && Databases.Count >= cap;
+    public QueueHealthSnapshot QueueHealth { get; set; } = new();
+    public FlashToastModel? FlashToast { get; set; }
+    public int ActiveJobCount => QueueHealth.Pending + QueueHealth.Processing;
 
     public async Task OnGetAsync()
     {
@@ -75,6 +80,7 @@ public class IndexModel : SyncPageModel
         var registryTask = _registry.ReadDashboardRegistryAsync();
         var maxTask = _tenants.GetMaxDatabasesAsync(tenant);
         var jobsTask = _jobs.ListAsync(take: 8);
+        var healthTask = _jobs.GetHealthAsync();
         var mappedTask = _mapping.CountMappedAsync();
         var conflictsTask = _mapping.ConflictsAsync();
         var rulesTask = _sync.CountEnabledRulesAsync();
@@ -87,7 +93,7 @@ public class IndexModel : SyncPageModel
             : Task.FromResult<object?>(0);
 
         await Task.WhenAll(
-            registryTask, maxTask, jobsTask,
+            registryTask, maxTask, jobsTask, healthTask,
             mappedTask, conflictsTask, rulesTask, txnsTask, errorsTask,
             auditTask, usersTask, settingsTask);
 
@@ -98,6 +104,7 @@ public class IndexModel : SyncPageModel
         Links = registry.Links;
         MaxDatabases = await maxTask;
         RecentJobs = await jobsTask;
+        QueueHealth = await healthTask;
         MappedCount = await mappedTask;
         Conflicts = await conflictsTask;
         EnabledRuleCount = await rulesTask;
@@ -106,5 +113,18 @@ public class IndexModel : SyncPageModel
         RecentAudit = await auditTask;
         Users = await usersTask;
         SettingsKeyCount = Convert.ToInt32(await settingsTask ?? 0);
+    }
+
+    public async Task<IActionResult> OnPostStopAllJobsAsync()
+    {
+        if (!CanOperate)
+            return Forbid();
+
+        var stopped = await _jobs.CancelAllActiveAsync().ConfigureAwait(false);
+        FlashToast = stopped == 0
+            ? FlashToasts.Ok("No active jobs to stop.")
+            : FlashToasts.Ok($"Stopped {stopped} job{(stopped == 1 ? "" : "s")}.");
+        await OnGetAsync().ConfigureAwait(false);
+        return Page();
     }
 }

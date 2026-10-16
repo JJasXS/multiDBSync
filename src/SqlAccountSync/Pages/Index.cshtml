@@ -8,6 +8,10 @@
     var showMappingsUi = FeatureOptions.Value.ShowMappingsUi;
     var showSyncConfigUi = FeatureOptions.Value.ShowSyncConfigUi;
 }
+@if (Model.FlashToast is not null)
+{
+    <partial name="_FlashToast" model="Model.FlashToast" />
+}
 <div class="stats">
     <div class="stat"><div class="n">@Model.Databases.Count</div><div class="l">Databases</div></div>
     <div class="stat"><div class="n">@Model.Links.Count</div><div class="l">Relationships</div></div>
@@ -571,7 +575,33 @@
 
         <div class="card">
             <div class="card-head">
-                <h3>Synchronization jobs</h3>
+                <div>
+                    <h3>Synchronization jobs</h3>
+                    @if (Model.CentralConfigured)
+                    {
+                        <p class="muted" style="margin:0.25rem 0 0;">
+                            Pending @Model.QueueHealth.Pending · Processing @Model.QueueHealth.Processing
+                            @if (Model.QueueHealth.Failed > 0)
+                            {
+                                <text> · Failed @Model.QueueHealth.Failed</text>
+                            }
+                        </p>
+                    }
+                </div>
+                @if (Model.CanOperate && Model.CentralConfigured)
+                {
+                    <form method="post" asp-page-handler="StopAllJobs">
+                        <button type="submit"
+                                class="btn small secondary"
+                                @(Model.ActiveJobCount == 0 ? "disabled" : null)
+                                data-confirm="Stop all pending, retrying, and processing jobs? Failed history is kept."
+                                data-confirm-title="Stop all jobs"
+                                data-confirm-ok="Stop all"
+                                data-confirm-danger>
+                            Stop all
+                        </button>
+                    </form>
+                }
             </div>
             @if (!Model.CentralConfigured)
             {

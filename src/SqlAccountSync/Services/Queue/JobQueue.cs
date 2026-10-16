@@ -17,6 +17,8 @@ public interface IJobQueue
     Task<List<SyncJob>> ListAsync(string? status = null, int take = 200, CancellationToken cancellationToken = default);
     Task<SyncJob?> GetAsync(int jobId, CancellationToken cancellationToken = default);
     Task CancelAsync(int jobId, CancellationToken cancellationToken = default);
+    /// <summary>Cancel every PENDING, RETRYING, and PROCESSING job. Returns how many rows were updated.</summary>
+    Task<int> CancelAllActiveAsync(CancellationToken cancellationToken = default);
     /// <summary>Cancel PENDING jobs that have never started and have waited longer than MaxQueueWaitSeconds.</summary>
     Task<int> CancelUnstartedWaitingAsync(CancellationToken cancellationToken = default);
     /// <summary>Reclaim PROCESSING jobs whose LOCKEDAT is older than the configured lease.</summary>
@@ -156,19 +158,21 @@ WHERE JOBID=@JOBID AND STATUS IN ('PENDING','RETRYING') AND NEXTRUNAT<=CURRENT_T
         if (status is JobStatuses.Failed or JobStatuses.Retrying)
         {
             var job = await GetAsync(jobId, cancellationToken).ConfigureAwait(false);
+            if (job?.Status == JobStatuses.Cancelled)
+                return;
             status = JobLeaseRules.ResolveCompleteStatus(status, job?.Attempts ?? 0, job?.MaxAttempts ?? 0);
             var delaySeconds = job is null ? 30 : JobLeaseRules.BackoffSeconds(job.Attempts);
             await _db.ExecuteAsync(@"
 UPDATE SYNC_JOB SET STATUS=@STATUS, ERRORMESSAGE=@ERR, LOCKEDBY=NULL, LOCKEDAT=NULL,
 NEXTRUNAT=DATEADD(SECOND, @DELAY, CURRENT_TIMESTAMP)
-WHERE JOBID=@JOBID",
+WHERE JOBID=@JOBID AND STATUS<>'CANCELLED'",
                 new { STATUS = status, ERR = error ?? "", DELAY = delaySeconds, JOBID = jobId }, cancellationToken).ConfigureAwait(false);
             return;
         }
 
         await _db.ExecuteAsync(@"
 UPDATE SYNC_JOB SET STATUS=@STATUS, ERRORMESSAGE=@ERR, LOCKEDBY=NULL, LOCKEDAT=NULL
-WHERE JOBID=@JOBID",
+WHERE JOBID=@JOBID AND STATUS<>'CANCELLED'",
             new { STATUS = status, ERR = error ?? "", JOBID = jobId }, cancellationToken).ConfigureAwait(false);
     }
 
@@ -198,6 +202,19 @@ WHERE JOBID=@JOBID",
 UPDATE SYNC_JOB SET STATUS='CANCELLED', LOCKEDBY=NULL, LOCKEDAT=NULL
 WHERE JOBID=@JOBID AND STATUS IN ('PENDING','RETRYING','FAILED','PROCESSING')",
             new { JOBID = jobId }, cancellationToken);
+
+    public async Task<int> CancelAllActiveAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_db.IsConfigured)
+            return 0;
+
+        return await _db.ExecuteAsync(@"
+UPDATE SYNC_JOB
+SET STATUS='CANCELLED', LOCKEDBY=NULL, LOCKEDAT=NULL,
+    ERRORMESSAGE='Stopped by operator.'
+WHERE STATUS IN ('PENDING','RETRYING','PROCESSING')",
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
 
     public async Task<int> CancelUnstartedWaitingAsync(CancellationToken cancellationToken = default)
     {
