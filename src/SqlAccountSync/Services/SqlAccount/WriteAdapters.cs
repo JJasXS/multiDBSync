@@ -231,28 +231,42 @@ public sealed class SqlAccountApiWriteAdapter : ISqlAccountWriteAdapter
             request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
         }
 
-        using var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        if (!response.IsSuccessStatusCode)
+        try
         {
-            if (treatNotFoundAsSuccess && response.StatusCode == System.Net.HttpStatusCode.NotFound)
-                return new WriteResult { Success = true, Message = "Already absent." };
+            using var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                if (treatNotFoundAsSuccess && response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                    return new WriteResult { Success = true, Message = "Already absent." };
 
-            TryDumpFailedPost(relative, json ?? "", (int)response.StatusCode, body);
-            var detail = SummarizeApiError(body);
-            _logger.LogWarning("SQL API {Method} {Path} returned {Status}: {Body}",
-                method.Method, relative, (int)response.StatusCode, detail);
+                TryDumpFailedPost(relative, json ?? "", (int)response.StatusCode, body);
+                var detail = SummarizeApiError(body);
+                _logger.LogWarning("SQL API {Method} {Path} returned {Status}: {Body}",
+                    method.Method, relative, (int)response.StatusCode, detail);
+                return new WriteResult
+                {
+                    Success = false,
+                    Message = string.IsNullOrWhiteSpace(detail)
+                        ? $"SQL Accounting API returned {(int)response.StatusCode}."
+                        : EnhanceApiErrorMessage(detail, relative)
+                };
+            }
+
+            var (docKey, docNo) = ParseCreated(body);
+            return new WriteResult { Success = true, DocKey = docKey, DocNo = docNo, Message = successMessage };
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            var seconds = (int)Math.Max(1, _http.Timeout.TotalSeconds);
+            _logger.LogWarning("SQL API {Method} {Path} timed out after {Seconds}s",
+                method.Method, relative, seconds);
             return new WriteResult
             {
                 Success = false,
-                Message = string.IsNullOrWhiteSpace(detail)
-                    ? $"SQL Accounting API returned {(int)response.StatusCode}."
-                    : EnhanceApiErrorMessage(detail, relative)
+                Message = $"Request timed out after {seconds}s."
             };
         }
-
-        var (docKey, docNo) = ParseCreated(body);
-        return new WriteResult { Success = true, DocKey = docKey, DocNo = docNo, Message = successMessage };
     }
 
     private static string EnhanceApiErrorMessage(string detail, string path)

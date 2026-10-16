@@ -1036,7 +1036,7 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
                 enriched.Fields[GlAccountMapper.FieldDestParent] = "0";
             }
 
-            var blocked = await ClearUnusedPartyAccountAsync(dest!, destEntity, enriched.Code, writer, job.DryRun, cancellationToken)
+            var blocked = await ClearUnusedPartyAccountAsync(dest!, destEntity, enriched.Code, job.DryRun, cancellationToken)
                 .ConfigureAwait(false);
             if (blocked is not null)
             {
@@ -1045,6 +1045,13 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
             }
 
             write = await writer.CreateMasterAsync(dest!, destEntity, enriched, stamp, src, sourceEntity, cancellationToken).ConfigureAwait(false);
+            if (!write.Success
+                && PartnerSyncRules.IsPartyEntity(destEntity)
+                && IsApiTimeout(write.Message))
+            {
+                write = await writer.CreateMasterAsync(dest!, destEntity, enriched, stamp, src, sourceEntity, cancellationToken)
+                    .ConfigureAwait(false);
+            }
             if (!write.Success && !string.IsNullOrWhiteSpace(prereqDiagnosis))
                 write = new WriteResult { Success = false, Message = write.Message + " " + prereqDiagnosis };
 
@@ -1376,7 +1383,7 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
 
 
     private async Task<string?> ClearUnusedPartyAccountAsync(
-        RegisteredDatabase dest, string destEntity, string code, ISqlAccountWriteAdapter writer, bool dryRun,
+        RegisteredDatabase dest, string destEntity, string code, bool dryRun,
         CancellationToken cancellationToken)
     {
         if (dryRun || !PartnerSyncRules.IsPartyEntity(destEntity))
@@ -1391,10 +1398,16 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
         if (await _read.GlAccountHasActivityAsync(dest, key, cancellationToken).ConfigureAwait(false))
             return $"Account code {key} already exists on {dest.DisplayName} and has postings, so this {destEntity.ToLowerInvariant()} cannot use that code.";
 
-        var deleted = await writer.DeleteMasterAsync(dest, EntityCodes.Account, key, cancellationToken).ConfigureAwait(false);
-        return deleted.Success
-            ? null
-            : $"Account code {key} already exists on {dest.DisplayName} and could not be removed: {deleted.Message}";
+        // Skip API DELETE /account (often hangs 30–100s). Fail fast so the operator can remove the unused GL.
+        return $"Account code {key} already exists unused on {dest.DisplayName}. Remove that GL account in SQL Account (or Accounts) before pushing this {destEntity.ToLowerInvariant()}.";
+    }
+
+    private static bool IsApiTimeout(string? message)
+    {
+        var m = message ?? "";
+        return m.Contains("timed out", StringComparison.OrdinalIgnoreCase)
+            || m.Contains("Request Timed Out", StringComparison.OrdinalIgnoreCase)
+            || m.Contains("504", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsGlCodeConflict(string? message) =>

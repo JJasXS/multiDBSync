@@ -84,8 +84,11 @@ catch
 }
 
 builder.Services.AddMemoryCache();
+var writeHttpTimeoutSeconds = Math.Clamp(
+    builder.Configuration.GetValue("Sync:WriteHttpTimeoutSeconds", 30), 5, 300);
 builder.Services.AddHttpClient<SqlAccountApiWriteAdapter>(client =>
 {
+    client.Timeout = TimeSpan.FromSeconds(writeHttpTimeoutSeconds);
     // SQL Accounting IntraWeb BFF rejects clients without a modern browser User-Agent (HTTP 500 HTML).
     client.DefaultRequestHeaders.UserAgent.ParseAdd(
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36");

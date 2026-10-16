@@ -77,6 +77,11 @@ public sealed class SyncOptions
     public int AccountAutoDeleteMaxPerCycle { get; set; } = 25;
     public int MaxAttempts { get; set; } = 5;
     /// <summary>
+    /// HttpClient timeout for SQL Accounting write API calls (POST/PUT/DELETE).
+    /// Default 30. Clamped to 5–300 at registration.
+    /// </summary>
+    public int WriteHttpTimeoutSeconds { get; set; } = 30;
+    /// <summary>
     /// Seconds a job may stay PROCESSING before the worker reclaims it as RETRYING (crash recovery).
     /// Default 900 (15 minutes). Clamped to 60–86400 at runtime.
     /// </summary>
