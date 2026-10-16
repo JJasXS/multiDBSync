@@ -119,6 +119,7 @@ public class ItemDestCodeLinkTests
                 new NoopErrorLogService(),
                 new NoopItemPrerequisiteService(),
                 new NoopFirebirdPartyInsert(),
+                new NoopFirebirdAccountInsert(),
                 Microsoft.Extensions.Options.Options.Create(new SyncOptions()));
         }
 
@@ -358,6 +359,15 @@ public class ItemDestCodeLinkTests
             string? sourceEntityCode,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(new WriteResult { Success = false, Message = "Firebird fallback disabled in tests." });
+    }
+
+    private sealed class NoopFirebirdAccountInsert : IFirebirdAccountInsert
+    {
+        public Task<WriteResult> CreateAsync(
+            RegisteredDatabase dest,
+            MasterRecord record,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new WriteResult { Success = false, Message = "Firebird account fallback disabled in tests." });
     }
 
     private sealed class NoopSecretResolver : ISecretResolver

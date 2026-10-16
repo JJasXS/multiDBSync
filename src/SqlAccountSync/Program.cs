@@ -124,6 +124,7 @@ builder.Services.AddScoped<IConnectionTestService, ConnectionTestService>();
 builder.Services.AddScoped<ISqlAccountReadAdapter, FirebirdReadAdapter>();
 builder.Services.AddScoped<IItemPrerequisiteService, ItemPrerequisiteService>();
 builder.Services.AddScoped<IFirebirdPartyInsert, FirebirdPartyInsert>();
+builder.Services.AddScoped<IFirebirdAccountInsert, FirebirdAccountInsert>();
 builder.Services.AddScoped<ISqlAccountWriteAdapter>(sp => sp.GetRequiredService<SqlAccountApiWriteAdapter>());
 builder.Services.AddScoped<IMappingService, MappingService>();
 builder.Services.AddScoped<IValidationService, ValidationService>();

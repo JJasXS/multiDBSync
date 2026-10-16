@@ -82,8 +82,8 @@ public sealed class SyncOptions
     /// </summary>
     public int WriteHttpTimeoutSeconds { get; set; } = 30;
     /// <summary>
-    /// When true, after SQL Acc API party create times out (and one immediate retry),
-    /// insert customer/supplier directly into the destination Firebird DB.
+    /// When true, after SQL Acc API create times out (and one immediate retry),
+    /// insert customer/supplier/account directly into the destination Firebird DB.
     /// </summary>
     public bool PartyFirebirdInsertFallbackEnabled { get; set; } = true;
     /// <summary>
