@@ -117,7 +117,9 @@ public class ItemDestCodeLinkTests
                 Queue,
                 new NoopAuditService(),
                 new NoopErrorLogService(),
-                new NoopItemPrerequisiteService());
+                new NoopItemPrerequisiteService(),
+                new NoopFirebirdPartyInsert(),
+                Microsoft.Extensions.Options.Options.Create(new SyncOptions()));
         }
 
         public SyncJob BuildJob(string code) => new()
@@ -310,6 +312,7 @@ public class ItemDestCodeLinkTests
         public Task<List<SyncJob>> ListAsync(string? status = null, int take = 200, CancellationToken cancellationToken = default) => Task.FromResult(new List<SyncJob>());
         public Task<SyncJob?> GetAsync(int jobId, CancellationToken cancellationToken = default) => Task.FromResult<SyncJob?>(null);
         public Task CancelAsync(int jobId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<int> CancelAllActiveAsync(CancellationToken cancellationToken = default) => Task.FromResult(0);
         public Task<int> CancelUnstartedWaitingAsync(CancellationToken cancellationToken = default) => Task.FromResult(0);
         public Task<int> ReclaimStaleProcessingAsync(CancellationToken cancellationToken = default) => Task.FromResult(0);
         public Task UnlockProcessingAsync(int jobId, CancellationToken cancellationToken = default) => Task.CompletedTask;
@@ -342,6 +345,19 @@ public class ItemDestCodeLinkTests
         public Task<List<PrerequisiteCheck>> CheckAsync(
             RegisteredDatabase dest, RegisteredDatabase? source, MasterRecord record, CancellationToken cancellationToken = default) =>
             Task.FromResult(new List<PrerequisiteCheck>());
+    }
+
+    private sealed class NoopFirebirdPartyInsert : IFirebirdPartyInsert
+    {
+        public Task<WriteResult> CreateAsync(
+            RegisteredDatabase dest,
+            string targetEntityCode,
+            MasterRecord record,
+            string txnStamp,
+            RegisteredDatabase? sourceDb,
+            string? sourceEntityCode,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new WriteResult { Success = false, Message = "Firebird fallback disabled in tests." });
     }
 
     private sealed class NoopSecretResolver : ISecretResolver

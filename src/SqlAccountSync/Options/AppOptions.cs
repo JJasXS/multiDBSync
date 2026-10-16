@@ -82,6 +82,11 @@ public sealed class SyncOptions
     /// </summary>
     public int WriteHttpTimeoutSeconds { get; set; } = 30;
     /// <summary>
+    /// When true, after SQL Acc API party create times out (and one immediate retry),
+    /// insert customer/supplier directly into the destination Firebird DB.
+    /// </summary>
+    public bool PartyFirebirdInsertFallbackEnabled { get; set; } = true;
+    /// <summary>
     /// Seconds a job may stay PROCESSING before the worker reclaims it as RETRYING (crash recovery).
     /// Default 900 (15 minutes). Clamped to 60–86400 at runtime.
     /// </summary>

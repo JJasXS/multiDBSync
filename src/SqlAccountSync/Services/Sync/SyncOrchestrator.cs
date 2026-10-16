@@ -1,25 +1,17 @@
 using System.Globalization;
 using System.Text.Json;
-
+using Microsoft.Extensions.Options;
 using SqlAccountSync.Data;
-
 using SqlAccountSync.Helpers;
-
 using SqlAccountSync.Models;
-
+using SqlAccountSync.Options;
 using SqlAccountSync.Services.Accounts;
 using SqlAccountSync.Services.Audit;
-
 using SqlAccountSync.Services.Databases;
-
 using SqlAccountSync.Services.Mapping;
-
 using SqlAccountSync.Services.Queue;
-
 using SqlAccountSync.Services.Items;
-
 using SqlAccountSync.Services.SqlAccount;
-
 using SqlAccountSync.Services.Validation;
 
 
@@ -99,6 +91,8 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
     private readonly IErrorLogService _errors;
 
     private readonly IItemPrerequisiteService _itemPrereqs;
+    private readonly IFirebirdPartyInsert _partyFirebirdInsert;
+    private readonly SyncOptions _sync;
 
 
 
@@ -122,7 +116,9 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
 
         IErrorLogService errors,
 
-        IItemPrerequisiteService itemPrereqs)
+        IItemPrerequisiteService itemPrereqs,
+        IFirebirdPartyInsert partyFirebirdInsert,
+        IOptions<SyncOptions> sync)
 
     {
 
@@ -145,6 +141,8 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
         _errors = errors;
 
         _itemPrereqs = itemPrereqs;
+        _partyFirebirdInsert = partyFirebirdInsert;
+        _sync = sync.Value;
 
     }
 
@@ -1052,6 +1050,28 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
                 write = await writer.CreateMasterAsync(dest!, destEntity, enriched, stamp, src, sourceEntity, cancellationToken)
                     .ConfigureAwait(false);
             }
+            if (!write.Success
+                && PartnerSyncRules.IsPartyEntity(destEntity)
+                && IsApiTimeout(write.Message)
+                && _sync.PartyFirebirdInsertFallbackEnabled
+                && !job.DryRun)
+            {
+                write = await _partyFirebirdInsert.CreateAsync(
+                    dest!, destEntity, enriched, stamp, src, sourceEntity, cancellationToken).ConfigureAwait(false);
+                if (write.Success)
+                {
+                    await _audit.WriteAsync(new AuditEntry
+                    {
+                        UserEmail = job.CreatedBy,
+                        Action = "MASTER_FB_FALLBACK",
+                        DbId = job.DestDbId,
+                        Entity = destEntity,
+                        RecordId = enriched.Code,
+                        Result = "SUCCESS",
+                        RequestId = job.JobId.ToString(CultureInfo.InvariantCulture)
+                    }, cancellationToken).ConfigureAwait(false);
+                }
+            }
             if (!write.Success && !string.IsNullOrWhiteSpace(prereqDiagnosis))
                 write = new WriteResult { Success = false, Message = write.Message + " " + prereqDiagnosis };
 
@@ -1398,8 +1418,8 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
         if (await _read.GlAccountHasActivityAsync(dest, key, cancellationToken).ConfigureAwait(false))
             return $"Account code {key} already exists on {dest.DisplayName} and has postings, so this {destEntity.ToLowerInvariant()} cannot use that code.";
 
-        // Skip API DELETE /account (often hangs 30–100s). Fail fast so the operator can remove the unused GL.
-        return $"Account code {key} already exists unused on {dest.DisplayName}. Remove that GL account in SQL Account (or Accounts) before pushing this {destEntity.ToLowerInvariant()}.";
+        // Unused same-code GL: allow create (API or Firebird fallback reuses it). Do not API-DELETE (hangs).
+        return null;
     }
 
     private static bool IsApiTimeout(string? message)
