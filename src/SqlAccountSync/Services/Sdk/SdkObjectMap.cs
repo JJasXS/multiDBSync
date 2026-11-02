@@ -39,10 +39,11 @@ public static class SdkObjectMap
 
     public static string DetailDataSetName(string bizObject) => bizObject.ToUpperInvariant() switch
     {
-        "ST_XF" => "cdsDocumentDetail",
-        "SL_IV" or "SL_DN" or "SL_CN" or "SL_DO" => "cdsDocumentDetail",
-        "PH_PI" or "PH_GR" or "PH_CN" => "cdsDocumentDetail",
-        _ => "cdsDocumentDetail"
+        // Official wiki samples use cdsDocDetail (not cdsDocumentDetail).
+        "ST_XF" => "cdsDocDetail",
+        "SL_IV" or "SL_DN" or "SL_CN" or "SL_DO" or "SL_CS" or "SL_SO" => "cdsDocDetail",
+        "PH_PI" or "PH_GR" or "PH_CN" => "cdsDocDetail",
+        _ => "cdsDocDetail"
     };
 
     /// <summary>
@@ -89,7 +90,9 @@ public static class SdkObjectMap
             "taxarea" => "TAXAREA",
             "remark" => "REMARK",
             "note" => "NOTE",
-            "status" => "ISACTIVE",
+            // AR_CUSTOMER/AP_SUPPLIER use STATUS ('A'/'I'); ST_ITEM uses ISACTIVE.
+            "status" => "STATUS",
+            "isactive" => "ISACTIVE",
             "description" => "DESCRIPTION",
             "description2" => "DESCRIPTION2",
             "description3" => "DESCRIPTION3",
@@ -99,7 +102,6 @@ public static class SdkObjectMap
             "uom" => "UOM",
             "refcost" => "REFCOST",
             "refprice" => "REFPRICE",
-            "isactive" => "ISACTIVE",
             "parent" => "PARENT",
             "dockey" => "DOCKEY",
             "acctype" => "ACCTYPE",

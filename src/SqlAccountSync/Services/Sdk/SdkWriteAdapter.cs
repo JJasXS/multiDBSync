@@ -106,19 +106,14 @@ public sealed class SdkWriteAdapter : ISqlAccountWriteAdapter
                     if (obj is null)
                         return Fail($"BizObject {bizName} not found.");
 
-                    object? foundKey = null;
-                    try { foundKey = obj.FindKeyByRef(key); }
-                    catch { foundKey = null; }
+                    var foundKey = FindKeyByCode(obj, key);
                     if (foundKey is null)
                         return new WriteResult { Success = true, Message = "Already absent.", DocNo = key };
 
-                    try
-                    {
-                        obj.Params.Find("DocKey").Value = foundKey;
-                    }
+                    try { obj.Params.Find("Code").Value = foundKey; }
                     catch
                     {
-                        try { obj.Params.Find("Code").Value = key; }
+                        try { obj.Params.Find("DocKey").Value = foundKey; }
                         catch { /* open by default */ }
                     }
 
@@ -282,16 +277,15 @@ public sealed class SdkWriteAdapter : ISqlAccountWriteAdapter
             }
             else
             {
-                object? foundKey = null;
-                try { foundKey = obj.FindKeyByRef(code); }
-                catch { foundKey = null; }
+                var foundKey = FindKeyByCode(obj, code);
                 if (foundKey is null)
                     return Fail($"Record {code} not found in {bizName}.");
 
-                try { obj.Params.Find("DocKey").Value = foundKey; }
+                // Wiki samples: Params.Find("Code").Value = FindKeyByRef result, then Open + Edit.
+                try { obj.Params.Find("Code").Value = foundKey; }
                 catch
                 {
-                    try { obj.Params.Find("Code").Value = code; }
+                    try { obj.Params.Find("DocKey").Value = foundKey; }
                     catch { /* fall through to Open */ }
                 }
                 obj.Open();
@@ -324,7 +318,8 @@ public sealed class SdkWriteAdapter : ISqlAccountWriteAdapter
                 dynamic? uomDs = null;
                 try
                 {
-                    uomDs = TryFindDataSet(obj, "cdsItemUom", "ItemUomDataSet", "sdsitemuom");
+                    // Wiki ST_ITEM sample uses cdsUOM.
+                    uomDs = TryFindDataSet(obj, "cdsUOM", "cdsItemUom", "ItemUomDataSet", "sdsitemuom");
                     if (uomDs is not null)
                         SdkPayloadApplier.ApplyDetailRows(uomDs, uomRows.Cast<object?>());
                 }
@@ -333,6 +328,10 @@ public sealed class SdkWriteAdapter : ISqlAccountWriteAdapter
                     ComHelper.SafeRelease(uomDs);
                 }
             }
+
+            _logger.LogInformation(
+                "SDK SaveMaster {Biz} code={Code} new={IsNew}",
+                bizName, code, isNew);
 
             TrySave(obj);
             TryClose(obj);
@@ -358,12 +357,12 @@ public sealed class SdkWriteAdapter : ISqlAccountWriteAdapter
             && !string.IsNullOrWhiteSpace(sourceEntityCode))
         {
             var partner = BusinessPartnerMapper.FromMasterRecord(record, sourceDb, sourceEntityCode);
-            return BusinessPartnerMapper.ToApiPayload(partner, targetEntityCode, record.Code, txnStamp);
+            return BusinessPartnerMapper.ToSdkPayload(partner, targetEntityCode, record.Code, txnStamp);
         }
 
         if (PartnerSyncRules.IsPartyEntity(targetEntityCode))
         {
-            return BusinessPartnerMapper.ToApiPayload(
+            return BusinessPartnerMapper.ToSdkPayload(
                 new BusinessPartner { CompanyName = record.Description, SourceCode = record.Code, SourceType = targetEntityCode },
                 targetEntityCode, record.Code, txnStamp);
         }
@@ -450,16 +449,31 @@ public sealed class SdkWriteAdapter : ISqlAccountWriteAdapter
         return null;
     }
 
-    private static void TrySave(dynamic obj)
+    /// <summary>Official signature: FindKeyByRef("CODE", code).</summary>
+    private static object? FindKeyByCode(dynamic obj, string code)
     {
-        try { obj.Save(); return; }
+        try { return obj.FindKeyByRef("CODE", code); }
         catch
         {
-            try { obj.Post(); }
-            catch (Exception ex)
+            try { return obj.FindKeyByRef("Code", code); }
+            catch
             {
-                throw new InvalidOperationException("SDK Save/Post failed: " + ComHelper.FormatException(ex), ex);
+                try { return obj.FindKeyByRef(code); }
+                catch { return null; }
             }
+        }
+    }
+
+    private static void TrySave(dynamic obj)
+    {
+        try
+        {
+            obj.Save();
+            return;
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException("SDK Save failed: " + ComHelper.FormatException(ex), ex);
         }
     }
 

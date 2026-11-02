@@ -104,6 +104,12 @@ public sealed class SdkSessionManager : ISdkSessionManager, IDisposable
             {
                 _lastError = ComHelper.FormatException(ex);
                 _logger.LogWarning(ex, "SDK work failed for {Code}", code);
+                // Access violations / RPC failures poison the COM instance — force a fresh BizApp.
+                if (IsFatalComFailure(ex))
+                {
+                    try { await RecreateBizAppAsync().ConfigureAwait(false); }
+                    catch { /* best effort */ }
+                }
                 throw;
             }
         }
@@ -180,56 +186,63 @@ public sealed class SdkSessionManager : ISdkSessionManager, IDisposable
         catch { alreadyLogin = false; }
 
         var sameCompany = alreadyLogin
+            && _sessionOwnedByUs
             && _currentCompany.Equals(dbCode, StringComparison.OrdinalIgnoreCase);
 
         if (sameCompany)
             return;
 
-        if (alreadyLogin && _sessionOwnedByUs)
+        // Company switch / foreign session: never Logout+Login on the same instance —
+        // that path crashes SQLAcc.AccountUI.bpl (AV) when SQL Account UI is also open.
+        // Always tear down and create a fresh owned BizApp, then Login once.
+        if (alreadyLogin || _bizApp is not null)
         {
-            try { _bizApp!.Logout(); }
+            try { ReleaseSession(); }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Logout before company switch failed");
+                _logger.LogWarning(ex, "Release before company switch failed");
+                ComHelper.SafeRelease(_bizApp);
+                _bizApp = null;
+                _sessionOwnedByUs = false;
+                _currentCompany = "";
             }
-            alreadyLogin = false;
         }
-        else if (alreadyLogin && !_sessionOwnedByUs)
+
+        EnsureBizAppCreated();
+        var sw = Stopwatch.StartNew();
+        try
         {
-            // Attached to someone else's session — release and create a fresh owned login.
+            _bizApp!.Login(creds.Username, creds.Password, creds.DcfPath, creds.Database);
+        }
+        catch (Exception ex)
+        {
             ComHelper.SafeRelease(_bizApp);
             _bizApp = null;
-            EnsureBizAppCreated();
-            alreadyLogin = false;
+            _sessionOwnedByUs = false;
+            _currentCompany = "";
+            throw new InvalidOperationException(
+                "SDK Login failed for " + dbCode + " (" + creds.Database + "). " +
+                "Close SQL Account desktop windows for this company, then retry. " +
+                ComHelper.FormatException(ex), ex);
         }
 
-        if (!alreadyLogin)
+        bool ok;
+        try { ok = (bool)_bizApp.IsLogin; }
+        catch (Exception ex)
         {
-            var sw = Stopwatch.StartNew();
-            _bizApp!.Login(creds.Username, creds.Password, creds.DcfPath, creds.Database);
-            bool ok;
-            try { ok = (bool)_bizApp.IsLogin; }
-            catch (Exception ex)
-            {
-                throw new InvalidOperationException(
-                    "Login returned but IsLogin check failed: " + ComHelper.FormatException(ex), ex);
-            }
-            if (!ok)
-                throw new InvalidOperationException(
-                    "Login completed but IsLogin is false. Check username, password, DCF and company database.");
-
-            _sessionOwnedByUs = true;
-            _currentCompany = dbCode;
-            _lastError = "";
-            _logger.LogInformation(
-                "SDK logged into {Code} ({Database}) in {Ms}ms",
-                dbCode, creds.Database, sw.ElapsedMilliseconds);
-            return;
+            throw new InvalidOperationException(
+                "Login returned but IsLogin check failed: " + ComHelper.FormatException(ex), ex);
         }
+        if (!ok)
+            throw new InvalidOperationException(
+                "Login completed but IsLogin is false. Check username, password, DCF and company database.");
 
-        _sessionOwnedByUs = false;
+        _sessionOwnedByUs = true;
         _currentCompany = dbCode;
-        _logger.LogWarning("Attached to existing SQL Account session for {Code}", dbCode);
+        _lastError = "";
+        _logger.LogInformation(
+            "SDK logged into {Code} ({Database}) in {Ms}ms",
+            dbCode, creds.Database, sw.ElapsedMilliseconds);
     }
 
     private void EnsureBizAppCreated()
@@ -304,6 +317,25 @@ public sealed class SdkSessionManager : ISdkSessionManager, IDisposable
             throw new InvalidOperationException("DCF file not found: " + creds.DcfPath);
         if (string.IsNullOrWhiteSpace(creds.Database))
             throw new InvalidOperationException("SDK company database filename is required.");
+    }
+
+    private static bool IsFatalComFailure(Exception ex)
+    {
+        for (var cur = ex; cur is not null; cur = cur.InnerException)
+        {
+            if (cur is COMException com)
+            {
+                var hr = unchecked((uint)com.ErrorCode);
+                if (hr is 0x8000FFFF or 0x800706BA or 0x800706BE or 0x80010001 or 0x80004005)
+                    return true;
+            }
+            var msg = cur.Message ?? "";
+            if (msg.Contains("Access violation", StringComparison.OrdinalIgnoreCase)
+                || msg.Contains("RPC_E", StringComparison.OrdinalIgnoreCase)
+                || msg.Contains("RPC server", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
     }
 
     public void Dispose()

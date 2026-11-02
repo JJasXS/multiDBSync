@@ -1,4 +1,4 @@
-# Creates/updates the single SDK connections secret for a tenant.
+﻿# Creates/updates the single SDK connections secret for a tenant.
 # Password is prompted securely and never echoed.
 param(
     [string]$TenantCode = $(if ($env:TENANT_CODE) { $env:TENANT_CODE } else { "TNT10006" }),
@@ -41,22 +41,30 @@ $tmp = Join-Path $env:TEMP "sdkConnections-$TenantCode.json"
 [System.IO.File]::WriteAllText($tmp, $payload)
 
 aws sts get-caller-identity --region $Region | Out-Host
-$exists = $true
+
+$exists = $false
+$prevEap = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
 aws secretsmanager describe-secret --secret-id $secretId --region $Region 2>$null | Out-Null
-if ($LASTEXITCODE -ne 0) { $exists = $false }
+if ($LASTEXITCODE -eq 0) { $exists = $true }
+$ErrorActionPreference = $prevEap
 
 if (-not $exists) {
+    Write-Host "Secret not found — creating $secretId ..."
     aws secretsmanager create-secret `
         --name $secretId `
         --description "SqlAccountSync SDK company logins for tenant $TenantCode" `
         --secret-string "file://$tmp" `
         --region $Region `
         --tags Key=tenant,Value=$TenantCode Key=app,Value=SqlAccountSync Key=kind,Value=sdkConnections
+    if ($LASTEXITCODE -ne 0) { throw "create-secret failed" }
 } else {
+    Write-Host "Secret exists — updating ..."
     aws secretsmanager put-secret-value `
         --secret-id $secretId `
         --secret-string "file://$tmp" `
         --region $Region
+    if ($LASTEXITCODE -ne 0) { throw "put-secret-value failed" }
 }
 
 Remove-Item -Force $tmp -ErrorAction SilentlyContinue

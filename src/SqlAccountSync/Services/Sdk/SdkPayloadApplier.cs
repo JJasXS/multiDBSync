@@ -7,6 +7,8 @@ public static class SdkPayloadApplier
 {
     public static int ApplyMain(dynamic dataSet, IDictionary<string, object?> payload)
     {
+        // Do not force Edit/Insert here — BizObject.New() already leaves MainDataSet in insert mode.
+        // Calling Edit/Insert again on some company DBs leaves integer fields as Null and Save crashes.
         var applied = 0;
         foreach (var (key, value) in payload)
         {
@@ -14,14 +16,63 @@ public static class SdkPayloadApplier
                 continue;
             if (value is IEnumerable<object> or System.Collections.IList && value is not string)
                 continue;
+            // Skip empty optionals — SQL Acc Save rejects unknown agent/area/category codes.
+            if (IsEmptyOptional(key, value))
+                continue;
+            // Never write dockey=0 on create (API leftover); SDK assigns keys.
+            if (key.Equals("dockey", StringComparison.OrdinalIgnoreCase)
+                && value is int di && di == 0)
+                continue;
+            if (key.Equals("dockey", StringComparison.OrdinalIgnoreCase)
+                && value is long dl && dl == 0)
+                continue;
             if (TrySetField(dataSet, SdkObjectMap.ToDatasetField(key), value))
                 applied++;
         }
         return applied;
     }
 
+    private static bool IsEmptyOptional(string key, object? value)
+    {
+        if (value is null) return true;
+        if (value is not string s) return false;
+        if (s.Length == 0) return true;
+        // Placeholder sent by HTTP API mappers; leave SQL Acc defaults instead.
+        if (s is "----" or "-" or "n/a")
+        {
+            var k = key.ToLowerInvariant();
+            return k is "agent" or "area" or "companycategory" or "currencycode"
+                or "pricetag" or "tax" or "biznature";
+        }
+        return false;
+    }
+
+    private static void EnsureEditable(dynamic dataSet)
+    {
+        try
+        {
+            // 0=browse in typical Delphi TDataSet.State; Edit/Insert already ok.
+            int state = (int)dataSet.State;
+            if (state == 0)
+            {
+                try { dataSet.Edit(); }
+                catch { dataSet.Insert(); }
+            }
+        }
+        catch
+        {
+            try { dataSet.Edit(); }
+            catch
+            {
+                try { dataSet.Insert(); }
+                catch { /* New() usually leaves dataset editable */ }
+            }
+        }
+    }
+
     public static int ApplyDetailRows(dynamic detailDataSet, IEnumerable<object?> rows)
     {
+        // Official SDK samples: New() creates the first detail row — Edit it; Append only for extras.
         var count = 0;
         foreach (var rowObj in rows)
         {
@@ -33,12 +84,8 @@ public static class SdkPayloadApplier
                 ?? ((Dictionary<string, object?>)rowObj)
                     .ToDictionary(kv => kv.Key, kv => (object?)kv.Value, StringComparer.OrdinalIgnoreCase);
 
-            try { detailDataSet.Append(); }
-            catch
-            {
-                try { detailDataSet.Insert(); }
-                catch { continue; }
-            }
+            if (!BeginDetailRow(detailDataSet, isFirst: count == 0))
+                continue;
 
             foreach (var (key, value) in dict)
             {
@@ -52,6 +99,40 @@ public static class SdkPayloadApplier
             count++;
         }
         return count;
+    }
+
+    private static bool BeginDetailRow(dynamic detailDataSet, bool isFirst)
+    {
+        if (isFirst)
+        {
+            try
+            {
+                detailDataSet.Edit();
+                return true;
+            }
+            catch
+            {
+                // fall through to Append/Insert
+            }
+        }
+
+        try
+        {
+            detailDataSet.Append();
+            return true;
+        }
+        catch
+        {
+            try
+            {
+                detailDataSet.Insert();
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
     }
 
     public static bool TrySetField(dynamic dataSet, string fieldName, object? value)
@@ -75,11 +156,20 @@ public static class SdkPayloadApplier
             {
                 case bool b:
                     try { field.AsBoolean = b; }
-                    catch { field.Value = b ? 1 : 0; }
+                    catch
+                    {
+                        try { field.AsString = b ? "T" : "F"; }
+                        catch { field.Value = b ? 1 : 0; }
+                    }
                     break;
                 case int i:
-                    try { field.AsInteger = i; }
-                    catch { field.Value = i; }
+                    // Prefer float for BCD/currency columns (CREDITLIMIT etc.); AsInteger can poison Null.
+                    try { field.AsFloat = i; }
+                    catch
+                    {
+                        try { field.AsInteger = i; }
+                        catch { field.Value = i; }
+                    }
                     break;
                 case long l:
                     field.Value = l;

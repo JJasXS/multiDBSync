@@ -1076,7 +1076,8 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
 
         if (!write.Success)
         {
-            var status = IsGlCodeConflict(write.Message) ? JobStatuses.Failed : JobStatuses.Retrying;
+            var permanent = IsGlCodeConflict(write.Message) || IsPermanentSdkFailure(write.Message);
+            var status = permanent ? JobStatuses.Failed : JobStatuses.Retrying;
             var message = IsGlCodeConflict(write.Message)
                 ? $"Account code {record.Code} already exists on the destination chart, so this {destEntity.ToLowerInvariant()} cannot be created with the same code."
                 : write.Message;
@@ -1437,6 +1438,14 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
 
     private static bool IsGlCodeConflict(string? message) =>
         (message ?? "").Contains("GL_ACC_CODE", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsPermanentSdkFailure(string? message)
+    {
+        var msg = message ?? "";
+        return msg.Contains("No SDK connection settings", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("DCF file not found", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("ProgID", StringComparison.OrdinalIgnoreCase);
+    }
 
     private static void Add(DryRunResult result, string name, ValidationResult v) =>
 

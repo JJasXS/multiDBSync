@@ -42,6 +42,12 @@ if (args.Any(a => string.Equals(a, "--sdk-discover", StringComparison.OrdinalIgn
     return;
 }
 
+if (args.Any(a => string.Equals(a, "--sdk-write-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    await SdkWriteSmokeHost.RunAsync(args).ConfigureAwait(false);
+    return;
+}
+
 if (args.Any(a => string.Equals(a, "--sdk-smoke", StringComparison.OrdinalIgnoreCase)))
 {
     await SdkSmokeHost.RunAsync(args).ConfigureAwait(false);

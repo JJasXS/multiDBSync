@@ -139,10 +139,10 @@ public static class ComHelper
 
     public static readonly string[] UnverifiedDetailDataSetNames =
     [
+        "cdsDocDetail",
         "cdsDocumentDetail",
         "MainDetailDataSet",
         "DetailDataSet",
-        "cdsDocDetail",
         "sdsdocdetail"
     ];
 
