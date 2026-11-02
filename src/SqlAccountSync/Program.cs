@@ -1,6 +1,7 @@
 using Amazon;
 using Amazon.SecretsManager;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Hosting;
 using SqlAccountSync.Authorization;
@@ -56,6 +57,15 @@ if (args.Any(a => string.Equals(a, "--sdk-smoke", StringComparison.OrdinalIgnore
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseWindowsService();
+
+// Persist antiforgery/auth keys outside publish so redeploys do not invalidate browser cookies.
+var dpKeysDir = Path.Combine(
+    Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+    "SqlAccountSync", "dp-keys");
+Directory.CreateDirectory(dpKeysDir);
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(dpKeysDir))
+    .SetApplicationName("SqlAccountSync");
 
 // Standard ProAcc .env keys (same names as ApprovalPO / eQuotation).
 var envOverrides = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
