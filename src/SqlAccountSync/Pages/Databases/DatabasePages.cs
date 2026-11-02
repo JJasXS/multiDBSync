@@ -7,7 +7,6 @@ using SqlAccountSync.Services.Audit;
 using SqlAccountSync.Services.Auth;
 using SqlAccountSync.Services.Connections;
 using SqlAccountSync.Services.Databases;
-using SqlAccountSync.Services.Secrets;
 using SqlAccountSync.Services.Tenants;
 
 namespace SqlAccountSync.Pages.Databases;
@@ -17,20 +16,17 @@ public class IndexModel : SyncPageModel
     private readonly IDatabaseRegistry _registry;
     private readonly IAuditService _audit;
     private readonly ITenantDatabaseBootstrap _tenants;
-    private readonly ISqlApiCredentialBundle _bundle;
     private readonly SyncOptions _sync;
 
     public IndexModel(
         IDatabaseRegistry registry,
         IAuditService audit,
         ITenantDatabaseBootstrap tenants,
-        ISqlApiCredentialBundle bundle,
         IOptions<SyncOptions> sync)
     {
         _registry = registry;
         _audit = audit;
         _tenants = tenants;
-        _bundle = bundle;
         _sync = sync.Value;
     }
 
@@ -65,19 +61,13 @@ public class IndexModel : SyncPageModel
         if (!IsAdmin) return Forbid();
         var existing = await _registry.GetAsync(id);
         if (existing is null) return RedirectToPage();
-        if (!await _bundle.RemoveAsync((_sync.TenantCode ?? "").Trim(), existing.DbCode))
-        {
-            TempData["DbStatusError"] = "Could not remove the SQL API keys. The company was kept.";
-            return RedirectToPage();
-        }
-
         try
         {
             await _registry.DeleteAsync(id);
         }
         catch (Exception)
         {
-            TempData["DbStatusError"] = "Could not delete the company. Its SQL API keys were already removed.";
+            TempData["DbStatusError"] = "Could not delete the company.";
             return RedirectToPage();
         }
 
@@ -298,44 +288,29 @@ public class EditModel : SyncPageModel
 {
     private readonly IDatabaseRegistry _registry;
     private readonly IAuditService _audit;
-    private readonly ISqlApiSecretProvisioner _secrets;
     private readonly ITenantDatabaseBootstrap _tenants;
     private readonly SyncOptions _sync;
 
     public EditModel(
         IDatabaseRegistry registry,
         IAuditService audit,
-        ISqlApiSecretProvisioner secrets,
         ITenantDatabaseBootstrap tenants,
         IOptions<SyncOptions> sync)
     {
         _registry = registry;
         _audit = audit;
-        _secrets = secrets;
         _tenants = tenants;
         _sync = sync.Value;
     }
 
     [BindProperty] public RegisteredDatabase Db { get; set; } = new();
-    [BindProperty] public string ApiAccessKey { get; set; } = "";
-    [BindProperty] public string ApiSecretKey { get; set; } = "";
     [BindProperty] public string ReturnTo { get; set; } = "";
     public string Message { get; set; } = "";
     public string TenantCode => (_sync.TenantCode ?? "").Trim();
-    public bool AutoSqlApiCredRef => _sync.AutoAssignSqlApiCredRefByDbId && TenantCode.Length > 0;
-    public string DefaultApiBaseUrl => "https://api.sql.my";
-    public string SqlApiCredRefPlaceholder
-    {
-        get
-        {
-            var tenant = TenantCode.Length > 0 ? TenantCode : "{TENANT_CODE}";
-            return $"proacc/tenant/{tenant}/{SqlApiCredRefConvention.BundleName}";
-        }
-    }
-    public string SqlApiCredRefHint =>
-        AutoSqlApiCredRef
-            ? $"One secret for this tenant. The Code field selects that company's keys inside {SqlApiCredRefConvention.BuildBundleSecretId(TenantCode)}."
-            : "Secrets Manager name, for example proacc/tenant/{TENANT_CODE}/sqlApiCredentials";
+    public string SdkSecretHint =>
+        TenantCode.Length > 0
+            ? $"SDK logins live in Secrets Manager secret proacc/tenant/{TenantCode}/sdkConnections (companies[] array)."
+            : "Set TENANT_CODE so SDK connections resolve from Secrets Manager.";
 
     public async Task<IActionResult> OnGetAsync(int? id)
     {
@@ -353,8 +328,6 @@ public class EditModel : SyncPageModel
         if (existing is null) return RedirectToPage("Index");
         Db = existing;
         Db.DbRole = MasterOrSub(Db.DbRole);
-        Db.ApiBaseUrl = DefaultApiBaseUrl;
-        Db.ApiCredRef = SqlApiCredRefConvention.ForDisplay(Db.ApiCredRef);
         return Page();
     }
 
@@ -364,8 +337,6 @@ public class EditModel : SyncPageModel
     private void ApplyNewDefaults()
     {
         Db.DbRole = DatabaseRoles.Master;
-        if (string.IsNullOrWhiteSpace(Db.ApiCredRef))
-            Db.ApiCredRef = SqlApiCredRefPlaceholder;
         if (string.IsNullOrWhiteSpace(Db.FbHost))
             Db.FbHost = "localhost";
         if (string.IsNullOrWhiteSpace(Db.FbCredRef))
@@ -374,8 +345,6 @@ public class EditModel : SyncPageModel
 
     private void PrepareDisplay()
     {
-        Db.ApiBaseUrl = DefaultApiBaseUrl;
-        Db.ApiCredRef = SqlApiCredRefConvention.ForDisplay(Db.ApiCredRef);
     }
 
     private static string MasterOrSub(string? role) =>
@@ -404,19 +373,14 @@ public class EditModel : SyncPageModel
 
     private async Task<IActionResult> SavePostedDatabaseAsync()
     {
-        if (ApiKeysArePartial())
-            return DbFailed("Enter both the access key and the secret key, or leave both blank.");
         var capMessage = await OverCapMessageAsync();
         if (capMessage is not null)
             return DbFailed(capMessage);
 
         Db.DbRole = MasterOrSub(Db.DbRole);
         Db.CompanyName = (Db.DisplayName ?? "").Trim();
-        Db.ApiBaseUrl = DefaultApiBaseUrl;
-        Db.ApiCredRef = SqlApiCredRefConvention.ForStorage(Db.ApiCredRef);
         var wasNew = Db.DbId == 0;
         var id = await _registry.SaveAsync(Db, CurrentEmail);
-        await SaveApiKeysAsync(id);
         await WriteDatabaseAuditAsync(wasNew, id);
         if (FromDashboard)
             return RedirectToPage("/Index");
@@ -476,31 +440,9 @@ public class EditModel : SyncPageModel
         return DatabasePlanLimit.NewDatabaseMessage(max, active.Count);
     }
 
-    private bool ApiKeysArePartial()
-    {
-        var hasAccess = !string.IsNullOrWhiteSpace(ApiAccessKey);
-        var hasSecret = !string.IsNullOrWhiteSpace(ApiSecretKey);
-        return hasAccess != hasSecret;
-    }
-
     private void PrepareForm()
     {
         Db.DbRole = MasterOrSub(Db.DbRole);
-        Db.ApiBaseUrl = DefaultApiBaseUrl;
-        Db.ApiCredRef = SqlApiCredRefConvention.ForDisplay(Db.ApiCredRef);
-    }
-
-    private async Task SaveApiKeysAsync(int id)
-    {
-        if (string.IsNullOrWhiteSpace(ApiAccessKey) || string.IsNullOrWhiteSpace(ApiSecretKey))
-            return;
-        var saved = await _registry.GetAsync(id);
-        if (saved is null || string.IsNullOrWhiteSpace(saved.DbCode))
-            return;
-        var (ok, message) = await _secrets.SaveCredentialsAsync(
-            _sync.TenantCode, saved.DbCode, ApiAccessKey, ApiSecretKey);
-        if (!ok)
-            TempData["Flash"] = message;
     }
 
     private Task WriteDatabaseAuditAsync(bool wasNew, int id) =>

@@ -98,7 +98,7 @@
                                                 class="accounts-icon-btn accounts-status-delete"
                                                 title="Delete @d.DisplayName"
                                                 aria-label="Delete @d.DisplayName"
-                                                data-confirm="Delete @d.DisplayName? This removes the company and its SQL API keys. The database file stays on disk."
+                                                data-confirm="Delete @d.DisplayName? This removes the company from SqlAccountSync. The database file stays on disk."
                                                 data-confirm-title="Delete company"
                                                 data-confirm-ok="Delete"
                                                 data-confirm-danger>
@@ -190,16 +190,8 @@
                                 <label class="role-choice"><input type="radio" name="Db.DbRole" value="SUB" data-role-sub /> Sub</label>
                             </div>
                         </div>
-                        <h4 class="db-create-subhead">SQL API</h4>
-                        <div class="field">
-                            <label for="editListAccess">Access key</label>
-                            <input id="editListAccess" name="ApiAccessKey" type="password" autocomplete="off" />
-                        </div>
-                        <div class="field">
-                            <label for="editListSecret">Secret key</label>
-                            <input id="editListSecret" name="ApiSecretKey" type="password" autocomplete="off" />
-                        </div>
-                        <p class="field-hint">Leave both blank to keep the current secret. Filling both stores them for this company.</p>
+                        <h4 class="db-create-subhead">SDK login</h4>
+                        <p class="field-hint">SDK credentials stay in AWS Secrets Manager (<code>sdkConnections</code>). Match this Code to a companies[].name row.</p>
                     </div>
                 </div>
             </div>
