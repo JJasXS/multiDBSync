@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Options;
 using SqlAccountSync.Options;
-using SqlAccountSync.Services.Queue;
+using SqlAccountSync.Services.Databases;
+using SqlAccountSync.Services.Sdk;
+using SqlAccountSync.Services.Secrets;
 using SqlAccountSync.Services.Sync;
 using SqlAccountSync.Services.Transactions;
 
@@ -43,6 +45,7 @@ public sealed class SyncWorker : BackgroundService
                 var job = await queue.ClaimAsync(workerId, stoppingToken).ConfigureAwait(false);
                 if (job is null)
                 {
+                    await ReturnSdkHomeIfIdleAsync(scope, stoppingToken).ConfigureAwait(false);
                     await Task.Delay(delay, stoppingToken).ConfigureAwait(false);
                     continue;
                 }
@@ -52,6 +55,10 @@ public sealed class SyncWorker : BackgroundService
                     await txns.ProcessJobAsync(job, stoppingToken).ConfigureAwait(false);
                 else
                     await sync.ProcessJobAsync(job, stoppingToken).ConfigureAwait(false);
+
+                var health = await queue.GetHealthAsync(stoppingToken).ConfigureAwait(false);
+                if (health.Pending == 0)
+                    await ReturnSdkHomeIfIdleAsync(scope, stoppingToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -62,6 +69,25 @@ public sealed class SyncWorker : BackgroundService
                 _logger.LogError(ex, "Worker loop failed.");
                 await Task.Delay(delay, stoppingToken).ConfigureAwait(false);
             }
+        }
+    }
+
+    private async Task ReturnSdkHomeIfIdleAsync(IServiceScope scope, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var session = scope.ServiceProvider.GetRequiredService<ISdkSessionManager>();
+            var registry = scope.ServiceProvider.GetRequiredService<IDatabaseRegistry>();
+            var bundle = scope.ServiceProvider.GetRequiredService<ISdkConnectionBundle>();
+            var home = await SdkHomeResolver.ResolveAsync(registry, bundle, _options, cancellationToken)
+                .ConfigureAwait(false);
+            if (home.Length == 0)
+                return;
+            await session.ReturnHomeAsync(home, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "SDK return-home skipped");
         }
     }
 }

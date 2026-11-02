@@ -20,6 +20,12 @@ public interface ISdkSessionManager
 
     SdkHealthStatus GetHealth();
 
+    /// <summary>
+    /// After pushing to many subs, leave COM logged into this company (usually Master)
+    /// so the next manual work starts there. No-op if already on that company or empty.
+    /// </summary>
+    Task ReturnHomeAsync(string dbCode, CancellationToken cancellationToken = default);
+
     Task DisconnectAsync(CancellationToken cancellationToken = default);
 }
 
@@ -116,6 +122,29 @@ public sealed class SdkSessionManager : ISdkSessionManager, IDisposable
         finally
         {
             _gate.Release();
+        }
+    }
+
+    public async Task ReturnHomeAsync(string dbCode, CancellationToken cancellationToken = default)
+    {
+        var code = (dbCode ?? "").Trim();
+        if (code.Length == 0)
+            return;
+
+        if (_currentCompany.Equals(code, StringComparison.OrdinalIgnoreCase)
+            && _sessionOwnedByUs
+            && _bizApp is not null)
+            return;
+
+        try
+        {
+            await UseCompanyAsync(code, _ => { /* login only */ }, cancellationToken)
+                .ConfigureAwait(false);
+            _logger.LogInformation("SDK returned home to {Code}", code);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not return SDK home to {Code}", code);
         }
     }
 

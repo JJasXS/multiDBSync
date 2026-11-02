@@ -101,6 +101,11 @@ public sealed class SyncOptions
     /// Default is <c>proacc/tenant/{TenantCode}/sdkConnections</c>. Env <c>SDK_SECRET_ID</c> also works.
     /// </summary>
     public string SdkSecretId { get; set; } = "";
+    /// <summary>
+    /// Company DbCode to leave the SDK logged into when the job queue is idle (so SQL Account stays on Master).
+    /// Empty = first active MASTER/BOTH database that has SDK credentials.
+    /// </summary>
+    public string SdkHomeDbCode { get; set; } = "";
     public string[] RequiredTables { get; set; } = ["ST_ITEM", "AR_CUSTOMER", "SY_USER"];
 }
 
