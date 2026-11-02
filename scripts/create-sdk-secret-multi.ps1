@@ -10,10 +10,12 @@ $ErrorActionPreference = "Stop"
 $secretId = "proacc/tenant/$TenantCode/sdkConnections"
 
 $companies = @(
-    @{ name = "UAMAT";   database = "ACC-UAMAT.FDB" },
-    @{ name = "MIRACLE"; database = "ACC-MIRACLE.FDB" },
-    @{ name = "ONYAT";   database = "ACC-ONYAT.FDB" },
-    @{ name = "STEPPES"; database = "ACC-STEPPES.FDB" }
+    # Master / MAIN COMPANY must be here or COM cannot return home after sub pushes.
+    @{ name = "MAINTEST"; database = "ACC-MAIN.FDB" },
+    @{ name = "UAMAT";    database = "ACC-UAMAT.FDB" },
+    @{ name = "MIRACLE";  database = "ACC-MIRACLE.FDB" },
+    @{ name = "ONYAT";    database = "ACC-ONYAT.FDB" },
+    @{ name = "STEPPES";  database = "ACC-STEPPES.FDB" }
 )
 
 Write-Host "Secret: $secretId"

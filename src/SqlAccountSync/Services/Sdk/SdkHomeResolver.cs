@@ -12,18 +12,23 @@ public static class SdkHomeResolver
         IDatabaseRegistry registry,
         ISdkConnectionBundle bundle,
         SyncOptions sync,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? preferredDbCode = null)
     {
-        var configured = (sync.SdkHomeDbCode ?? "").Trim();
-        if (configured.Length > 0)
+        foreach (var candidate in Candidates(sync, preferredDbCode))
         {
-            var creds = await bundle.ResolveAsync(configured, cancellationToken).ConfigureAwait(false);
+            var creds = await bundle.ResolveAsync(candidate, cancellationToken).ConfigureAwait(false);
             if (creds is not null)
-                return configured;
+                return candidate;
         }
 
-        var dbs = await registry.ListAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
-        foreach (var db in dbs.Where(d => d.IsActive && SyncTargetResolver.IsMasterOrBoth(d)))
+        var dbs = (await registry.ListAsync(cancellationToken: cancellationToken).ConfigureAwait(false))
+            .Where(d => d.IsActive && SyncTargetResolver.IsMasterOrBoth(d))
+            .OrderBy(d => HomeRank(d.DbCode, d.DisplayName, d.CompanyName))
+            .ThenBy(d => d.DbCode, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        foreach (var db in dbs)
         {
             var code = (db.DbCode ?? "").Trim();
             if (code.Length == 0)
@@ -34,5 +39,31 @@ public static class SdkHomeResolver
         }
 
         return "";
+    }
+
+    private static IEnumerable<string> Candidates(SyncOptions sync, string? preferredDbCode)
+    {
+        var preferred = (preferredDbCode ?? "").Trim();
+        if (preferred.Length > 0)
+            yield return preferred;
+
+        var configured = (sync.SdkHomeDbCode ?? "").Trim();
+        if (configured.Length > 0)
+            yield return configured;
+
+        // Common Main company codes used by this tenant.
+        foreach (var code in new[] { "MAINTEST", "MAIN", "HQ" })
+            yield return code;
+    }
+
+    private static int HomeRank(string? dbCode, string? displayName, string? companyName)
+    {
+        var blob = $"{dbCode} {displayName} {companyName}".ToUpperInvariant();
+        if (blob.Contains("MAIN COMPANY", StringComparison.Ordinal)) return 0;
+        if (blob.Contains("MAINTEST", StringComparison.Ordinal)) return 1;
+        if (blob.Contains("MAIN", StringComparison.Ordinal)) return 2;
+        if (blob.Contains("HQ", StringComparison.Ordinal) || blob.Contains("HEAD", StringComparison.Ordinal))
+            return 3;
+        return 10;
     }
 }

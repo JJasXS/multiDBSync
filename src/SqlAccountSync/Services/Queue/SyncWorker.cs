@@ -45,7 +45,8 @@ public sealed class SyncWorker : BackgroundService
                 var job = await queue.ClaimAsync(workerId, stoppingToken).ConfigureAwait(false);
                 if (job is null)
                 {
-                    await ReturnSdkHomeIfIdleAsync(scope, stoppingToken).ConfigureAwait(false);
+                    await ReturnSdkHomeIfIdleAsync(scope, preferredDbCode: null, stoppingToken)
+                        .ConfigureAwait(false);
                     await Task.Delay(delay, stoppingToken).ConfigureAwait(false);
                     continue;
                 }
@@ -58,7 +59,11 @@ public sealed class SyncWorker : BackgroundService
 
                 var health = await queue.GetHealthAsync(stoppingToken).ConfigureAwait(false);
                 if (health.Pending == 0)
-                    await ReturnSdkHomeIfIdleAsync(scope, stoppingToken).ConfigureAwait(false);
+                {
+                    var preferred = await PreferSourceDbCodeAsync(scope, job.SourceDbId, stoppingToken)
+                        .ConfigureAwait(false);
+                    await ReturnSdkHomeIfIdleAsync(scope, preferred, stoppingToken).ConfigureAwait(false);
+                }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -72,22 +77,41 @@ public sealed class SyncWorker : BackgroundService
         }
     }
 
-    private async Task ReturnSdkHomeIfIdleAsync(IServiceScope scope, CancellationToken cancellationToken)
+    private static async Task<string?> PreferSourceDbCodeAsync(
+        IServiceScope scope, int sourceDbId, CancellationToken cancellationToken)
+    {
+        if (sourceDbId <= 0)
+            return null;
+        var registry = scope.ServiceProvider.GetRequiredService<IDatabaseRegistry>();
+        var src = await registry.GetAsync(sourceDbId, cancellationToken).ConfigureAwait(false);
+        return string.IsNullOrWhiteSpace(src?.DbCode) ? null : src!.DbCode.Trim();
+    }
+
+    private async Task ReturnSdkHomeIfIdleAsync(
+        IServiceScope scope, string? preferredDbCode, CancellationToken cancellationToken)
     {
         try
         {
             var session = scope.ServiceProvider.GetRequiredService<ISdkSessionManager>();
             var registry = scope.ServiceProvider.GetRequiredService<IDatabaseRegistry>();
             var bundle = scope.ServiceProvider.GetRequiredService<ISdkConnectionBundle>();
-            var home = await SdkHomeResolver.ResolveAsync(registry, bundle, _options, cancellationToken)
+            var home = await SdkHomeResolver.ResolveAsync(
+                    registry, bundle, _options, cancellationToken, preferredDbCode)
                 .ConfigureAwait(false);
             if (home.Length == 0)
+            {
+                _logger.LogWarning(
+                    "SDK cannot return to Master: no MASTER/BOTH company is in Secrets Manager " +
+                    "(need e.g. MAINTEST → ACC-MAIN.FDB). Logging out of the last sub instead.");
+                await session.DisconnectAsync(cancellationToken).ConfigureAwait(false);
                 return;
+            }
+
             await session.ReturnHomeAsync(home, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "SDK return-home skipped");
+            _logger.LogWarning(ex, "SDK return-home skipped");
         }
     }
 }
