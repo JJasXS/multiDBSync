@@ -934,75 +934,24 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
 
 
 
-        if (existing is not null)
-
+        if (existing is not null
+            || ((string.Equals(destEntity, EntityCodes.Item, StringComparison.OrdinalIgnoreCase)
+                 || string.Equals(destEntity, EntityCodes.Account, StringComparison.OrdinalIgnoreCase)
+                 || PartnerSyncRules.IsPartyEntity(destEntity))
+                && await _read.MasterExistsByCodeAsync(dest!, destEntity, record.Code, cancellationToken).ConfigureAwait(false)))
         {
-
-            if (!job.DryRun)
-
-                await _mapping.TouchLastSyncAtAsync(existing.MappingId, cancellationToken).ConfigureAwait(false);
-
-            write = new WriteResult
-
-            {
-
-                Success = true,
-
-                DocNo = existing.SubCode,
-
-                Message = "Mapping exists; destination already identified. No duplicate created."
-
-            };
-
+            // Already on sub → UPDATE fields (do not skip or create a second row).
+            write = await UpdateExistingOnDestAsync(
+                job, src, dest!, sourceEntity, destEntity, record, stamp, writer, cancellationToken)
+                .ConfigureAwait(false);
         }
-
         else if (PartnerSyncRules.IsPartyEntity(destEntity)
-
                  && await _read.PartyExistsByStampAsync(dest!, destEntity, stamp, cancellationToken).ConfigureAwait(false))
-
         {
-
             write = new WriteResult
-
             {
-
                 Success = true,
-
                 Message = "Destination already has a record with this sync stamp. Skipped to prevent loop."
-
-            };
-
-        }
-
-        else if ((string.Equals(destEntity, EntityCodes.Item, StringComparison.OrdinalIgnoreCase)
-                  || string.Equals(destEntity, EntityCodes.Account, StringComparison.OrdinalIgnoreCase)
-                  || PartnerSyncRules.IsPartyEntity(destEntity))
-                 && await _read.MasterExistsByCodeAsync(dest!, destEntity, record.Code, cancellationToken).ConfigureAwait(false))
-        {
-            var enriched = await LoadSourceRecordAsync(src!, sourceEntity, record.Code, cancellationToken).ConfigureAwait(false) ?? record;
-            if (!job.DryRun)
-            {
-                await _mapping.ConfirmPairAsync(new EntityMapping
-                {
-                    MasterDbId = job.SourceDbId,
-                    SubDbId = job.DestDbId,
-                    EntityCode = sourceEntity,
-                    SrcEntityCode = sourceEntity,
-                    DstEntityCode = destEntity,
-                    MasterCode = enriched.Code,
-                    SubCode = enriched.Code,
-                    MasterDesc = enriched.Description,
-                    SubDesc = enriched.Description
-                }, job.CreatedBy,
-                    writeReverse: false,
-                    originJobId: job.JobId,
-                    cancellationToken).ConfigureAwait(false);
-            }
-            write = new WriteResult
-            {
-                Success = true,
-                DocNo = enriched.Code,
-                Message = $"Destination already has this {destEntity.ToLowerInvariant()} code. Mapping linked; no duplicate created."
             };
         }
         else
@@ -1297,6 +1246,8 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
             }
             destDocKey = destRow.DocKey;
             destParent = GlAccountMapper.ResolveDestParentDocKey(GlAccountMapper.ParentCodeOf(record), destChart);
+            if (destParent == 0)
+                destParent = -1;
             record.Fields[GlAccountMapper.FieldDestParent] = destParent.ToString(CultureInfo.InvariantCulture);
         }
         else if (!await _read.MasterExistsByCodeAsync(dest!, destEntity, record.Code, cancellationToken).ConfigureAwait(false))
@@ -1408,6 +1359,86 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
         CancellationToken cancellationToken) =>
         writer.CreateMasterAsync(dest, destEntity, record, stamp, source, sourceEntity, cancellationToken);
 
+    private async Task<WriteResult> UpdateExistingOnDestAsync(
+        SyncJob job,
+        RegisteredDatabase? source,
+        RegisteredDatabase dest,
+        string sourceEntity,
+        string destEntity,
+        MasterRecord record,
+        string stamp,
+        ISqlAccountWriteAdapter writer,
+        CancellationToken cancellationToken)
+    {
+        var enriched = await LoadSourceRecordAsync(source!, sourceEntity, record.Code, cancellationToken)
+            .ConfigureAwait(false) ?? record;
+
+        var destDocKey = 0;
+        var destParent = 0;
+        if (string.Equals(destEntity, EntityCodes.Account, StringComparison.OrdinalIgnoreCase))
+        {
+            var destChart = await _read.GetGlChartAsync(dest, cancellationToken).ConfigureAwait(false);
+            var destRow = destChart.FirstOrDefault(a =>
+                string.Equals((a.Code ?? "").Trim(), (enriched.Code ?? "").Trim(), StringComparison.OrdinalIgnoreCase));
+            if (destRow is null)
+            {
+                return new WriteResult
+                {
+                    Success = false,
+                    Message = $"Account {enriched.Code} looked present but chart row was not found for update."
+                };
+            }
+
+            destDocKey = destRow.DocKey;
+            destParent = GlAccountMapper.ResolveDestParentDocKey(GlAccountMapper.ParentCodeOf(enriched), destChart);
+            if (destParent == 0)
+                destParent = -1;
+            enriched.Fields[GlAccountMapper.FieldDestParent] = destParent.ToString(CultureInfo.InvariantCulture);
+        }
+
+        if (job.DryRun)
+        {
+            return new WriteResult
+            {
+                Success = true,
+                DocNo = enriched.Code,
+                Message = "Dry-run: would update existing destination row."
+            };
+        }
+
+        var write = await writer.UpdateMasterAsync(
+                dest, destEntity, enriched, stamp, destDocKey, destParent, cancellationToken, source, sourceEntity)
+            .ConfigureAwait(false);
+
+        if (write.Success)
+        {
+            await _mapping.ConfirmPairAsync(new EntityMapping
+            {
+                MasterDbId = job.SourceDbId,
+                SubDbId = job.DestDbId,
+                EntityCode = sourceEntity,
+                SrcEntityCode = sourceEntity,
+                DstEntityCode = destEntity,
+                MasterCode = enriched.Code,
+                SubCode = enriched.Code,
+                MasterDesc = enriched.Description,
+                SubDesc = enriched.Description
+            }, job.CreatedBy,
+                writeReverse: false,
+                originJobId: job.JobId,
+                cancellationToken).ConfigureAwait(false);
+
+            write = new WriteResult
+            {
+                Success = true,
+                DocNo = enriched.Code,
+                Message = string.IsNullOrWhiteSpace(write.Message) ? "Updated existing." : write.Message
+            };
+        }
+
+        return write;
+    }
+
     private async Task<string?> ClearUnusedPartyAccountAsync(
         RegisteredDatabase dest, string destEntity, string code, bool dryRun,
         CancellationToken cancellationToken)
@@ -1444,7 +1475,10 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
         var msg = message ?? "";
         return msg.Contains("No SDK connection settings", StringComparison.OrdinalIgnoreCase)
             || msg.Contains("DCF file not found", StringComparison.OrdinalIgnoreCase)
-            || msg.Contains("ProgID", StringComparison.OrdinalIgnoreCase);
+            || msg.Contains("ProgID", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("Null) into type (OleStr)", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("empty dataset", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("GL_ACC_CODE", StringComparison.OrdinalIgnoreCase);
     }
 
     private static void Add(DryRunResult result, string name, ValidationResult v) =>

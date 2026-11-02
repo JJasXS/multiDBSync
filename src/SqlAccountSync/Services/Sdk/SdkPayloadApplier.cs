@@ -36,7 +36,7 @@ public static class SdkPayloadApplier
     {
         if (value is null) return true;
         if (value is not string s) return false;
-        if (s.Length == 0) return true;
+        // Keep empty strings — SQL Acc OleStr fields (DESCRIPTION2, ACCTYPE, …) reject Null on Save.
         // Placeholder sent by HTTP API mappers; leave SQL Acc defaults instead.
         if (s is "----" or "-" or "n/a")
         {

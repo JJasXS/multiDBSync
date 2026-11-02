@@ -14,7 +14,8 @@ public static class SdkObjectMap
     {
         EntityCodes.Customer => "AR_CUSTOMER",
         EntityCodes.Supplier => "AP_SUPPLIER",
-        EntityCodes.Account => "GL_ACC",
+        // Wiki / COM ProgID spelling is GL_Acc; Find is case-insensitive on most builds.
+        EntityCodes.Account => "GL_Acc",
         EntityCodes.Item => "ST_ITEM",
         _ => ""
     };
@@ -130,6 +131,8 @@ public static class SdkObjectMap
     public static readonly HashSet<string> SkipPayloadKeys = new(StringComparer.OrdinalIgnoreCase)
     {
         "sdsbranch", "sdsdocdetail", "sdsitemuom", "sdscategory",
-        "lastmodified", "dirty", "outstanding", "dtlkey", "fromdocno"
+        "lastmodified", "dirty", "outstanding", "dtlkey", "fromdocno",
+        // DocKey is for Open/Params only — never write onto MainDataSet.
+        "dockey"
     };
 }

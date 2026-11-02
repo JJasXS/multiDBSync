@@ -73,8 +73,9 @@ public sealed class SdkWriteAdapter : ISqlAccountWriteAdapter
 
         try
         {
+            var docKey = destDocKey;
             return await _session.UseCompanyAsync(db.DbCode, biz =>
-                SaveMaster(biz, bizName, payload, code, isNew: false), cancellationToken)
+                SaveMaster(biz, bizName, payload, code, false, docKey), cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -120,6 +121,13 @@ public sealed class SdkWriteAdapter : ISqlAccountWriteAdapter
                     obj.Open();
                     try
                     {
+                        var main = obj.DataSets.Find(SdkObjectMap.MainDataSet);
+                        var empty = false;
+                        try { empty = main is null || Convert.ToBoolean(main.Eof); }
+                        catch { empty = false; }
+                        if (empty)
+                            return new WriteResult { Success = true, Message = "Already absent.", DocNo = key };
+
                         obj.Delete();
                         TrySave(obj);
                     }
@@ -262,7 +270,8 @@ public sealed class SdkWriteAdapter : ISqlAccountWriteAdapter
     }
 
     private WriteResult SaveMaster(
-        dynamic biz, string bizName, Dictionary<string, object?> payload, string code, bool isNew)
+        dynamic biz, string bizName, Dictionary<string, object?> payload, string code, bool isNew,
+        int destDocKey = 0)
     {
         dynamic? obj = null;
         try
@@ -275,22 +284,9 @@ public sealed class SdkWriteAdapter : ISqlAccountWriteAdapter
             {
                 obj.New();
             }
-            else
+            else if (!OpenExistingForEdit(obj, bizName, code, destDocKey))
             {
-                var foundKey = FindKeyByCode(obj, code);
-                if (foundKey is null)
-                    return Fail($"Record {code} not found in {bizName}.");
-
-                // Wiki samples: Params.Find("Code").Value = FindKeyByRef result, then Open + Edit.
-                try { obj.Params.Find("Code").Value = foundKey; }
-                catch
-                {
-                    try { obj.Params.Find("DocKey").Value = foundKey; }
-                    catch { /* fall through to Open */ }
-                }
-                obj.Open();
-                try { obj.Edit(); }
-                catch { /* some objects edit on Open */ }
+                return Fail($"Record {code} not found in {bizName}.");
             }
 
             var main = obj.DataSets.Find(SdkObjectMap.MainDataSet);
@@ -462,6 +458,41 @@ public sealed class SdkWriteAdapter : ISqlAccountWriteAdapter
                 catch { return null; }
             }
         }
+    }
+
+    private static bool OpenExistingForEdit(dynamic obj, string bizName, string code, int destDocKey)
+    {
+        // GL chart: open by DocKey from Firebird chart read (FindKeyByRef is unreliable here).
+        if (destDocKey > 0
+            && bizName.Contains("GL", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                obj.Params.Find("DocKey").Value = destDocKey;
+                obj.Open();
+                try { obj.Edit(); } catch { /* some objects edit on Open */ }
+                return true;
+            }
+            catch
+            {
+                // fall through to FindKeyByRef
+            }
+        }
+
+        var foundKey = FindKeyByCode(obj, code);
+        if (foundKey is null)
+            return false;
+
+        try { obj.Params.Find("Code").Value = foundKey; }
+        catch
+        {
+            try { obj.Params.Find("DocKey").Value = foundKey; }
+            catch { /* fall through to Open */ }
+        }
+
+        obj.Open();
+        try { obj.Edit(); } catch { /* some objects edit on Open */ }
+        return true;
     }
 
     private static void TrySave(dynamic obj)
