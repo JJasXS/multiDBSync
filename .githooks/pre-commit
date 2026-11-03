@@ -1,0 +1,50 @@
+#!/bin/sh
+# Filename-only secret gate. Does not open or print file contents.
+# Blocks staged real .env / private-key paths, including those added with git add -f.
+# Allows basename .env.example templates only.
+
+set -e
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+if [ -z "$staged" ]; then
+  exit 0
+fi
+
+fail=0
+OLDIFS=$IFS
+IFS='
+'
+for path in $staged; do
+  IFS=$OLDIFS
+  [ -z "$path" ] && continue
+
+  base=${path##*/}
+  lower=$(printf '%s' "$base" | tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz')
+
+  case "$lower" in
+    .env.example)
+      ;;
+    .env|.env.*)
+      echo "pre-commit: blocked staged env file: $path" >&2
+      fail=1
+      ;;
+    *.pem|*.pfx|*.p12|*.key|*.ppk)
+      echo "pre-commit: blocked staged key/cert file: $path" >&2
+      fail=1
+      ;;
+    id_rsa|id_dsa|id_ecdsa|id_ed25519)
+      echo "pre-commit: blocked staged private key file: $path" >&2
+      fail=1
+      ;;
+  esac
+done
+IFS=$OLDIFS
+
+if [ "$fail" -ne 0 ]; then
+  echo "pre-commit: remove secret files from the index (git restore --staged <path>)." >&2
+  echo "pre-commit: force-add (-f) does not bypass this hook." >&2
+  echo "pre-commit: bypasses still exist: --no-verify, disabling hooksPath, or committing elsewhere." >&2
+  exit 1
+fi
+
+exit 0
