@@ -19,12 +19,16 @@ public class GlAccountMapperTests
         };
 
         var payload = GlAccountMapper.ToApiPayload(row, destParentDocKey: 42);
-        Assert.Equal(0, payload["dockey"]);
+        // Create payload omits dockey (SDK New); updates set dockey via ToUpdatePayload.
+        Assert.False(payload.ContainsKey("dockey"));
         Assert.Equal(42, payload["parent"]);
         Assert.Equal("300-000", payload["code"]);
         Assert.Equal("TRADE DEBTORS", payload["description"]);
         Assert.Equal("CA", payload["acctype"]);
         Assert.Equal("DC", payload["specialacctype"]);
+
+        var root = GlAccountMapper.ToApiPayload(row, destParentDocKey: 0);
+        Assert.Equal(-1, root["parent"]);
     }
 
     [Fact]

@@ -13,6 +13,11 @@ public interface IJobQueue
 {
     Task<JobEnqueueResult> EnqueueAsync(SyncJob job, CancellationToken cancellationToken = default, bool reviveCancelled = true);
     Task<SyncJob?> ClaimAsync(string workerId, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Claim one specific PENDING/RETRYING job by id (Development single-job path).
+    /// Does not scan or claim other queued jobs.
+    /// </summary>
+    Task<SyncJob?> ClaimExactAsync(int jobId, string workerId, CancellationToken cancellationToken = default);
     Task CompleteAsync(int jobId, string status, string? error, CancellationToken cancellationToken = default);
     Task<List<SyncJob>> ListAsync(string? status = null, int take = 200, CancellationToken cancellationToken = default);
     Task<SyncJob?> GetAsync(int jobId, CancellationToken cancellationToken = default);
@@ -151,6 +156,21 @@ WHERE JOBID=@JOBID AND STATUS IN ('PENDING','RETRYING') AND NEXTRUNAT<=CURRENT_T
         if (rows != 1)
             return null;
         return await GetAsync(candidate.JobId, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<SyncJob?> ClaimExactAsync(int jobId, string workerId, CancellationToken cancellationToken = default)
+    {
+        if (!_db.IsConfigured || jobId <= 0)
+            return null;
+
+        var rows = await _db.ExecuteAsync(@"
+UPDATE SYNC_JOB
+SET STATUS='PROCESSING', LOCKEDBY=@LOCKEDBY, LOCKEDAT=CURRENT_TIMESTAMP, ATTEMPTS=ATTEMPTS+1
+WHERE JOBID=@JOBID AND STATUS IN ('PENDING','RETRYING') AND NEXTRUNAT<=CURRENT_TIMESTAMP",
+            new { LOCKEDBY = workerId, JOBID = jobId }, cancellationToken).ConfigureAwait(false);
+        if (rows != 1)
+            return null;
+        return await GetAsync(jobId, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task CompleteAsync(int jobId, string status, string? error, CancellationToken cancellationToken = default)

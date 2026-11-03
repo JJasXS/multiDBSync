@@ -118,6 +118,10 @@ public class ItemDestCodeLinkTests
                 new NoopAuditService(),
                 new NoopErrorLogService(),
                 new NoopItemPrerequisiteService(),
+                new NoopFirebirdPartyInsert(),
+                new NoopFirebirdAccountInsert(),
+                new NoopFirebirdPartyMutate(),
+                new NoopFirebirdAccountMutate(),
                 Microsoft.Extensions.Options.Options.Create(new SyncOptions()));
         }
 
@@ -241,6 +245,10 @@ public class ItemDestCodeLinkTests
 
         public Task<WriteResult> CreateDocumentAsync(RegisteredDatabase db, string apiPath, DocumentHeader document, string txnStamp, CancellationToken cancellationToken = default) =>
             Task.FromResult(new WriteResult { Success = true });
+
+        public Task<WriteResult> CreateStockGroupAsync(
+            RegisteredDatabase db, StockGroupRecord group, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new WriteResult { Success = true, DocNo = group.Code });
     }
 
     private sealed class TestMappingService : IMappingService
@@ -309,6 +317,7 @@ public class ItemDestCodeLinkTests
         public Task<JobEnqueueResult> EnqueueAsync(SyncJob job, CancellationToken cancellationToken = default, bool reviveCancelled = true) =>
             Task.FromResult(new JobEnqueueResult(job.JobId, true));
         public Task<SyncJob?> ClaimAsync(string workerId, CancellationToken cancellationToken = default) => Task.FromResult<SyncJob?>(null);
+        public Task<SyncJob?> ClaimExactAsync(int jobId, string workerId, CancellationToken cancellationToken = default) => Task.FromResult<SyncJob?>(null);
         public Task<List<SyncJob>> ListAsync(string? status = null, int take = 200, CancellationToken cancellationToken = default) => Task.FromResult(new List<SyncJob>());
         public Task<SyncJob?> GetAsync(int jobId, CancellationToken cancellationToken = default) => Task.FromResult<SyncJob?>(null);
         public Task CancelAsync(int jobId, CancellationToken cancellationToken = default) => Task.CompletedTask;
@@ -345,6 +354,51 @@ public class ItemDestCodeLinkTests
         public Task<List<PrerequisiteCheck>> CheckAsync(
             RegisteredDatabase dest, RegisteredDatabase? source, MasterRecord record, CancellationToken cancellationToken = default) =>
             Task.FromResult(new List<PrerequisiteCheck>());
+    }
+
+    private sealed class NoopFirebirdPartyInsert : IFirebirdPartyInsert
+    {
+        public Task<WriteResult> CreateAsync(
+            RegisteredDatabase dest,
+            string targetEntityCode,
+            MasterRecord record,
+            string txnStamp,
+            RegisteredDatabase? sourceDb,
+            string? sourceEntityCode,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new WriteResult { Success = false, Message = "Firebird fallback disabled in tests." });
+    }
+
+    private sealed class NoopFirebirdAccountInsert : IFirebirdAccountInsert
+    {
+        public Task<WriteResult> CreateAsync(
+            RegisteredDatabase dest,
+            MasterRecord record,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new WriteResult { Success = false, Message = "Firebird account fallback disabled in tests." });
+    }
+
+    private sealed class NoopFirebirdPartyMutate : IFirebirdPartyMutate
+    {
+        public Task<WriteResult> UpdateAsync(
+            RegisteredDatabase dest, string targetEntityCode, MasterRecord record, string txnStamp,
+            RegisteredDatabase? sourceDb, string? sourceEntityCode, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new WriteResult { Success = false, Message = "disabled" });
+
+        public Task<WriteResult> DeleteAsync(
+            RegisteredDatabase dest, string targetEntityCode, string code, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new WriteResult { Success = false, Message = "disabled" });
+    }
+
+    private sealed class NoopFirebirdAccountMutate : IFirebirdAccountMutate
+    {
+        public Task<WriteResult> UpdateAsync(
+            RegisteredDatabase dest, MasterRecord record, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new WriteResult { Success = false, Message = "disabled" });
+
+        public Task<WriteResult> DeleteAsync(
+            RegisteredDatabase dest, string code, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new WriteResult { Success = false, Message = "disabled" });
     }
 
     private sealed class NoopSecretResolver : ISecretResolver

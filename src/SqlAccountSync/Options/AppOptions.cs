@@ -14,6 +14,18 @@ public sealed class CentralDbOptions
 }
 
 /// <summary>
+/// Optional local login Firebird override. When <see cref="Path"/> is set, SY_USER lookups
+/// use this database instead of AWS tenant-config <c>database.dbPath</c>. Leave Path empty in production.
+/// </summary>
+public sealed class LoginDbOptions
+{
+    public const string SectionName = "LoginDb";
+    public string Host { get; set; } = "localhost";
+    public int Port { get; set; } = 3050;
+    public string Path { get; set; } = "";
+}
+
+/// <summary>
 /// Dashboard company registry source. <see cref="Mode"/> Local reads <see cref="CentralDbOptions"/>.
 /// Live reads another Firebird SYNC database with SELECT only. Writes always stay on <see cref="CentralDbOptions"/>.
 /// </summary>
@@ -57,6 +69,17 @@ public sealed class SyncOptions
     public int OtpMinutes { get; set; } = 10;
     public int WorkerPollSeconds { get; set; } = 5;
     /// <summary>
+    /// When false, <c>SyncWorker</c> and <c>AccountAutoPushWorker</c> idle and do not claim or enqueue write jobs.
+    /// Production default remains true. Local Development SDK verification sets this false.
+    /// </summary>
+    public bool EnableBackgroundWriteWorkers { get; set; } = true;
+    /// <summary>
+    /// Development-only: allow POST /api/dev/jobs/{jobId}/process to claim and run one
+    /// explicitly selected job via SyncOrchestrator / TransactionEngine without enabling
+    /// background workers. Default false. Must stay false in Production.
+    /// </summary>
+    public bool AllowDevSingleJobProcess { get; set; }
+    /// <summary>
     /// How often to auto-push missing ACCOUNT codes from MASTER/BOTH to linked subs.
     /// Set 0 to disable. Default 60 (one minute).
     /// </summary>
@@ -79,6 +102,17 @@ public sealed class SyncOptions
     /// <summary>Max delete jobs enqueued per master→sub pair per cycle.</summary>
     public int AccountAutoDeleteMaxPerCycle { get; set; } = 25;
     public int MaxAttempts { get; set; } = 5;
+    /// <summary>
+    /// HTTP timeout for SQL Accounting REST writes when <c>SqlAccountingWrite:Provider=Rest</c>.
+    /// Default 30. Clamped to 5–300 at runtime.
+    /// </summary>
+    public int WriteHttpTimeoutSeconds { get; set; } = 30;
+    /// <summary>
+    /// When true, after SQL Acc API create/update/delete times out (and one immediate retry),
+    /// write customer/supplier/account directly into the destination Firebird DB.
+    /// Never used when <c>SqlAccountingWrite:Provider=Sdk</c>.
+    /// </summary>
+    public bool PartyFirebirdInsertFallbackEnabled { get; set; } = true;
     /// <summary>
     /// Max seconds for one SDK COM call (login/save). On timeout BizApp is recreated.
     /// Default 60. Clamped to 5–600 at runtime.
@@ -147,4 +181,10 @@ public sealed class FeatureOptions
     public bool ShowMappingsUi { get; set; }
     /// <summary>When false, Sync configuration nav/links are hidden and /SyncConfig redirects away. Rules still apply if configured.</summary>
     public bool ShowSyncConfigUi { get; set; }
+
+    /// <summary>
+    /// Development lab only: keep Document Transfer visible even when the AWS tenant plan hides it.
+    /// Never enable in Production appsettings.
+    /// </summary>
+    public bool ForceShowDocumentTransferUi { get; set; }
 }

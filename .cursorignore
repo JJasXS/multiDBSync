@@ -1,0 +1,49 @@
+﻿# Cursor context / AI access exclusions.
+# Limitation: agents, terminal, and explicit path opens can still reach ignored files.
+# This is not absolute protection — see docs/SECURITY_PROTECTIONS.md.
+
+.env
+.env.*
+!.env.example
+!**/.env.example
+!.env*.example
+!**/.env*.example
+
+*.pem
+*.pfx
+*.p12
+*.key
+*.ppk
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+secrets/
+**/secrets/
+.secrets/
+**/.secrets/
+.certs/
+tls/
+
+# Additional local credential filenames
+*credentials*.json
+credentials.json
+client_secret*.json
+.aws/credentials
+.aws/config
+user-secrets.json
+*.usersecrets.json
+appsettings.*.local.json
+appsettings.Local.json
+secrets.json
+*secret*.local.*
+
+_buildcheck/
+_buildcheck*/
+**/[Bb]in/
+**/[Oo]bj/
+**/publish/
+**/out/
+artifacts/
+Data/*.fdb
+Data/*.FDB

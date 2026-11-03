@@ -12,6 +12,14 @@
 copy src\SqlAccountSync\.env.example src\SqlAccountSync\.env
 ```
 
+Do not commit `.env`. Enable the local secret filename hook once per clone:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\install-git-hooks.ps1
+```
+
+Details and limitations: [SECURITY_PROTECTIONS.md](SECURITY_PROTECTIONS.md).
+
 Set `CENTRAL_FB_MASTERKEY` and `CentralDb` path. Then:
 
 ```powershell
