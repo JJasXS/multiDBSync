@@ -57,6 +57,11 @@ public sealed class SyncOptions
     public int OtpMinutes { get; set; } = 10;
     public int WorkerPollSeconds { get; set; } = 5;
     /// <summary>
+    /// When false, <c>SyncWorker</c> and <c>AccountAutoPushWorker</c> idle and do not claim or enqueue write jobs.
+    /// Production default remains true. Local Development SDK verification sets this false.
+    /// </summary>
+    public bool EnableBackgroundWriteWorkers { get; set; } = true;
+    /// <summary>
     /// How often to auto-push missing ACCOUNT codes from MASTER/BOTH to linked subs.
     /// Set 0 to disable. Default 60 (one minute).
     /// </summary>
