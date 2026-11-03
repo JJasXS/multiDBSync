@@ -15,19 +15,22 @@ public class IndexModel : SyncPageModel
     private readonly ISqlAccountWriteAdapter _write;
     private readonly ISyncOrchestrator _sync;
     private readonly IAutoPushSettings _autoPush;
+    private readonly IAutoPushSchedule _autoPushSchedule;
 
     public IndexModel(
         IDatabaseRegistry registry,
         ISqlAccountReadAdapter read,
         ISqlAccountWriteAdapter write,
         ISyncOrchestrator sync,
-        IAutoPushSettings autoPush)
+        IAutoPushSettings autoPush,
+        IAutoPushSchedule autoPushSchedule)
     {
         _registry = registry;
         _read = read;
         _write = write;
         _sync = sync;
         _autoPush = autoPush;
+        _autoPushSchedule = autoPushSchedule;
     }
 
     [BindProperty(SupportsGet = true)] public string Tab { get; set; } = "push";
@@ -49,6 +52,8 @@ public class IndexModel : SyncPageModel
     [BindProperty] public bool AutoPushSupplier { get; set; }
     [BindProperty] public bool AutoPushAccount { get; set; }
     public bool AutoPushPanelOpen { get; set; }
+    public bool AutoPushAny { get; set; }
+    public AutoPushScheduleSnapshot AutoPushCountdown { get; set; } = new();
 
     public List<RegisteredDatabase> SourceDatabases { get; set; } = [];
     public List<RegisteredDatabase> TargetSubs { get; set; } = [];
@@ -65,6 +70,19 @@ public class IndexModel : SyncPageModel
     {
         Tab = "push";
         await LoadPushAsync();
+    }
+
+    public async Task<IActionResult> OnGetAutoPushStatusAsync()
+    {
+        var flags = await _autoPush.GetAsync().ConfigureAwait(false);
+        var snap = _autoPushSchedule.Snapshot(flags.Any);
+        return new JsonResult(new
+        {
+            active = snap.Active,
+            intervalSeconds = snap.IntervalSeconds,
+            nextDueUnixMs = snap.NextDueUnixMs,
+            remainingSeconds = snap.RemainingSeconds
+        });
     }
 
     public async Task<IActionResult> OnPostPushAsync()
@@ -178,6 +196,8 @@ public class IndexModel : SyncPageModel
         AutoPushCustomer = flags.Customer;
         AutoPushSupplier = flags.Supplier;
         AutoPushAccount = flags.Account;
+        AutoPushAny = flags.Any;
+        AutoPushCountdown = _autoPushSchedule.Snapshot(flags.Any);
     }
 
     private async Task<List<RegisteredDatabase>> ResolveTargetsAsync(int sourceDbId, List<RegisteredDatabase> databases)

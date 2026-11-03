@@ -23,6 +23,14 @@
         <div class="master-section-current">
             <span class="master-section-label">Multi Push</span>
             <span class="master-section-hint">Multiple rows</span>
+            <span class="auto-push-countdown"
+                  data-auto-push-timer
+                  data-status-url="@Url.Page("/Push/Index", "AutoPushStatus")"
+                  data-active="@(Model.AutoPushAny ? "true" : "false")"
+                  data-next-due="@(Model.AutoPushCountdown.NextDueUnixMs?.ToString() ?? "")"
+                  data-interval="@Model.AutoPushCountdown.IntervalSeconds"
+                  @(Model.AutoPushAny ? null : "hidden")
+                  aria-live="polite">Auto push in —</span>
         </div>
         <div class="master-section-menu @(Model.AutoPushPanelOpen ? "is-open" : "")" data-master-menu>
             <button type="button"
@@ -69,7 +77,7 @@
                         </form>
                     </div>
                 }
-                <p class="auto-push-hint">On copies new master codes to linked subs about once a minute. The first run also sends older codes the subs are still missing. Creates only.</p>
+                <p class="auto-push-hint">On copies new master codes to linked subs on the red countdown. The first run also sends older codes the subs are still missing. Creates only (Account also updates/deletes when on).</p>
             </div>
         </div>
     </div>
@@ -425,4 +433,5 @@
 })();
 </script>
 }
+<script src="~/js/auto-push-timer.js" asp-append-version="true"></script>
 </div>
