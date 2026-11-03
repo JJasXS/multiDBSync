@@ -60,14 +60,16 @@ public class LoginModel : PageModel
         if (!await ValidateAntiForgeryAsync().ConfigureAwait(false))
             return new JsonResult(new { success = false, message = "Invalid session. Refresh and try again." });
 
-        var (ok, msg, debugCode) = await _auth.SendOtpAsync(email ?? "");
+        var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
+        var (ok, msg, debugCode) = await _auth.SendOtpAsync(email ?? "", ip).ConfigureAwait(false);
+        // debugOtp is non-null only in local Development + APP_MODE=dev (never Production).
         return new JsonResult(new
         {
             success = ok,
             message = msg,
             email = (email ?? "").Trim(),
             expiresInSeconds = OtpSeconds,
-            resendCooldownSeconds = 30,
+            resendCooldownSeconds = OtpAuthService.SendCooldownSeconds,
             debugOtp = debugCode
         });
     }
@@ -77,11 +79,12 @@ public class LoginModel : PageModel
         if (!await ValidateAntiForgeryAsync().ConfigureAwait(false))
             return new JsonResult(new { success = false, message = "Invalid session. Refresh and try again." });
 
-        var (ok, user, msg) = await _auth.VerifyAsync(email ?? "", code ?? "");
+        var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
+        var (ok, user, msg) = await _auth.VerifyAsync(email ?? "", code ?? "", ip).ConfigureAwait(false);
         if (!ok || user is null)
             return new JsonResult(new { success = false, message = msg });
 
-        await OtpAuthService.SignInAsync(HttpContext, user);
+        await OtpAuthService.SignInAsync(HttpContext, user).ConfigureAwait(false);
         return new JsonResult(new { success = true, message = msg, redirect = Url.Page("/Index") });
     }
 

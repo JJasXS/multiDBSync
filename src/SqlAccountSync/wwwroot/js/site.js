@@ -131,35 +131,6 @@
 })();
 
 (() => {
-  const codeInput = document.querySelector("[data-db-code]");
-  const credInput = document.querySelector("[data-api-cred-ref]");
-  if (!codeInput || !credInput) return;
-  if (codeInput.getAttribute("data-sync-api-cred") !== "true") return;
-
-  const tenant = (codeInput.getAttribute("data-tenant-code") || "").trim();
-  if (!tenant) return;
-
-  const bundle = `proacc/tenant/${tenant}/sqlApiCredentials`;
-  const legacy = `proacc/tenant/${tenant}/sqlApiCredentials/`;
-  const visible = (v) => (v || "").trim().replace(/^sm:/i, "");
-
-  const sync = () => {
-    const current = visible(credInput.value);
-    const managed =
-      !current ||
-      current.includes("{CODE}") ||
-      current.includes("{DBID}") ||
-      current === bundle ||
-      current.startsWith(legacy);
-    if (!managed) return;
-    credInput.value = bundle;
-  };
-
-  codeInput.addEventListener("input", sync);
-  sync();
-})();
-
-(() => {
   document.querySelectorAll("[data-check-all]").forEach((master) => {
     master.addEventListener("change", () => {
       const group = master.getAttribute("data-check-all");

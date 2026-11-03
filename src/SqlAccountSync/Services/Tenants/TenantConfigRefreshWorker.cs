@@ -1,6 +1,3 @@
-using SqlAccountSync.Services.Databases;
-using SqlAccountSync.Services.Secrets;
-
 namespace SqlAccountSync.Services.Tenants;
 
 /// <summary>Re-reads the AWS tenant JSON once a minute so plan fields such as maxDatabases stay current.</summary>
@@ -12,7 +9,6 @@ public sealed class TenantConfigRefreshWorker : BackgroundService
     private readonly IConfiguration _config;
     private readonly ILogger<TenantConfigRefreshWorker> _logger;
     private readonly TenantMenuFlags _menu;
-    private int _secretsMigrated;
 
     public TenantConfigRefreshWorker(
         IServiceScopeFactory scopes,
@@ -59,7 +55,6 @@ public sealed class TenantConfigRefreshWorker : BackgroundService
             await tenants.RefreshAsync(tenant, stoppingToken).ConfigureAwait(false);
             var menu = await tenants.GetMenuFlagsAsync(tenant, stoppingToken).ConfigureAwait(false);
             _menu.Apply(menu.ShowSynchronization, menu.ShowDocumentTransfer);
-            await MigrateSecretsOnceAsync(scope.ServiceProvider, tenant, stoppingToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
@@ -68,17 +63,6 @@ public sealed class TenantConfigRefreshWorker : BackgroundService
         {
             _logger.LogWarning(ex, "Tenant config refresh failed for {Tenant}.", tenant);
         }
-    }
-
-    private async Task MigrateSecretsOnceAsync(IServiceProvider services, string tenant, CancellationToken cancellationToken)
-    {
-        if (_secretsMigrated != 0)
-            return;
-        var bundle = services.GetRequiredService<ISqlApiCredentialBundle>();
-        var databases = services.GetRequiredService<IDatabaseRegistry>();
-        await bundle.MigrateLegacyAsync(tenant, cancellationToken).ConfigureAwait(false);
-        await databases.PointSqlApiCredRefsAtBundleAsync(tenant, cancellationToken).ConfigureAwait(false);
-        _secretsMigrated = 1;
     }
 
     private static async Task<bool> WaitAsync(CancellationToken stoppingToken)

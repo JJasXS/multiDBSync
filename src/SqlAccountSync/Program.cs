@@ -1,6 +1,7 @@
 using Amazon;
 using Amazon.SecretsManager;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Hosting;
 using SqlAccountSync.Authorization;
@@ -14,6 +15,7 @@ using SqlAccountSync.Services.Connections;
 using SqlAccountSync.Services.Databases;
 using SqlAccountSync.Services.Mapping;
 using SqlAccountSync.Services.Queue;
+using SqlAccountSync.Services.Sdk;
 using SqlAccountSync.Services.Secrets;
 using SqlAccountSync.Services.Items;
 using SqlAccountSync.Services.SqlAccount;
@@ -35,8 +37,35 @@ foreach (var envPath in new[]
     }
 }
 
+if (args.Any(a => string.Equals(a, "--sdk-discover", StringComparison.OrdinalIgnoreCase)))
+{
+    await SdkDiscoverHost.RunAsync(args).ConfigureAwait(false);
+    return;
+}
+
+if (args.Any(a => string.Equals(a, "--sdk-write-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    await SdkWriteSmokeHost.RunAsync(args).ConfigureAwait(false);
+    return;
+}
+
+if (args.Any(a => string.Equals(a, "--sdk-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    await SdkSmokeHost.RunAsync(args).ConfigureAwait(false);
+    return;
+}
+
 var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseWindowsService();
+
+// Persist antiforgery/auth keys outside publish so redeploys do not invalidate browser cookies.
+var dpKeysDir = Path.Combine(
+    Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+    "SqlAccountSync", "dp-keys");
+Directory.CreateDirectory(dpKeysDir);
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(dpKeysDir))
+    .SetApplicationName("SqlAccountSync");
 
 // Standard ProAcc .env keys (same names as ApprovalPO / eQuotation).
 var envOverrides = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
@@ -57,6 +86,18 @@ var bootstrapUrlFromEnv = (Environment.GetEnvironmentVariable("TENANT_BOOTSTRAP_
     ?? Environment.GetEnvironmentVariable("TenantBootstrap__AwsApiBaseUrl"))?.Trim();
 if (!string.IsNullOrEmpty(bootstrapUrlFromEnv))
     envOverrides["TenantBootstrap:AwsApiBaseUrl"] = bootstrapUrlFromEnv;
+
+var sdkSecretFromEnv = (Environment.GetEnvironmentVariable("SDK_SECRET_ID")
+    ?? builder.Configuration["SDK_SECRET_ID"])?.Trim();
+if (!string.IsNullOrEmpty(sdkSecretFromEnv))
+    envOverrides["Sync:SdkSecretId"] = sdkSecretFromEnv;
+
+var appModeFromEnv = (Environment.GetEnvironmentVariable("APP_MODE")
+    ?? Environment.GetEnvironmentVariable("Sync__AppMode")
+    ?? builder.Configuration["APP_MODE"]
+    ?? builder.Configuration["Sync:AppMode"])?.Trim();
+if (!string.IsNullOrEmpty(appModeFromEnv))
+    envOverrides["Sync:AppMode"] = appModeFromEnv;
 
 if (envOverrides.Count > 0)
     builder.Configuration.AddInMemoryCollection(envOverrides);
@@ -84,20 +125,6 @@ catch
 }
 
 builder.Services.AddMemoryCache();
-var writeHttpTimeoutSeconds = Math.Clamp(
-    builder.Configuration.GetValue("Sync:WriteHttpTimeoutSeconds", 30), 5, 300);
-builder.Services.AddHttpClient<SqlAccountApiWriteAdapter>(client =>
-{
-    client.Timeout = TimeSpan.FromSeconds(writeHttpTimeoutSeconds);
-    // SQL Accounting IntraWeb BFF rejects clients without a modern browser User-Agent (HTTP 500 HTML).
-    client.DefaultRequestHeaders.UserAgent.ParseAdd(
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36");
-}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { UseCookies = false });
-builder.Services.AddHttpClient<ISqlAccountApiClient, SqlAccountApiClient>(client =>
-{
-    client.DefaultRequestHeaders.UserAgent.ParseAdd(
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36");
-}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { UseCookies = false });
 builder.Services.AddHttpClient<TenantEmailBootstrap>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(30);
@@ -106,8 +133,8 @@ builder.Services.AddTransient<ITenantEmailBootstrap>(sp => sp.GetRequiredService
 builder.Services.AddTransient<ITenantDatabaseBootstrap>(sp => sp.GetRequiredService<TenantEmailBootstrap>());
 builder.Services.AddSingleton<TenantMenuFlags>();
 builder.Services.AddSingleton<ISecretResolver, SecretResolver>();
-builder.Services.AddSingleton<ISqlApiCredentialBundle, SqlApiCredentialBundle>();
-builder.Services.AddSingleton<ISqlApiSecretProvisioner, SqlApiSecretProvisioner>();
+builder.Services.AddSingleton<ISdkConnectionBundle, SdkConnectionBundle>();
+builder.Services.AddSingleton<ISdkSessionManager, SdkSessionManager>();
 builder.Services.AddSingleton<CentralDb>();
 builder.Services.AddSingleton<IRegistryReadGateway, RegistryReadGateway>();
 builder.Services.AddSingleton<CompanyConnectionFactory>();
@@ -123,11 +150,8 @@ builder.Services.AddScoped<IErrorLogService, ErrorLogService>();
 builder.Services.AddScoped<IConnectionTestService, ConnectionTestService>();
 builder.Services.AddScoped<ISqlAccountReadAdapter, FirebirdReadAdapter>();
 builder.Services.AddScoped<IItemPrerequisiteService, ItemPrerequisiteService>();
-builder.Services.AddScoped<IFirebirdPartyInsert, FirebirdPartyInsert>();
-builder.Services.AddScoped<IFirebirdAccountInsert, FirebirdAccountInsert>();
-builder.Services.AddScoped<IFirebirdPartyMutate, FirebirdPartyMutate>();
-builder.Services.AddScoped<IFirebirdAccountMutate, FirebirdAccountMutate>();
-builder.Services.AddScoped<ISqlAccountWriteAdapter>(sp => sp.GetRequiredService<SqlAccountApiWriteAdapter>());
+builder.Services.AddScoped<ISqlAccountWriteAdapter, SdkWriteAdapter>();
+builder.Services.AddScoped<SdkWriteAdapter>();
 builder.Services.AddScoped<IMappingService, MappingService>();
 builder.Services.AddScoped<IValidationService, ValidationService>();
 builder.Services.AddScoped<IJobQueue, JobQueue>();
@@ -136,6 +160,7 @@ builder.Services.AddScoped<ITransferMasterEnsure, TransferMasterEnsure>();
 builder.Services.AddScoped<ITransactionEngine, TransactionEngine>();
 builder.Services.AddScoped<IAccountAutoPushService, AccountAutoPushService>();
 builder.Services.AddScoped<IAutoPushSettings, AutoPushSettings>();
+builder.Services.AddSingleton<IAutoPushSchedule, AutoPushSchedule>();
 builder.Services.AddScoped<IMasterMissingAutoPushService, MasterMissingAutoPushService>();
 builder.Services.AddHostedService<TenantConfigRefreshWorker>();
 builder.Services.AddHostedService<SyncWorker>();
@@ -154,6 +179,7 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.Cookie.HttpOnly = true;
         options.Cookie.Name = "SqlAccountSync.Auth";
         options.Cookie.SameSite = SameSiteMode.Lax;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
         options.Events.OnValidatePrincipal = AuthCookieEvents.ValidatePrincipalAsync;
     });
 
@@ -197,17 +223,31 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.Use(async (ctx, next) =>
+{
+    ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    ctx.Response.Headers["X-Frame-Options"] = "DENY";
+    ctx.Response.Headers["Referrer-Policy"] = "no-referrer";
+    ctx.Response.Headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()";
+    await next();
+});
 app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<TenantMenuMiddleware>();
-app.MapGet("/health", async (IJobQueue queue) =>
+// Public liveness only — no queue/SDK internals.
+app.MapGet("/health", () => Results.Json(new { status = "ok" })).AllowAnonymous();
+// Detailed health for authenticated admins (monitoring UIs that can sign in).
+app.MapGet("/health/detail", async (HttpContext http, IJobQueue queue, ISdkSessionManager sdk, IConfiguration config) =>
 {
     var snap = await queue.GetHealthAsync();
-    var lease = builder.Configuration.GetValue("Sync:ProcessingLeaseSeconds", 900);
+    var lease = config.GetValue("Sync:ProcessingLeaseSeconds", 900);
+    var sdkHealth = sdk.GetHealth();
     var status = "ok";
-    if (snap.OldestProcessingAgeSec is double age && age > Math.Max(lease, 60) * 2)
+    if (!sdkHealth.ProgIdRegistered)
+        status = "sdk-offline";
+    else if (snap.OldestProcessingAgeSec is double age && age > Math.Max(lease, 60) * 2)
         status = "degraded";
     double? oldestAge = snap.OldestProcessingAgeSec is null
         ? null
@@ -215,6 +255,13 @@ app.MapGet("/health", async (IJobQueue queue) =>
     return Results.Json(new
     {
         status,
+        requestId = RequestId.Current(http),
+        sdk = new
+        {
+            progIdRegistered = sdkHealth.ProgIdRegistered,
+            loggedIn = sdkHealth.LoggedIn,
+            currentCompany = sdkHealth.CurrentCompany
+        },
         queue = new
         {
             pending = snap.Pending,
@@ -223,7 +270,7 @@ app.MapGet("/health", async (IJobQueue queue) =>
             oldestProcessingAgeSec = oldestAge
         }
     });
-}).AllowAnonymous();
+}).RequireAuthorization(PolicyNames.Admin);
 app.MapControllers();
 app.MapRazorPages();
 
@@ -236,6 +283,14 @@ try
 catch (Exception ex)
 {
     app.Logger.LogWarning(ex, "Central database bootstrap skipped or failed. Configure CentralDb and restart.");
+}
+
+{
+    var syncOpts = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<SyncOptions>>().Value;
+    var schedule = app.Services.GetRequiredService<IAutoPushSchedule>();
+    var seconds = Math.Clamp(syncOpts.AccountAutoPushSeconds <= 0 ? 60 : syncOpts.AccountAutoPushSeconds, 15, 3600);
+    schedule.SetIntervalSeconds(seconds);
+    schedule.ArmNextFromNow();
 }
 
 app.Run();

@@ -91,10 +91,6 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
     private readonly IErrorLogService _errors;
 
     private readonly IItemPrerequisiteService _itemPrereqs;
-    private readonly IFirebirdPartyInsert _partyFirebirdInsert;
-    private readonly IFirebirdAccountInsert _accountFirebirdInsert;
-    private readonly IFirebirdPartyMutate _partyFirebirdMutate;
-    private readonly IFirebirdAccountMutate _accountFirebirdMutate;
     private readonly SyncOptions _sync;
 
 
@@ -120,10 +116,6 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
         IErrorLogService errors,
 
         IItemPrerequisiteService itemPrereqs,
-        IFirebirdPartyInsert partyFirebirdInsert,
-        IFirebirdAccountInsert accountFirebirdInsert,
-        IFirebirdPartyMutate partyFirebirdMutate,
-        IFirebirdAccountMutate accountFirebirdMutate,
         IOptions<SyncOptions> sync)
 
     {
@@ -147,10 +139,6 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
         _errors = errors;
 
         _itemPrereqs = itemPrereqs;
-        _partyFirebirdInsert = partyFirebirdInsert;
-        _accountFirebirdInsert = accountFirebirdInsert;
-        _partyFirebirdMutate = partyFirebirdMutate;
-        _accountFirebirdMutate = accountFirebirdMutate;
         _sync = sync.Value;
 
     }
@@ -946,75 +934,24 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
 
 
 
-        if (existing is not null)
-
+        if (existing is not null
+            || ((string.Equals(destEntity, EntityCodes.Item, StringComparison.OrdinalIgnoreCase)
+                 || string.Equals(destEntity, EntityCodes.Account, StringComparison.OrdinalIgnoreCase)
+                 || PartnerSyncRules.IsPartyEntity(destEntity))
+                && await _read.MasterExistsByCodeAsync(dest!, destEntity, record.Code, cancellationToken).ConfigureAwait(false)))
         {
-
-            if (!job.DryRun)
-
-                await _mapping.TouchLastSyncAtAsync(existing.MappingId, cancellationToken).ConfigureAwait(false);
-
-            write = new WriteResult
-
-            {
-
-                Success = true,
-
-                DocNo = existing.SubCode,
-
-                Message = "Mapping exists; destination already identified. No duplicate created."
-
-            };
-
+            // Already on sub → UPDATE fields (do not skip or create a second row).
+            write = await UpdateExistingOnDestAsync(
+                job, src, dest!, sourceEntity, destEntity, record, stamp, writer, cancellationToken)
+                .ConfigureAwait(false);
         }
-
         else if (PartnerSyncRules.IsPartyEntity(destEntity)
-
                  && await _read.PartyExistsByStampAsync(dest!, destEntity, stamp, cancellationToken).ConfigureAwait(false))
-
         {
-
             write = new WriteResult
-
             {
-
                 Success = true,
-
                 Message = "Destination already has a record with this sync stamp. Skipped to prevent loop."
-
-            };
-
-        }
-
-        else if ((string.Equals(destEntity, EntityCodes.Item, StringComparison.OrdinalIgnoreCase)
-                  || string.Equals(destEntity, EntityCodes.Account, StringComparison.OrdinalIgnoreCase)
-                  || PartnerSyncRules.IsPartyEntity(destEntity))
-                 && await _read.MasterExistsByCodeAsync(dest!, destEntity, record.Code, cancellationToken).ConfigureAwait(false))
-        {
-            var enriched = await LoadSourceRecordAsync(src!, sourceEntity, record.Code, cancellationToken).ConfigureAwait(false) ?? record;
-            if (!job.DryRun)
-            {
-                await _mapping.ConfirmPairAsync(new EntityMapping
-                {
-                    MasterDbId = job.SourceDbId,
-                    SubDbId = job.DestDbId,
-                    EntityCode = sourceEntity,
-                    SrcEntityCode = sourceEntity,
-                    DstEntityCode = destEntity,
-                    MasterCode = enriched.Code,
-                    SubCode = enriched.Code,
-                    MasterDesc = enriched.Description,
-                    SubDesc = enriched.Description
-                }, job.CreatedBy,
-                    writeReverse: false,
-                    originJobId: job.JobId,
-                    cancellationToken).ConfigureAwait(false);
-            }
-            write = new WriteResult
-            {
-                Success = true,
-                DocNo = enriched.Code,
-                Message = $"Destination already has this {destEntity.ToLowerInvariant()} code. Mapping linked; no duplicate created."
             };
         }
         else
@@ -1056,7 +993,7 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
                 return;
             }
 
-            write = await CreateMasterWithFirebirdFallbackAsync(
+            write = await DirectCreateMasterAsync(
                 writer, dest!, destEntity, enriched, stamp, src, sourceEntity, job, cancellationToken)
                 .ConfigureAwait(false);
             if (!write.Success && !string.IsNullOrWhiteSpace(prereqDiagnosis))
@@ -1088,7 +1025,8 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
 
         if (!write.Success)
         {
-            var status = IsGlCodeConflict(write.Message) ? JobStatuses.Failed : JobStatuses.Retrying;
+            var permanent = IsGlCodeConflict(write.Message) || IsPermanentSdkFailure(write.Message);
+            var status = permanent ? JobStatuses.Failed : JobStatuses.Retrying;
             var message = IsGlCodeConflict(write.Message)
                 ? $"Account code {record.Code} already exists on the destination chart, so this {destEntity.ToLowerInvariant()} cannot be created with the same code."
                 : write.Message;
@@ -1174,7 +1112,7 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
         if (!parentReady.Ok)
             return parentReady;
 
-        var parentWrite = await CreateMasterWithFirebirdFallbackAsync(
+        var parentWrite = await DirectCreateMasterAsync(
             writer, dest, EntityCodes.Account, parentReady.Record, stamp, source, EntityCodes.Account, job, cancellationToken)
             .ConfigureAwait(false);
         if (!parentWrite.Success)
@@ -1308,6 +1246,8 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
             }
             destDocKey = destRow.DocKey;
             destParent = GlAccountMapper.ResolveDestParentDocKey(GlAccountMapper.ParentCodeOf(record), destChart);
+            if (destParent == 0)
+                destParent = -1;
             record.Fields[GlAccountMapper.FieldDestParent] = destParent.ToString(CultureInfo.InvariantCulture);
         }
         else if (!await _read.MasterExistsByCodeAsync(dest!, destEntity, record.Code, cancellationToken).ConfigureAwait(false))
@@ -1318,10 +1258,7 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
             return;
         }
 
-        var write = await WriteWithFirebirdFallbackAsync(
-            () => _write.UpdateMasterAsync(dest!, destEntity, record, stamp, destDocKey, destParent, cancellationToken, source, sourceEntity),
-            () => UpdateViaFirebirdAsync(dest!, destEntity, record, stamp, source, sourceEntity, cancellationToken),
-            job, destEntity, record.Code, cancellationToken).ConfigureAwait(false);
+        var write = await _write.UpdateMasterAsync(dest!, destEntity, record, stamp, destDocKey, destParent, cancellationToken, source, sourceEntity).ConfigureAwait(false);
 
         if (!write.Success)
         {
@@ -1384,10 +1321,7 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
         var sourceEntity = string.IsNullOrWhiteSpace(job.EntityCode) ? EntityCodes.Account : job.EntityCode;
         var destEntity = PartnerSyncRules.ResolveTargetEntity(source, dest, sourceEntity);
 
-        var write = await WriteWithFirebirdFallbackAsync(
-            () => _write.DeleteMasterAsync(dest!, destEntity, code, cancellationToken),
-            () => DeleteViaFirebirdAsync(dest!, destEntity, code, cancellationToken),
-            job, destEntity, code, cancellationToken).ConfigureAwait(false);
+        var write = await _write.DeleteMasterAsync(dest!, destEntity, code, cancellationToken).ConfigureAwait(false);
 
         if (!write.Success)
         {
@@ -1413,7 +1347,7 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
 
 
 
-    private async Task<WriteResult> CreateMasterWithFirebirdFallbackAsync(
+    private Task<WriteResult> DirectCreateMasterAsync(
         ISqlAccountWriteAdapter writer,
         RegisteredDatabase dest,
         string destEntity,
@@ -1423,73 +1357,85 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
         string sourceEntity,
         SyncJob job,
         CancellationToken cancellationToken) =>
-        await WriteWithFirebirdFallbackAsync(
-            () => writer.CreateMasterAsync(dest, destEntity, record, stamp, source, sourceEntity, cancellationToken),
-            () => CreateViaFirebirdAsync(dest, destEntity, record, stamp, source, sourceEntity, cancellationToken),
-            job, destEntity, record.Code, cancellationToken).ConfigureAwait(false);
+        writer.CreateMasterAsync(dest, destEntity, record, stamp, source, sourceEntity, cancellationToken);
 
-    private Task<WriteResult> CreateViaFirebirdAsync(
-        RegisteredDatabase dest, string destEntity, MasterRecord record, string stamp,
-        RegisteredDatabase? source, string sourceEntity, CancellationToken cancellationToken)
-    {
-        if (PartnerSyncRules.IsPartyEntity(destEntity))
-            return _partyFirebirdInsert.CreateAsync(dest, destEntity, record, stamp, source, sourceEntity, cancellationToken);
-        if (string.Equals(destEntity, EntityCodes.Account, StringComparison.OrdinalIgnoreCase))
-            return _accountFirebirdInsert.CreateAsync(dest, record, cancellationToken);
-        return Task.FromResult(new WriteResult { Success = false, Message = $"No Firebird create for {destEntity}." });
-    }
-
-    private Task<WriteResult> UpdateViaFirebirdAsync(
-        RegisteredDatabase dest, string destEntity, MasterRecord record, string stamp,
-        RegisteredDatabase? source, string sourceEntity, CancellationToken cancellationToken)
-    {
-        if (PartnerSyncRules.IsPartyEntity(destEntity))
-            return _partyFirebirdMutate.UpdateAsync(dest, destEntity, record, stamp, source, sourceEntity, cancellationToken);
-        if (string.Equals(destEntity, EntityCodes.Account, StringComparison.OrdinalIgnoreCase))
-            return _accountFirebirdMutate.UpdateAsync(dest, record, cancellationToken);
-        return Task.FromResult(new WriteResult { Success = false, Message = $"No Firebird update for {destEntity}." });
-    }
-
-    private Task<WriteResult> DeleteViaFirebirdAsync(
-        RegisteredDatabase dest, string destEntity, string code, CancellationToken cancellationToken)
-    {
-        if (PartnerSyncRules.IsPartyEntity(destEntity))
-            return _partyFirebirdMutate.DeleteAsync(dest, destEntity, code, cancellationToken);
-        if (string.Equals(destEntity, EntityCodes.Account, StringComparison.OrdinalIgnoreCase))
-            return _accountFirebirdMutate.DeleteAsync(dest, code, cancellationToken);
-        return Task.FromResult(new WriteResult { Success = false, Message = $"No Firebird delete for {destEntity}." });
-    }
-
-    private async Task<WriteResult> WriteWithFirebirdFallbackAsync(
-        Func<Task<WriteResult>> apiCall,
-        Func<Task<WriteResult>> firebirdCall,
+    private async Task<WriteResult> UpdateExistingOnDestAsync(
         SyncJob job,
-        string entity,
-        string? recordId,
+        RegisteredDatabase? source,
+        RegisteredDatabase dest,
+        string sourceEntity,
+        string destEntity,
+        MasterRecord record,
+        string stamp,
+        ISqlAccountWriteAdapter writer,
         CancellationToken cancellationToken)
     {
-        var write = await apiCall().ConfigureAwait(false);
-        if (write.Success || !IsApiTimeout(write.Message) || job.DryRun)
-            return write;
+        var enriched = await LoadSourceRecordAsync(source!, sourceEntity, record.Code, cancellationToken)
+            .ConfigureAwait(false) ?? record;
 
-        write = await apiCall().ConfigureAwait(false);
-        if (write.Success || !IsApiTimeout(write.Message) || !_sync.PartyFirebirdInsertFallbackEnabled)
-            return write;
-
-        write = await firebirdCall().ConfigureAwait(false);
-        if (!write.Success)
-            return write;
-
-        await _audit.WriteAsync(new AuditEntry
+        var destDocKey = 0;
+        var destParent = 0;
+        if (string.Equals(destEntity, EntityCodes.Account, StringComparison.OrdinalIgnoreCase))
         {
-            UserEmail = job.CreatedBy,
-            Action = "MASTER_FB_FALLBACK",
-            DbId = job.DestDbId,
-            Entity = entity,
-            RecordId = recordId ?? "",
-            Result = "SUCCESS",
-            RequestId = job.JobId.ToString(CultureInfo.InvariantCulture)
-        }, cancellationToken).ConfigureAwait(false);
+            var destChart = await _read.GetGlChartAsync(dest, cancellationToken).ConfigureAwait(false);
+            var destRow = destChart.FirstOrDefault(a =>
+                string.Equals((a.Code ?? "").Trim(), (enriched.Code ?? "").Trim(), StringComparison.OrdinalIgnoreCase));
+            if (destRow is null)
+            {
+                return new WriteResult
+                {
+                    Success = false,
+                    Message = $"Account {enriched.Code} looked present but chart row was not found for update."
+                };
+            }
+
+            destDocKey = destRow.DocKey;
+            destParent = GlAccountMapper.ResolveDestParentDocKey(GlAccountMapper.ParentCodeOf(enriched), destChart);
+            if (destParent == 0)
+                destParent = -1;
+            enriched.Fields[GlAccountMapper.FieldDestParent] = destParent.ToString(CultureInfo.InvariantCulture);
+        }
+
+        if (job.DryRun)
+        {
+            return new WriteResult
+            {
+                Success = true,
+                DocNo = enriched.Code,
+                Message = "Dry-run: would update existing destination row."
+            };
+        }
+
+        var write = await writer.UpdateMasterAsync(
+                dest, destEntity, enriched, stamp, destDocKey, destParent, cancellationToken, source, sourceEntity)
+            .ConfigureAwait(false);
+
+        if (write.Success)
+        {
+            await _mapping.ConfirmPairAsync(new EntityMapping
+            {
+                MasterDbId = job.SourceDbId,
+                SubDbId = job.DestDbId,
+                EntityCode = sourceEntity,
+                SrcEntityCode = sourceEntity,
+                DstEntityCode = destEntity,
+                MasterCode = enriched.Code,
+                SubCode = enriched.Code,
+                MasterDesc = enriched.Description,
+                SubDesc = enriched.Description
+            }, job.CreatedBy,
+                writeReverse: false,
+                originJobId: job.JobId,
+                cancellationToken).ConfigureAwait(false);
+
+            write = new WriteResult
+            {
+                Success = true,
+                DocNo = enriched.Code,
+                Message = string.IsNullOrWhiteSpace(write.Message) ? "Updated existing." : write.Message
+            };
+        }
+
         return write;
     }
 
@@ -1523,6 +1469,17 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
 
     private static bool IsGlCodeConflict(string? message) =>
         (message ?? "").Contains("GL_ACC_CODE", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsPermanentSdkFailure(string? message)
+    {
+        var msg = message ?? "";
+        return msg.Contains("No SDK connection settings", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("DCF file not found", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("ProgID", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("Null) into type (OleStr)", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("empty dataset", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("GL_ACC_CODE", StringComparison.OrdinalIgnoreCase);
+    }
 
     private static void Add(DryRunResult result, string name, ValidationResult v) =>
 

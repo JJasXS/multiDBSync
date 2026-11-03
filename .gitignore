@@ -14,7 +14,9 @@ out/
 .idea/
 *.nupkg
 .env
-.env.*.local
+.env.*
+!.env.example
+!**/.env.example
 .DS_Store
 Thumbs.db
 coverage*.json
@@ -24,3 +26,12 @@ Data/*.fdb
 Data/*.FDB
 /secrets/
 src/SqlAccountSync/secrets/
+# Local build/debug drop folders and captured diagnostics
+_buildcheck/
+**/_buildcheck/
+src/SqlAccountSync/_run.log
+src/SqlAccountSync/_api500.html
+**/_run.log
+**/_api500.html
+*.log
+

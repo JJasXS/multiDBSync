@@ -82,7 +82,6 @@ public sealed class DatabaseRegistry : IDatabaseRegistry
         if (db.DbId == 0)
         {
             id = (int)await _db.NextIdAsync("GEN_SYNC_DATABASE", cancellationToken).ConfigureAwait(false);
-            ApplyAutoSqlApiCredRef(db);
             await _db.ExecuteAsync(@"
 INSERT INTO SYNC_DATABASE (DBID, DBCODE, DISPLAYNAME, COMPANYNAME, DBROLE, FBHOST, FBPORT, FBPATH, FBCHARSET, FBDIALECT, FBUSER, FBCREDREF, APIBASEURL, APICREDREF, ENVIRONMENT, ISACTIVE, CONNSTATUS, CREATEDAT, CREATEDBY, UPDATEDAT, UPDATEDBY, NOTES)
 VALUES (@DBID, @DBCODE, @DISPLAYNAME, @COMPANYNAME, @DBROLE, @FBHOST, @FBPORT, @FBPATH, @FBCHARSET, @FBDIALECT, @FBUSER, @FBCREDREF, @APIBASEURL, @APICREDREF, @ENVIRONMENT, 1, 'OFFLINE', CURRENT_TIMESTAMP, @USER, CURRENT_TIMESTAMP, @USER, @NOTES)",
@@ -91,7 +90,6 @@ VALUES (@DBID, @DBCODE, @DISPLAYNAME, @COMPANYNAME, @DBROLE, @FBHOST, @FBPORT, @
         }
 
         id = db.DbId;
-        ApplyAutoSqlApiCredRef(db);
         await _db.ExecuteAsync(@"
 UPDATE SYNC_DATABASE SET
     DBCODE=@DBCODE, DISPLAYNAME=@DISPLAYNAME, COMPANYNAME=@COMPANYNAME, DBROLE=@DBROLE,
@@ -102,32 +100,9 @@ WHERE DBID=@DBID AND ISACTIVE=1", Args(db, id, user), cancellationToken).Configu
         return id;
     }
 
-    private void ApplyAutoSqlApiCredRef(RegisteredDatabase db)
-    {
-        if (!_sync.AutoAssignSqlApiCredRefByDbId)
-            return;
-        if (string.IsNullOrWhiteSpace(_sync.TenantCode))
-            return;
-        if (!SqlApiCredRefConvention.ShouldAutoAssign(db.ApiCredRef, _sync.TenantCode))
-            return;
-
-        var bundle = SqlApiCredRefConvention.BuildBundleCredRef(_sync.TenantCode);
-        if (bundle.Length > 0)
-            db.ApiCredRef = bundle;
-    }
-
-    public Task PointSqlApiCredRefsAtBundleAsync(string tenantCode, CancellationToken cancellationToken = default)
-    {
-        var cred = SqlApiCredRefConvention.BuildBundleCredRef(tenantCode);
-        var prefix = SqlApiCredRefConvention.LegacyPrefix(tenantCode);
-        if (cred.Length == 0 || prefix.Length == 0 || !_db.IsConfigured)
-            return Task.CompletedTask;
-        return _db.ExecuteAsync(@"
-UPDATE SYNC_DATABASE SET APICREDREF = @CRED
-WHERE UPPER(APICREDREF) LIKE UPPER(@SM) || '%'
-   OR UPPER(APICREDREF) LIKE UPPER(@BARE) || '%'",
-            new { CRED = cred, SM = "sm:" + prefix, BARE = prefix }, cancellationToken);
-    }
+    /// <summary>No-op under SDK mode (SQL API credentials are no longer used).</summary>
+    public Task PointSqlApiCredRefsAtBundleAsync(string tenantCode, CancellationToken cancellationToken = default) =>
+        Task.CompletedTask;
 
     public Task DeactivateAsync(int dbId, string user, CancellationToken cancellationToken = default) =>
         SetActiveAsync(dbId, false, user, cancellationToken);

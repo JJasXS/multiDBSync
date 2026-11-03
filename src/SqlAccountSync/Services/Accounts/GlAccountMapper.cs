@@ -77,13 +77,20 @@ public static class GlAccountMapper
 
     public static Dictionary<string, object?> ToApiPayload(GlAccountRow row, int destParentDocKey)
     {
+        var code = (row.Code ?? "").Trim();
+        var description = (row.Description ?? "").Trim();
+        if (description.Length == 0)
+            description = code;
+
+        // SQL Acc chart roots use Parent = -1 (not 0).
+        var parent = destParentDocKey == 0 ? -1 : destParentDocKey;
+
         return new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
         {
-            ["dockey"] = 0,
-            ["parent"] = destParentDocKey,
-            ["code"] = (row.Code ?? "").Trim(),
-            ["description"] = (row.Description ?? "").Trim(),
-            // SQL Acc rejects JSON null for these OleStr fields ("Could not convert variant of type (Null)").
+            ["parent"] = parent,
+            ["code"] = code,
+            ["description"] = description,
+            // Always send "" — Null OleStr crashes SDK Save.
             ["description2"] = (row.Description2 ?? "").Trim(),
             ["acctype"] = (row.AccType ?? "").Trim(),
             ["specialacctype"] = (row.SpecialAccType ?? "").Trim(),
