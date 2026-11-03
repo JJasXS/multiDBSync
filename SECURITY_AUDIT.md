@@ -1,18 +1,20 @@
 # multiDBSync (SqlAccountSync) — Security Audit Report
 
 **Repository:** `JJasXS/multiDBSync`  
-**Date:** 2026-11-03  
-**Scope:** Full application tree (ASP.NET Core Razor Pages, Firebird, SQL Account SDK COM, AWS Secrets Manager, OTP auth, background workers)
+**Branch reviewed:** `master` (includes prior OTP hardening) + follow-up on `sdk-conversion`  
+**Date:** 2026-11-03 (updated)  
+**Scope:** ASP.NET Core Razor Pages, Firebird, SQL Account SDK COM, AWS Secrets Manager, OTP auth, background workers
 
 ## Executive summary
 
-Critical OTP bypass paths (fixed mock code `123456`, debug OTP return, console OTP logging) were removed or strictly gated to local `Development` + `APP_MODE=dev`. OTP brute-force and enumeration protections were added. Public `/health` no longer exposes queue/SDK internals. Example Firebird credentials no longer advertise `masterkey`. ~3,968 tracked `_buildcheck` build artifacts plus diagnostic `_run.log` / `_api500.html` were removed from Git tracking.
+Initial Critical/High OTP and artifact issues were remixed in PR #14. This follow-up closes remaining audit gaps against current master: **public debug-OTP disclosure**, **HTTPS-only cookies in Production**, **trusted reverse-proxy configuration**, **HMAC OTP hashing + distributed rate-limit counters**, **AllowedHosts hardening**, and the **verified MimeKit transitive `System.Security.Cryptography.Pkcs` advisory** (pinned to **8.0.2**).
 
 | Metric | Result |
 |--------|--------|
-| OTP security regression tests | **7 passed** |
-| Full `dotnet test` | **98 passed**, 2 failed (pre-existing, unrelated to this audit) |
-| `dotnet list package --vulnerable` | See Dependency section |
+| OTP / host hardening regression tests | **13 passed** |
+| `dotnet list package --vulnerable --include-transitive` | **No vulnerable packages** (after Pkcs 8.0.2 pin) |
+
+SDK synchronization paths (`SdkWriteAdapter` / `SyncWorker` / Firebird reads) were not redesigned.
 
 ---
 
@@ -20,95 +22,54 @@ Critical OTP bypass paths (fixed mock code `123456`, debug OTP return, console O
 
 | ID | Severity | File / Line | Vulnerability | Evidence | Impact | Fix Applied | Verification |
 |----|----------|-------------|---------------|----------|--------|-------------|--------------|
-| SEC-001 | Critical | `appsettings.Development.json`, `OtpAuthService.cs`, `Login.cshtml.cs`, `Program.cs` | Development OTP auth bypass | Committed `MockSignInCode=123456`, `DebugOtpToConsole=true`; OTP returned to client; console write of OTP; `APP_MODE=dev` forced debug flag even outside Development | Anyone who could hit a misconfigured host could sign in with a known OTP | Removed fixed OTP from config; always `RandomNumberGenerator`; debug OTP only if `IsDevelopment && IsDevAppMode`; no console OTP logging; obsolete mock ignored | `OtpAuthServiceTests` (mock ignored, prod never returns debug OTP) |
-| SEC-002 | High | `OtpAuthService.cs` `VerifyAsync` | OTP brute-force / reuse / enumeration | Unlimited verify attempts; OTP removed only after success path; send revealed missing users | Account takeover via 6-digit guessing; email enumeration | Max 5 failures then invalidate; hashed OTP; per-email/IP send + verify throttles; cooldown; atomic consume under lock; generic send message | Brute-force, concurrent verify, cooldown, enumeration tests |
-| SEC-003 | High | `.env.example`, `src/.../.env.example` | Default Firebird password in examples | `CENTRAL_FB_MASTERKEY=masterkey` | Operators copy insecure defaults into real hosts | Placeholder `REPLACE_WITH_STRONG_PASSWORD`; document least-privilege user | Manual review of examples |
-| SEC-004 | Medium | `Program.cs` `/health` | Public health info disclosure | Anonymous JSON with queue depths, SDK company, lastError | Recon for attackers; ops fingerprinting | `/health` → `{status:ok}` only; `/health/detail` requires Admin | Code review |
-| SEC-005 | Medium | `AccountsController.cs` | API error detail leakage | `502` returned raw `write.Message` | May expose paths/COM/DB detail | Generic client error + `requestId`; detail logged redacted | Code review |
-| SEC-006 | High | `_buildcheck/` (~3968 files), `_run.log`, `_api500.html` | Committed build/debug artifacts | Tracked binaries/logs in Git | Supply-chain noise; possible future secret leakage | `git rm --cached`; `.gitignore` updated | Pattern scan of logs: **0** secret-like hits; no tracked `_buildcheck/**/*.env` |
-| SEC-007 | Medium | `DatabaseFileBrowser.cs` | Full fixed-drive FDB search | Enumerated all fixed drives after preferred roots | Path disclosure / DoS | Search limited to approved roots only | Code review |
-| SEC-008 | Low | Cookie auth | Missing SecurePolicy | HttpOnly+SameSite set; Secure unset | Cookie on plain HTTP if TLS terminated oddly | `CookieSecurePolicy.SameAsRequest` | Code review |
-| SEC-009 | Low | `Program.cs` | Missing basic security headers | No XFO / nosniff | Clickjacking / MIME sniffing | Added X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy | Code review |
-| SEC-010 | Informational | `appsettings.json` Bootstrap | Personal admin email in repo | `jason.choo2004@gmail.com` committed | Privacy / targeting | Replaced with `admin@localhost` | Diff review |
-| SEC-011 | Medium (weakness) | Razor Pages / policies | Manager/Operator policies == Admin only | `PolicyNames.Manager/Operator` require Admin role | Fine-grained roles unused | Documented; no role redesign (preserve behavior) | Code review |
-| SEC-012 | Informational | `AllowedHosts: *`, ForwardedHeaders | Broad host / proxy trust | Default config | Host-header / IP spoof if mis-proxied | Documented deployment hardening | Remaining risk |
-| SEC-013 | Low (existing controls) | `FirebirdReadAdapter` dynamic SQL | Identifier interpolation | Table/column names from allowlisted schema discovery | Injection if allowlist bypassed | Values parameterized; identifiers from internal maps — monitored | Existing `SqlGuard` on ad-hoc SQL |
-| SEC-014 | Informational | Stack note | “REST API” vs SDK | Writes are COM SDK (`SdkWriteAdapter`), not SQL Accounting REST | N/A | Audited actual SDK path | N/A |
-
-**Classification notes**
-
-- **Confirmed fixed:** SEC-001–SEC-010, SEC-007–SEC-009  
-- **Weakness accepted (documented):** SEC-011 role policy collapse  
-- **Remaining / runtime:** SEC-012, Firebird least-privilege account creation, history rewrite for `_buildcheck`  
-- **Already partially protected:** parameterized values in reads; `CredentialRedactor`; antiforgery on login JSON handlers; cookie principal revalidation against SY_USER  
+| SEC-001 | Critical | OTP auth stack | Development OTP auth bypass | Fixed mock OTP / debug return | Auth bypass | Random OTP; mock ignored | Tests |
+| SEC-002 | High | `OtpAuthService` | Brute-force / reuse / enumeration | Unlimited verifies | Takeover / enum | Fail lockout, atomic consume, generic send | Tests |
+| SEC-003 | High | `.env.example` | Default Firebird password | `masterkey` example | Weak defaults | Placeholder password | Review |
+| SEC-004 | Medium | `/health` | Public queue/SDK disclosure | Anonymous rich JSON | Recon | Minimal `/health`; Admin `/health/detail` | Review |
+| SEC-005 | Medium | `AccountsController` | Error detail leakage | Raw write messages | Info leak | Generic + `requestId` | Review |
+| SEC-006 | High | `_buildcheck`, logs | Tracked build artifacts | ~3970 binaries in Git | Noise / leak risk | Removed from tracking + gitignore | Review |
+| SEC-007 | Medium | `DatabaseFileBrowser` | Full-drive FDB search | All fixed drives | Disclosure / DoS | Approved roots only | Review |
+| SEC-008 | Low→Fixed | Cookie auth | Non-HTTPS cookies in prod | `SameAsRequest` only | Cookie theft on HTTP | **Production `CookieSecurePolicy.Always`** | Code + review |
+| SEC-009 | Low | Security headers | Missing XFO/nosniff | — | Clickjacking | Headers added | Review |
+| SEC-010 | Info | Bootstrap email | Personal email in repo | — | Privacy | `admin@localhost` | Review |
+| SEC-011 | Medium (accepted) | Role policies | Manager/Operator = Admin | Policy collapse | Coarse RBAC | Documented; no redesign | Review |
+| SEC-012 | Info→Fixed | AllowedHosts / proxies | `*` hosts; unconfigured proxies | Broad trust | Host-header / IP spoof | **Local-only default AllowedHosts; Production rejects `*`/empty; explicit KnownProxies/Networks** | Tests |
+| SEC-013 | Low | Dynamic SQL identifiers | Allowlisted tables | Injection if bypassed | Data integrity | Existing SqlGuard / params | Review |
+| SEC-014 | Info | Stack note | SDK not REST | — | — | Documented | — |
+| SEC-015 | High→Fixed | Debug OTP on public hosts | `Development+dev` returned OTP to any client | Misconfigured public Dev host | OTP disclosure | **Require `AllowLocalOtpReveal` + loopback; Login strips non-loopback** | Tests |
+| SEC-016 | Medium→Fixed | Plain SHA-256 OTP | 6-digit space offline-guessable if cache dumped | Weak hash | Offline OTP recovery | **HMAC-SHA256 with pepper (`OtpHashPepper`)** | Tests |
+| SEC-017 | Medium→Fixed | Process-local rate limits | Multi-instance bypass | Soft limit gap | Brute-force across nodes | **`IDistributedCache` counters + local locks** (Redis-ready) | Code |
+| SEC-018 | High→Fixed | NuGet GHSA-846f-f764-76mx | MimeKit → Pkcs 8.0.1 | DoS via SignedCms | Pin **System.Security.Cryptography.Pkcs 8.0.2** | `dotnet list --vulnerable` clean |
 
 ---
 
-## Modified files (this remediation)
+## Follow-up changes (this iteration)
 
-- `src/SqlAccountSync/Services/Auth/OtpAuthService.cs`
-- `src/SqlAccountSync/Pages/Login.cshtml.cs`
-- `src/SqlAccountSync/Program.cs`
-- `src/SqlAccountSync/Options/AppOptions.cs`
-- `src/SqlAccountSync/appsettings.Development.json`
-- `src/SqlAccountSync/appsettings.json`
-- `src/SqlAccountSync/Controllers/AccountsController.cs`
-- `src/SqlAccountSync/Helpers/DatabaseFileBrowser.cs`
-- `.env.example`, `src/SqlAccountSync/.env.example`
-- `.gitignore`
-- `tests/SqlAccountSync.Tests/OtpAuthServiceTests.cs` (new)
-- `docs/CREDENTIAL_ROTATION.md` (new)
-- `SECURITY_AUDIT.md` (this file)
-- Git index: removed `_buildcheck/**`, `src/SqlAccountSync/_run.log`, `src/SqlAccountSync/_api500.html`
+- `Services/Auth/OtpAuthService.cs` — reveal gate, HMAC, distributed rate limits  
+- `Services/Auth/OtpHashPepper.cs` — shared/process pepper  
+- `Helpers/HostHardening.cs`, `Helpers/ForwardedHeadersSetup.cs`  
+- `Program.cs` — Secure cookie Always in Production; forwarded headers DI; AllowedHosts check  
+- `appsettings.json` / `Production` / `.env.example`  
+- `SqlAccountSync.csproj` — Pkcs 8.0.2 override  
+- `tests/OtpAuthServiceTests.cs` — 13 tests  
+- `docs/CREDENTIAL_ROTATION.md` — pepper / AllowedHosts notes  
 
 ---
 
-## Security improvements implemented
+## Manual deployment actions (no automatic credential changes)
 
-1. Cryptographically random 6-digit OTPs; SHA-256 stored hashes; single-use atomic consume.  
-2. Send/verify rate limits and failure lockout.  
-3. No account enumeration on OTP send.  
-4. Debug OTP UI only on local Development + `APP_MODE=dev`.  
-5. Minimal public health endpoint; admin detail endpoint.  
-6. Safer example credentials and bootstrap email.  
-7. Build artifact purge from Git tracking.  
-8. DB file browser confined to approved roots.  
-9. Basic security headers + cookie SecurePolicy.  
-10. Credential rotation runbook.
+1. Set **`AllowedHosts`** env to the public DNS name(s) in Production (startup fails on `*` / empty).  
+2. Terminate TLS (or set `X-Forwarded-Proto` from a **listed** `ForwardedHeaders:KnownProxies` / `KnownNetworks` entry) so Secure cookies work.  
+3. Prefer **`Sync:OtpHashPepperSecretRef`** (`env:` / `sm:`) for multi-instance OTP HMAC.  
+4. Never set `Sync:AllowLocalOtpReveal=true` on publicly reachable hosts.  
+5. Keep strong Firebird / AWS / SMTP secrets per `docs/CREDENTIAL_ROTATION.md`.  
+6. Optional: register Redis as `IDistributedCache` for cross-node OTP rate limits.
 
 ---
 
-## Test results
+## Remaining residual risks
 
-```
-OtpAuthServiceTests: 7 passed
-Full suite: 98 passed, 2 failed (pre-existing)
-  - GlAccountMapperTests.ToApiPayload_uses_dest_parent_and_zero_dockey
-  - ItemDestCodeLinkTests.ProcessMaster_links_when_destination_item_code_exists_without_api_create
-```
-
-Tests needing Firebird / AWS / SMTP / SQLACC COM were not run against production. OTP tests use in-memory fakes only.
-
----
-
-## Remaining risks / manual deployment actions
-
-1. **Set strong `CENTRAL_FB_MASTERKEY`** (and prefer non-SYSDBA) on every host; do not leave `masterkey`.  
-2. **Production hosts:** `ASPNETCORE_ENVIRONMENT=Production`, `APP_MODE=prod`.  
-3. **Monitoring:** switch probes that expected rich `/health` JSON to `/health` liveness or authenticated `/health/detail`.  
-4. **Git history:** `_buildcheck` binaries may still exist in older commits — rotate any credentials if ever embedded; history purge is optional coordinated ops (see `docs/CREDENTIAL_ROTATION.md`). Do not force-push without agreement.  
-5. **Tighten `AllowedHosts`** and reverse-proxy forwarded-header known networks.  
-6. **CSRF:** Login validates antiforgery manually; keep tokens on other state-changing forms.  
-7. Pre-existing failing unit tests should be fixed separately (not introduced by this audit).
-
----
-
-## Dependency vulnerability check
-
-```text
-Transitive: System.Security.Cryptography.Pkcs 8.0.1
-  High     GHSA-846f-f764-76mx
-  Moderate GHSA-2fmv-rv2c-59x7
-```
-
-Pulled in transitively (likely MailKit / signing stack). Pinning 9.0.x / 10.0.0 still reported the same advisories in the NuGet vulnerability feed at audit time, so no forced upgrade was committed (would not clear the warning and risks package churn). **Remaining risk:** track .NET / MailKit updates; re-run `dotnet list package --vulnerable --include-transitive` after each restore.
+- Role policies still collapse Manager/Operator to Admin (product decision).  
+- OTP challenge objects remain in process `IMemoryCache` (sticky sessions or single instance recommended for verify; rate limits are distributed-ready).  
+- Git history may still contain old `_buildcheck` blobs — rotate only if secrets were ever embedded; do not rewrite history without agreement.  
+- Pre-existing unrelated unit test failures (GL mapper / item link) may still exist outside this audit scope.

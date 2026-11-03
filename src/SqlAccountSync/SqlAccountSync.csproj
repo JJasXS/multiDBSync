@@ -28,6 +28,8 @@
     <PackageReference Include="MailKit" Version="4.16.0" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation" Version="8.0.11" />
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="8.0.1" />
+    <!-- Override MimeKit transitive 8.0.1 (CVE-2026-84008 / GHSA-846f-f764-76mx). -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="8.0.2" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
   </ItemGroup>
 

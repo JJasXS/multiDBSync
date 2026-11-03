@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Options;
+using SqlAccountSync.Helpers;
 using SqlAccountSync.Options;
 using SqlAccountSync.Services.Auth;
 using SqlAccountSync.Services.Tenants;
@@ -62,7 +63,8 @@ public class LoginModel : PageModel
 
         var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
         var (ok, msg, debugCode) = await _auth.SendOtpAsync(email ?? "", ip).ConfigureAwait(false);
-        // debugOtp is non-null only in local Development + APP_MODE=dev (never Production).
+        // Defense in depth: never put OTP on the wire unless the TCP peer is loopback.
+        var reveal = debugCode is not null && HostHardening.IsLoopbackIp(ip) ? debugCode : null;
         return new JsonResult(new
         {
             success = ok,
@@ -70,7 +72,7 @@ public class LoginModel : PageModel
             email = (email ?? "").Trim(),
             expiresInSeconds = OtpSeconds,
             resendCooldownSeconds = OtpAuthService.SendCooldownSeconds,
-            debugOtp = debugCode
+            debugOtp = reveal
         });
     }
 
