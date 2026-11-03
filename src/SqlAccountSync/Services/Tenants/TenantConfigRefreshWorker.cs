@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Options;
+using SqlAccountSync.Options;
 using SqlAccountSync.Services.Databases;
 using SqlAccountSync.Services.Secrets;
 
@@ -10,6 +12,8 @@ public sealed class TenantConfigRefreshWorker : BackgroundService
 
     private readonly IServiceScopeFactory _scopes;
     private readonly IConfiguration _config;
+    private readonly IHostEnvironment _env;
+    private readonly FeatureOptions _features;
     private readonly ILogger<TenantConfigRefreshWorker> _logger;
     private readonly TenantMenuFlags _menu;
     private int _secretsMigrated;
@@ -17,11 +21,15 @@ public sealed class TenantConfigRefreshWorker : BackgroundService
     public TenantConfigRefreshWorker(
         IServiceScopeFactory scopes,
         IConfiguration config,
+        IHostEnvironment env,
+        IOptions<FeatureOptions> features,
         ILogger<TenantConfigRefreshWorker> logger,
         TenantMenuFlags menu)
     {
         _scopes = scopes;
         _config = config;
+        _env = env;
+        _features = features.Value;
         _logger = logger;
         _menu = menu;
     }
@@ -58,7 +66,8 @@ public sealed class TenantConfigRefreshWorker : BackgroundService
             var tenants = scope.ServiceProvider.GetRequiredService<ITenantDatabaseBootstrap>();
             await tenants.RefreshAsync(tenant, stoppingToken).ConfigureAwait(false);
             var menu = await tenants.GetMenuFlagsAsync(tenant, stoppingToken).ConfigureAwait(false);
-            _menu.Apply(menu.ShowSynchronization, menu.ShowDocumentTransfer);
+            var forceDocs = _env.IsDevelopment() && _features.ForceShowDocumentTransferUi;
+            _menu.ApplyTenantPlan(menu.ShowSynchronization, menu.ShowDocumentTransfer, forceDocs);
             await MigrateSecretsOnceAsync(scope.ServiceProvider, tenant, stoppingToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)

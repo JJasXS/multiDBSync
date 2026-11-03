@@ -14,6 +14,18 @@ public sealed class CentralDbOptions
 }
 
 /// <summary>
+/// Optional local login Firebird override. When <see cref="Path"/> is set, SY_USER lookups
+/// use this database instead of AWS tenant-config <c>database.dbPath</c>. Leave Path empty in production.
+/// </summary>
+public sealed class LoginDbOptions
+{
+    public const string SectionName = "LoginDb";
+    public string Host { get; set; } = "localhost";
+    public int Port { get; set; } = 3050;
+    public string Path { get; set; } = "";
+}
+
+/// <summary>
 /// Dashboard company registry source. <see cref="Mode"/> Local reads <see cref="CentralDbOptions"/>.
 /// Live reads another Firebird SYNC database with SELECT only. Writes always stay on <see cref="CentralDbOptions"/>.
 /// </summary>

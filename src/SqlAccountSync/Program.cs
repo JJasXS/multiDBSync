@@ -74,6 +74,7 @@ if (envOverrides.Count > 0)
     builder.Configuration.AddInMemoryCollection(envOverrides);
 
 builder.Services.Configure<CentralDbOptions>(builder.Configuration.GetSection(CentralDbOptions.SectionName));
+builder.Services.Configure<LoginDbOptions>(builder.Configuration.GetSection(LoginDbOptions.SectionName));
 builder.Services.Configure<CentralRegistryOptions>(builder.Configuration.GetSection(CentralRegistryOptions.SectionName));
 builder.Services.Configure<SmtpOptions>(builder.Configuration.GetSection(SmtpOptions.SectionName));
 builder.Services.Configure<SyncOptions>(builder.Configuration.GetSection(SyncOptions.SectionName));
@@ -228,6 +229,18 @@ app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<TenantMenuMiddleware>();
+
+if (app.Environment.IsDevelopment())
+{
+    var features = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<FeatureOptions>>().Value;
+    if (features.ForceShowDocumentTransferUi)
+    {
+        var menu = app.Services.GetRequiredService<TenantMenuFlags>();
+        menu.ApplyTenantPlan(menu.ShowSynchronization, menu.ShowDocumentTransfer, forceShowDocumentTransfer: true);
+        app.Logger.LogInformation(
+            "Development: Document Transfer menu forced on (Features:ForceShowDocumentTransferUi).");
+    }
+}
 app.MapGet("/health", async (IJobQueue queue) =>
 {
     var snap = await queue.GetHealthAsync();
