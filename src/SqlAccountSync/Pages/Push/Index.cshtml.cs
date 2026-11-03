@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using SqlAccountSync.Helpers;
 using SqlAccountSync.Models;
+using SqlAccountSync.Options;
 using SqlAccountSync.Services.Accounts;
 using SqlAccountSync.Services.Databases;
 using SqlAccountSync.Services.SqlAccount;
@@ -15,20 +17,26 @@ public class IndexModel : SyncPageModel
     private readonly ISqlAccountWriteAdapter _write;
     private readonly ISyncOrchestrator _sync;
     private readonly IAutoPushSettings _autoPush;
+    private readonly SqlAccountingWriteOptions _writeOptions;
 
     public IndexModel(
         IDatabaseRegistry registry,
         ISqlAccountReadAdapter read,
         ISqlAccountWriteAdapter write,
         ISyncOrchestrator sync,
-        IAutoPushSettings autoPush)
+        IAutoPushSettings autoPush,
+        IOptions<SqlAccountingWriteOptions> writeOptions)
     {
         _registry = registry;
         _read = read;
         _write = write;
         _sync = sync;
         _autoPush = autoPush;
+        _writeOptions = writeOptions.Value;
     }
+
+    /// <summary>Effective write provider for sub-queue readiness (Sdk → FbPath; Rest → API creds).</summary>
+    public string WriteProvider => _writeOptions.Provider ?? SqlAccountingWriteProviders.Rest;
 
     [BindProperty(SupportsGet = true)] public string Tab { get; set; } = "push";
     [BindProperty(SupportsGet = true)] public int SourceDbId { get; set; }
@@ -149,7 +157,7 @@ public class IndexModel : SyncPageModel
         }
 
         FlashToast = await AccountChartEdit.SaveAsync(
-            _read, _write, _sync, SelectedSource, TargetSubs, EditInput(), CurrentEmail);
+            _read, _write, _sync, SelectedSource, TargetSubs, EditInput(), CurrentEmail, WriteProvider);
         await LoadPushAsync();
         return Page();
     }

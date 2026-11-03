@@ -24,7 +24,7 @@ public class SdkSessionDiagnosticsTests
         Assert.True(status.AllowLiveCom);
         Assert.False(status.BackgroundWriteWorkersEnabled);
         Assert.False(status.PasswordConfigured);
-        Assert.Contains("SQLACC_SDK_PASSWORD", status.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("SQLACC_SDK_PASSWORD_UNITTEST_ABSENT", status.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -78,7 +78,10 @@ public class SdkSessionDiagnosticsTests
                 AllowLiveCom = allowLiveCom,
                 DefaultDcfPath = @"\\192.168.100.201\Share\SQLACC.DCF",
                 UserName = "ADMIN",
-                PasswordSecretRef = "env:SQLACC_SDK_PASSWORD"
+                // Unique env name so a developer User-level SQLACC_SDK_PASSWORD cannot flip PasswordConfigured.
+                PasswordSecretRef = passwordEnvSet
+                    ? "env:SQLACC_SDK_PASSWORD"
+                    : "env:SQLACC_SDK_PASSWORD_UNITTEST_ABSENT"
             }),
             MsOptions.Create(new SyncOptions { EnableBackgroundWriteWorkers = workersEnabled }));
     }

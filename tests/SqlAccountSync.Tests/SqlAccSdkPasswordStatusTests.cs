@@ -60,7 +60,7 @@ public class SqlAccSdkPasswordStatusTests
                 AllowLiveCom = true,
                 DefaultDcfPath = @"\\192.168.100.201\Share\SQLACC.DCF",
                 UserName = "ADMIN",
-                PasswordSecretRef = "env:SQLACC_SDK_PASSWORD"
+                PasswordSecretRef = "env:SQLACC_SDK_PASSWORD_UNITTEST_ABSENT"
             }),
             Microsoft.Extensions.Options.Options.Create(new Options.SyncOptions
             {
@@ -69,7 +69,7 @@ public class SqlAccSdkPasswordStatusTests
 
         var status = diag.GetProviderStatus();
         Assert.False(status.PasswordConfigured);
-        Assert.Contains("SQLACC_SDK_PASSWORD", status.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("SQLACC_SDK_PASSWORD_UNITTEST_ABSENT", status.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     private sealed class BlockingSessions : ISqlAccSessionManager

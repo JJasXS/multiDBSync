@@ -7,7 +7,7 @@ using SqlAccountSync.Services.SqlAccount.Sdk;
 /*
  * Isolated SDK Read POC (no web host / workers).
  * Password: env SQLACC_SDK_PASSWORD or interactive secure prompt — never --password.
- * Project companies: ACC-MIRACLE.FDB / ACC-ONYAT.FDB (ACC-UAMAT.FDB refused).
+ * Project companies: ACC-STEPPES.FDB / ACC-MIRACLE.FDB / ACC-ONYAT.FDB (ACC-UAMAT.FDB refused).
  */
 
 static int Usage()
@@ -102,7 +102,7 @@ if (!string.IsNullOrWhiteSpace(company))
 {
     if (!SqlAccProjectTargets.TryResolveCompanyAlias(company, out var resolvedFdb, out var dbCode))
     {
-        Console.WriteLine($"Unknown --company '{company}'. Use miracle or onyat.");
+        Console.WriteLine($"Unknown --company '{company}'. Use steppes, miracle, or onyat.");
         return 2;
     }
 
@@ -114,7 +114,7 @@ if (!string.IsNullOrWhiteSpace(company))
 }
 
 if (string.IsNullOrWhiteSpace(authorizedTarget) && authorizeLan)
-    authorizedTarget = SqlAccProjectTargets.AuthorizedBothCompanies;
+    authorizedTarget = SqlAccProjectTargets.AuthorizedProjectCompanies;
 
 Console.WriteLine("=== SDK Read POC safety preflight ===");
 Console.WriteLine($"Explicit DCF: {dcf}");

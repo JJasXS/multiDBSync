@@ -3,7 +3,7 @@ namespace SqlAccountSync.Services.SqlAccount.Sdk;
 /// <summary>
 /// Write POC gates: authorized TEST company only + restorable-backup evidence before first write.
 /// Backup evidence is either an on-disk archive path, or an explicit supervisor-managed confirmation
-/// scoped to ACC-MIRACLE.FDB / ACC-ONYAT.FDB (never a silent bypass).
+/// scoped to ACC-MIRACLE.FDB / ACC-ONYAT.FDB / ACC-STEPPES.FDB (never a silent bypass).
 /// </summary>
 public static class SqlAccWritePocSafety
 {
@@ -11,7 +11,7 @@ public static class SqlAccWritePocSafety
 
     /// <summary>
     /// Exact confirmation token prefix. Full token must be
-    /// <c>SUPERVISOR-MANAGED-RESTORABLE-BACKUP:ACC-MIRACLE.FDB</c> (or ONYAT).
+    /// <c>SUPERVISOR-MANAGED-RESTORABLE-BACKUP:ACC-STEPPES.FDB</c> (or MIRACLE / ONYAT).
     /// </summary>
     public const string SupervisorManagedBackupPrefix = "SUPERVISOR-MANAGED-RESTORABLE-BACKUP:";
 
@@ -80,7 +80,8 @@ public static class SqlAccWritePocSafety
         {
             throw new InvalidOperationException(
                 "WRITE SAFETY STOP: supervisor-managed backup confirmation is only allowed for " +
-                SqlAccProjectTargets.MiracleFdb + " or " + SqlAccProjectTargets.OnyatFdb +
+                SqlAccProjectTargets.MiracleFdb + ", " + SqlAccProjectTargets.OnyatFdb +
+                ", or " + SqlAccProjectTargets.SteppesFdb +
                 ". Refused FDB='" + fdb + "'.");
         }
 
@@ -93,12 +94,8 @@ public static class SqlAccWritePocSafety
         }
     }
 
-    public static bool IsAuthorizedProjectWriteDatabase(string? databaseFileName)
-    {
-        var fdb = (databaseFileName ?? "").Trim();
-        return fdb.Equals(SqlAccProjectTargets.MiracleFdb, StringComparison.OrdinalIgnoreCase)
-               || fdb.Equals(SqlAccProjectTargets.OnyatFdb, StringComparison.OrdinalIgnoreCase);
-    }
+    public static bool IsAuthorizedProjectWriteDatabase(string? databaseFileName) =>
+        SqlAccProjectTargets.IsAuthorizedProjectDatabaseFileName(databaseFileName);
 
     public static bool LooksLikePocAgentCode(string? code) =>
         !string.IsNullOrWhiteSpace(code)

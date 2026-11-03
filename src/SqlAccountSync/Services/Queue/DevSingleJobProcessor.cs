@@ -153,7 +153,10 @@ public sealed class DevSingleJobProcessor : IDevSingleJobProcessor
             Processed: true);
     }
 
-    /// <summary>Authorized local SDK test destinations only (DbCode or FDB file name).</summary>
+    /// <summary>
+    /// Authorized local DevSingleJob destinations: MIRACLE and ONYAT only.
+    /// STEPPES is allowed for Write POC labs via <see cref="SqlAccWritePocSafety"/>, not Website single-job processing.
+    /// </summary>
     public static bool IsAuthorizedDevTarget(RegisteredDatabase dest)
     {
         var code = (dest.DbCode ?? "").Trim();
@@ -162,6 +165,7 @@ public sealed class DevSingleJobProcessor : IDevSingleJobProcessor
             return true;
 
         var file = Path.GetFileName((dest.FbPath ?? "").Trim().Replace('/', '\\'));
-        return SqlAccWritePocSafety.IsAuthorizedProjectWriteDatabase(file);
+        return file.Equals(SqlAccProjectTargets.MiracleFdb, StringComparison.OrdinalIgnoreCase)
+               || file.Equals(SqlAccProjectTargets.OnyatFdb, StringComparison.OrdinalIgnoreCase);
     }
 }

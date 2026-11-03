@@ -101,6 +101,29 @@ public class SdkLiveCudVerificationProbeTests
     }
 
     [Fact]
+    public void SupervisorBackupConfirm_AllowsSteppesExactToken()
+    {
+        SqlAccWritePocSafety.EnsureRestorableBackup(
+            SqlAccProjectTargets.SteppesFdb,
+            backupPath: null,
+            supervisorManagedBackupConfirm: SqlAccWritePocSafety.BuildSupervisorManagedBackupConfirm(
+                SqlAccProjectTargets.SteppesFdb));
+    }
+
+    [Fact]
+    public void ProjectTargets_ResolvesSteppesAlias()
+    {
+        Assert.True(SqlAccProjectTargets.TryResolveCompanyAlias("steppes", out var fdb, out var code));
+        Assert.Equal(SqlAccProjectTargets.SteppesFdb, fdb);
+        Assert.Equal(SqlAccProjectTargets.SteppesDbCode, code);
+        Assert.True(SqlAccProjectTargets.IsAuthorizedProjectDatabaseFileName(fdb));
+        Assert.Contains(SqlAccProjectTargets.SteppesTargetKey,
+            SqlAccProjectTargets.AuthorizedProjectCompanies, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(SqlAccProjectTargets.SteppesTargetKey,
+            SqlAccProjectTargets.AuthorizedBothCompanies, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void ResolveDocumentBizObject_StillMapsGoodsReceived()
     {
         Assert.Equal(SqlAccBizObjectWriter.GoodsReceivedBiz,

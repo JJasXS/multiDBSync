@@ -186,7 +186,8 @@ public sealed class SqlAccSdkWebsiteFunctionalProbe
         string controlAccount,
         List<SqlAccWebsiteFunctionalStep> steps, ref bool failed, ref string message)
     {
-        var code = "SDKPOC-C-" + token;
+        // AR_CUSTOMER.CODE CHARACTER_LENGTH=10 (UTF8). Long POC codes truncate and fail post-save verify.
+        var code = ShortPocCode("C", token, 10);
         var record = PartyRecord(code, "SDK POC Customer " + code, controlAccount);
         var create = write.CreateMasterAsync(db, EntityCodes.Customer, record, "SDKPOC-" + token).GetAwaiter().GetResult();
         steps.Add(Step("Customer", "create", create.Success, create.Message, code, orphan: create.Success));
@@ -216,7 +217,8 @@ public sealed class SqlAccSdkWebsiteFunctionalProbe
         string controlAccount,
         List<SqlAccWebsiteFunctionalStep> steps, ref bool failed, ref string message)
     {
-        var code = "SDKPOC-S-" + token;
+        // AP_SUPPLIER.CODE CHARACTER_LENGTH=10 (UTF8).
+        var code = ShortPocCode("S", token, 10);
         var record = PartyRecord(code, "SDK POC Supplier " + code, controlAccount);
         var create = write.CreateMasterAsync(db, EntityCodes.Supplier, record, "SDKPOC-" + token).GetAwaiter().GetResult();
         steps.Add(Step("Supplier", "create", create.Success, create.Message, code, orphan: create.Success));
@@ -245,9 +247,8 @@ public sealed class SqlAccSdkWebsiteFunctionalProbe
         ISqlAccountWriteAdapter write, LiveProbeSession sessions, RegisteredDatabase db, string token,
         List<SqlAccWebsiteFunctionalStep> steps, ref bool failed, ref string message)
     {
-        var groupCode = "SDKPOC-G-" + token;
-        if (groupCode.Length > 20)
-            groupCode = "SDKPOC-G" + token[^8..];
+        // ST_GROUP.CODE CHARACTER_LENGTH=20; ST_ITEM.CODE=30.
+        var groupCode = ShortPocCode("G", token, 20);
 
         var group = new StockGroupRecord
         {
@@ -264,9 +265,8 @@ public sealed class SqlAccSdkWebsiteFunctionalProbe
         var dupOk = gDup.Success && gDup.Message.Contains("already exists", StringComparison.OrdinalIgnoreCase);
         steps.Add(Step("StockGroup", "duplicate", dupOk, gDup.Message, groupCode));
 
-        var uom = "SP" + token[^6..];
-        if (uom.Length > 10) uom = "SP" + token[^4..];
-        var itemCode = "SDKPOC-I-" + token;
+        var uom = ShortPocCode("U", token, 10);
+        var itemCode = ShortPocCode("I", token, 30);
         var item = new MasterRecord
         {
             Code = itemCode,
@@ -454,25 +454,183 @@ public sealed class SqlAccSdkWebsiteFunctionalProbe
                 blocked: r.Biz is null));
         }
 
-        // Only create PH_GR when supplier + item exist; leave document for inspection (no delete of business docs).
+        // Standalone document creates on STEPPES (empty dest tables). Unique DocNo; SDKPOC description.
+        // No FROM* transfer links. No delete of existing business documents. Leave POC docs for inspection.
         var supplier = FirstCode(sessions, db, "SELECT FIRST 1 TRIM(CODE) AS CODE FROM AP_SUPPLIER ORDER BY CODE");
+        var customer = FirstCode(sessions, db, "SELECT FIRST 1 TRIM(CODE) AS CODE FROM AR_CUSTOMER ORDER BY CODE");
         var item = FirstCode(sessions, db, "SELECT FIRST 1 TRIM(CODE) AS CODE FROM ST_ITEM ORDER BY CODE");
+        var uom = FirstField(sessions, db,
+            "SELECT FIRST 1 TRIM(UOM) AS UOM FROM ST_ITEM WHERE TRIM(CODE) = '" +
+            (item ?? "").Replace("'", "''", StringComparison.Ordinal) + "'",
+            "UOM");
+        if (string.IsNullOrWhiteSpace(uom))
+            uom = "UNIT";
+
         if (string.IsNullOrWhiteSpace(supplier) || string.IsNullOrWhiteSpace(item))
         {
             steps.Add(Step("Document GR", "create", false,
-                "Missing supplier or item reference — GR create skipped.", blocked: true));
+                "Missing supplier or item reference — document creates skipped.", blocked: true));
             return;
         }
 
+        // PH_GR standalone (Website goodsreceived path). Unique DocNo — avoid literal "--".
+        CreateAndVerifyDoc(
+            write, sessions, db, steps, ref failed, ref message,
+            feature: "Document GR",
+            apiPath: "/goodsreceived",
+            table: "PH_GR",
+            docNo: ShortPocCode("GR", token, 10),
+            party: supplier,
+            item: item,
+            uom: uom,
+            token: token,
+            descriptionPrefix: "SDKPOC GR");
+
+        steps.Add(Step("Document GR", "from-link-note", true,
+            "FROMDOCTYPE/FROMDOCKEY/FROMDTLKEY not set (no destination DO keys in this lab).",
+            blocked: true));
+        steps.Add(Step("Document DO→GR", "link", true,
+            "Blocked: SL_DO has no rows on ACC-STEPPES.FDB; cannot authorize FROM* link without a safe destination DO.",
+            blocked: true));
+
+        // Remaining Website dest doc paths — independent of DO→GR. Stop only the failed path; continue others.
+        CreateAndVerifyDoc(
+            write, sessions, db, steps, ref failed, ref message,
+            feature: "Document PI",
+            apiPath: "/purchaseinvoice",
+            table: "PH_PI",
+            docNo: ShortPocCode("PI", token, 10),
+            party: supplier,
+            item: item,
+            uom: uom,
+            token: token,
+            descriptionPrefix: "SDKPOC PI");
+
+        var locFrom = FirstCode(sessions, db, "SELECT FIRST 1 TRIM(CODE) AS CODE FROM ST_LOCATION ORDER BY CODE");
+        var locTo = FirstCode(sessions, db,
+            "SELECT FIRST 1 TRIM(CODE) AS CODE FROM ST_LOCATION WHERE TRIM(CODE) <> '" +
+            (locFrom ?? "").Replace("'", "''", StringComparison.Ordinal) + "' ORDER BY CODE");
+        if (string.IsNullOrWhiteSpace(locFrom) || string.IsNullOrWhiteSpace(locTo)
+            || string.Equals(locFrom, locTo, StringComparison.OrdinalIgnoreCase))
+        {
+            steps.Add(Step("Document ST", "create", true,
+                "Blocked: ACC-STEPPES.FDB has fewer than 2 ST_LOCATION codes (SDK refuses same From/To). " +
+                "BizObject route ST_XF is mapped; live transfer not executed. Locations=[" +
+                (locFrom ?? "") + "].",
+                blocked: true));
+        }
+        else
+        {
+            CreateAndVerifyDoc(
+                write, sessions, db, steps, ref failed, ref message,
+                feature: "Document ST",
+                apiPath: "/stocktransfer",
+                table: "ST_XF",
+                docNo: ShortPocCode("ST", token, 10),
+                party: supplier,
+                item: item,
+                uom: uom,
+                token: token,
+                descriptionPrefix: "SDKPOC ST",
+                stockTransfer: true,
+                fromLocation: locFrom,
+                toLocation: locTo);
+        }
+
+        CreateAndVerifyDoc(
+            write, sessions, db, steps, ref failed, ref message,
+            feature: "Document PR",
+            apiPath: "/purchasereturned",
+            table: "PH_SC",
+            docNo: ShortPocCode("PR", token, 10),
+            party: supplier,
+            item: item,
+            uom: uom,
+            token: token,
+            descriptionPrefix: "SDKPOC PR");
+
+        if (string.IsNullOrWhiteSpace(customer))
+        {
+            steps.Add(Step("Document CN", "create", false,
+                "No AR_CUSTOMER row — CN/DN skipped.", blocked: true));
+            steps.Add(Step("Document DN", "create", false,
+                "No AR_CUSTOMER row — CN/DN skipped.", blocked: true));
+        }
+        else
+        {
+            CreateAndVerifyDoc(
+                write, sessions, db, steps, ref failed, ref message,
+                feature: "Document CN",
+                apiPath: "/salescreditnote",
+                table: "SL_CN",
+                docNo: ShortPocCode("CN", token, 10),
+                party: customer,
+                item: item,
+                uom: uom,
+                token: token,
+                descriptionPrefix: "SDKPOC CN");
+
+            CreateAndVerifyDoc(
+                write, sessions, db, steps, ref failed, ref message,
+                feature: "Document DN",
+                apiPath: "/salesdebitnote",
+                table: "SL_DN",
+                docNo: ShortPocCode("DN", token, 10),
+                party: customer,
+                item: item,
+                uom: uom,
+                token: token,
+                descriptionPrefix: "SDKPOC DN");
+        }
+
+        steps.Add(Step("Document", "cleanup-note", true,
+            "POC documents left for inspection (SDKPOC* DocNo/Description). Existing business documents were not deleted."));
+    }
+
+    private static void CreateAndVerifyDoc(
+        ISqlAccountWriteAdapter write,
+        LiveProbeSession sessions,
+        RegisteredDatabase db,
+        List<SqlAccWebsiteFunctionalStep> steps,
+        ref bool failed,
+        ref string message,
+        string feature,
+        string apiPath,
+        string table,
+        string docNo,
+        string party,
+        string item,
+        string uom,
+        string token,
+        string descriptionPrefix,
+        bool stockTransfer = false,
+        string? fromLocation = null,
+        string? toLocation = null)
+    {
+        var line = new DocumentLine
+        {
+            Seq = 1,
+            ItemCode = item,
+            Description = descriptionPrefix + " line",
+            Qty = 1m,
+            Uom = uom,
+            Rate = "1",
+            UnitPrice = 1m,
+            Amount = 1m,
+            Warehouse = stockTransfer ? (fromLocation ?? "----") : "----",
+            FromLocation = stockTransfer ? (fromLocation ?? "----") : "",
+            ToLocation = stockTransfer ? (toLocation ?? "----") : ""
+        };
+
         var doc = new DocumentHeader
         {
-            DocNo = "--",
+            DocNo = docNo,
             DocDate = DateTime.Today,
             PostDate = DateTime.Today,
             TaxDate = DateTime.Today,
-            PartyCode = supplier,
-            PartyName = supplier,
-            Description = "SDKPOC GR " + token,
+            PartyCode = party,
+            PartyName = party,
+            Description = descriptionPrefix + " " + token,
             Area = "----",
             Agent = "----",
             Project = "----",
@@ -486,43 +644,33 @@ public sealed class SqlAccSdkWebsiteFunctionalProbe
                 ["country"] = "MY",
                 ["sic"] = "00000"
             },
-            Lines =
-            [
-                new DocumentLine
-                {
-                    Seq = 1,
-                    ItemCode = item,
-                    Description = "SDKPOC GR line",
-                    Qty = 1m,
-                    Uom = "UNIT",
-                    Rate = "1",
-                    UnitPrice = 1m,
-                    Amount = 1m,
-                    Warehouse = "----"
-                }
-            ]
+            Lines = [line]
         };
 
-        var create = write.CreateDocumentAsync(db, "/goodsreceived", doc, "SDKPOC-" + token).GetAwaiter().GetResult();
-        steps.Add(Step("Document GR", "create", create.Success, create.Message, docNo: create.DocNo, orphan: create.Success));
+        var create = write.CreateDocumentAsync(db, apiPath, doc, "SDKPOC-" + token).GetAwaiter().GetResult();
+        steps.Add(Step(feature, "create", create.Success, create.Message, docNo: create.DocNo ?? docNo, orphan: create.Success));
         if (!create.Success)
         {
-            // GR failure is reported but does not block masters that already passed — still mark failed for suite honesty.
             failed = true;
-            message = create.Message;
+            if (string.IsNullOrWhiteSpace(message))
+                message = feature + ": " + create.Message;
             return;
         }
 
-        steps.Add(Step("Document GR", "from-link-note", true,
-            "FROMDOCTYPE/FROMDOCKEY/FROMDTLKEY not set (no destination DO keys in this lab). DocNo=" + create.DocNo,
-            docNo: create.DocNo));
-        steps.Add(Step("Document GR", "cleanup-note", true,
-            "POC GR left for inspection; existing business documents were not deleted.",
-            docNo: create.DocNo, orphan: true));
-
-        steps.Add(Step("Document PI/ST/PR/CN/DN", "create", true,
-            "BizObject routes verified; live Create NOT executed (relationships/FROM* not confirmed for safe test docs).",
-            blocked: true));
+        var safeDoc = (create.DocNo ?? docNo).Replace("'", "''", StringComparison.Ordinal);
+        var persisted = FirstField(sessions, db,
+            "SELECT FIRST 1 TRIM(DOCNO) AS DOCNO FROM " + table + " WHERE TRIM(DOCNO) = '" + safeDoc + "'",
+            "DOCNO");
+        var ok = !string.IsNullOrWhiteSpace(persisted);
+        steps.Add(Step(feature, "verify-create", ok,
+            ok ? $"Present in {table} DOCNO={persisted}." : $"Save reported success but {table} row missing for DOCNO={safeDoc}.",
+            docNo: create.DocNo ?? docNo, orphan: true));
+        if (!ok)
+        {
+            failed = true;
+            if (string.IsNullOrWhiteSpace(message))
+                message = feature + " verify-create failed.";
+        }
     }
 
     private bool VerifyIsolation(
@@ -801,6 +949,19 @@ public sealed class SqlAccSdkWebsiteFunctionalProbe
             dynamic native = SqlAccBizObjectWriter.NativeApp(app);
             return Field(QueryFirst(native, sql), field);
         }).GetAwaiter().GetResult();
+
+    /// <summary>Builds a unique POC code within Firebird CHARACTER_LENGTH for the target table.</summary>
+    private static string ShortPocCode(string prefix, string token, int maxLen)
+    {
+        prefix = (prefix ?? "").Trim();
+        token = (token ?? "").Trim();
+        if (maxLen < 2) throw new ArgumentOutOfRangeException(nameof(maxLen));
+        if (prefix.Length >= maxLen)
+            return prefix[..maxLen];
+        var budget = maxLen - prefix.Length;
+        var tail = token.Length <= budget ? token : token[^budget..];
+        return prefix + tail;
+    }
 
     private static MasterRecord PartyRecord(string code, string companyName, string controlAccount) =>
         new()

@@ -48,6 +48,22 @@ public class PartnerAutoPushTargetsTests
         Assert.False(PartnerAutoPushTargets.HasApiCredentials(s1));
     }
 
+    /// <summary>
+    /// AccountChartEdit / Push must pass Provider=Sdk. Null/omitted writeProvider falls back to Rest API-cred gate
+    /// and would skip FbPath-only subs under Sdk (Push OnPostSaveEdit regression).
+    /// </summary>
+    [Fact]
+    public void IsWriteReady_null_provider_uses_Rest_api_gate_not_Sdk_fbpath()
+    {
+        var fbOnly = Db(7, "S1", DatabaseRoles.Sub, api: false, fb: true);
+        var apiOnly = Db(8, "S2", DatabaseRoles.Sub, api: true, fb: false);
+
+        Assert.False(PartnerAutoPushTargets.IsWriteReady(fbOnly, writeProvider: null));
+        Assert.True(PartnerAutoPushTargets.IsWriteReady(apiOnly, writeProvider: null));
+        Assert.True(PartnerAutoPushTargets.IsWriteReady(fbOnly, SqlAccountingWriteProviders.Sdk));
+        Assert.False(PartnerAutoPushTargets.IsWriteReady(apiOnly, SqlAccountingWriteProviders.Sdk));
+    }
+
     [Fact]
     public void Resolve_sub_source_returns_empty()
     {

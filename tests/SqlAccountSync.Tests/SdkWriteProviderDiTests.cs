@@ -73,9 +73,26 @@ public class SdkWriteProviderDiTests
             FbPath = @"C:\lab\ACC-0001.FDB"
         };
 
-        var result = await rest.CreateMasterAsync(db, "CUSTOMER", new MasterRecord { Code = "C1", Description = "X" }, "DRY");
-        Assert.False(result.Success);
-        Assert.Contains("Provider=Sdk", result.Message, StringComparison.OrdinalIgnoreCase);
+        var create = await rest.CreateMasterAsync(db, "CUSTOMER", new MasterRecord { Code = "C1", Description = "X" }, "DRY");
+        Assert.False(create.Success);
+        Assert.Contains("Provider=Sdk", create.Message, StringComparison.OrdinalIgnoreCase);
+
+        var update = await rest.UpdateMasterAsync(
+            db, "SUPPLIER", new MasterRecord { Code = "S1", Description = "Y" }, "DRY", destDocKey: 0, destParentDocKey: 0);
+        Assert.False(update.Success);
+        Assert.Contains("Provider=Sdk", update.Message, StringComparison.OrdinalIgnoreCase);
+
+        var delete = await rest.DeleteMasterAsync(db, "ACCOUNT", "A1");
+        Assert.False(delete.Success);
+        Assert.Contains("Provider=Sdk", delete.Message, StringComparison.OrdinalIgnoreCase);
+
+        var stockGroup = await rest.CreateStockGroupAsync(db, new StockGroupRecord { Code = "G1", Description = "G" });
+        Assert.False(stockGroup.Success);
+        Assert.Contains("Provider=Sdk", stockGroup.Message, StringComparison.OrdinalIgnoreCase);
+
+        var doc = await rest.CreateDocumentAsync(db, "/goodsreceived", new DocumentHeader { DocNo = "G1" }, "DRY");
+        Assert.False(doc.Success);
+        Assert.Contains("Provider=Sdk", doc.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -94,8 +111,10 @@ public class SdkWriteProviderDiTests
             ApiBaseUrl = "https://api.sql.my",
             ApiCredRef = "sm:test"
         };
-        var response = await client.GetAsync(db, "/account/*");
-        Assert.False(response.Available);
+        var get = await client.GetAsync(db, "/account/*");
+        Assert.False(get.Available);
+        var post = await client.PostAsync(db, "/uom", "{}");
+        Assert.False(post.Success);
     }
 
     private static ServiceProvider BuildWriteProvider(string provider)

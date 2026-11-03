@@ -11,8 +11,8 @@ using SqlAccountSync.Services.SqlAccount.Sdk;
  *   OR --confirm-supervisor-backup "SUPERVISOR-MANAGED-RESTORABLE-BACKUP:<FDB>"
  *      (env SQLACC_SDK_CONFIRM_SUPERVISOR_BACKUP). MIRACLE/ONYAT only.
  * Password: env SQLACC_SDK_PASSWORD or interactive prompt (never --password).
- * Project companies: ACC-MIRACLE.FDB / ACC-ONYAT.FDB only (ACC-UAMAT.FDB refused).
- * Does NOT modify website appsettings (AllowLiveCom only in this process).
+ * Project companies: ACC-STEPPES.FDB / ACC-MIRACLE.FDB / ACC-ONYAT.FDB (ACC-UAMAT.FDB refused).
+ * Primary CUD lab target: --company steppes. Does NOT modify website appsettings.
  */
 
 static string? Opt(List<string> a, string name)
@@ -77,7 +77,7 @@ var argsList = args.ToList();
 var live = argsList.Any(a => string.Equals(a, "--live", StringComparison.OrdinalIgnoreCase));
 var dcf = Opt(argsList, "--dcf") ?? "";
 var fdb = Opt(argsList, "--fdb") ?? "";
-var company = Opt(argsList, "--company") ?? "miracle";
+var company = Opt(argsList, "--company") ?? "steppes";
 var verifyOther = Opt(argsList, "--verify-other-fdb") ?? "";
 var user = Opt(argsList, "--user") ?? "ADMIN";
 var backup = Opt(argsList, "--backup-path")
@@ -96,7 +96,7 @@ var websiteSuite = string.Equals(suiteRaw, "website", StringComparison.OrdinalIg
 
 if (!SqlAccProjectTargets.TryResolveCompanyAlias(company, out var resolvedFdb, out var dbCode))
 {
-    Console.WriteLine($"Unknown --company '{company}'. Use miracle or onyat.");
+    Console.WriteLine($"Unknown --company '{company}'. Use steppes, miracle, or onyat.");
     return 2;
 }
 
@@ -112,13 +112,18 @@ if (string.Equals(verifyOther, "none", StringComparison.OrdinalIgnoreCase)
 }
 else if (string.IsNullOrWhiteSpace(verifyOther))
 {
-    verifyOther = string.Equals(fdb, SqlAccProjectTargets.MiracleFdb, StringComparison.OrdinalIgnoreCase)
-        ? SqlAccProjectTargets.OnyatFdb
-        : SqlAccProjectTargets.MiracleFdb;
+    // STEPPES is the primary CUD lab: skip cross-company verify unless explicitly requested.
+    // MIRACLE ↔ ONYAT keep the historical isolation default.
+    if (string.Equals(fdb, SqlAccProjectTargets.SteppesFdb, StringComparison.OrdinalIgnoreCase))
+        verifyOther = "";
+    else if (string.Equals(fdb, SqlAccProjectTargets.MiracleFdb, StringComparison.OrdinalIgnoreCase))
+        verifyOther = SqlAccProjectTargets.OnyatFdb;
+    else
+        verifyOther = SqlAccProjectTargets.MiracleFdb;
 }
 
 if (string.IsNullOrWhiteSpace(authorizedTarget) && authorizeLan)
-    authorizedTarget = SqlAccProjectTargets.AuthorizedBothCompanies;
+    authorizedTarget = SqlAccProjectTargets.AuthorizedProjectCompanies;
 
 Console.WriteLine("=== SDK Write / Live CUD POC preflight ===");
 Console.WriteLine($"CompanyAlias={company} DBCODE={dbCode}");
