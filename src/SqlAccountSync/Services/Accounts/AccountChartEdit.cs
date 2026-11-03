@@ -1,5 +1,6 @@
 using SqlAccountSync.Helpers;
 using SqlAccountSync.Models;
+using SqlAccountSync.Options;
 using SqlAccountSync.Services.SqlAccount;
 using SqlAccountSync.Services.Sync;
 
@@ -26,7 +27,8 @@ public static class AccountChartEdit
         RegisteredDatabase source,
         IReadOnlyList<RegisteredDatabase> subs,
         AccountEditInput input,
-        string user)
+        string user,
+        string? writeProvider = null)
     {
         var code = (input.Code ?? "").Trim();
         if (code.Length == 0)
@@ -45,7 +47,7 @@ public static class AccountChartEdit
         if (failed is not null)
             return failed;
 
-        return await QueueUpdatesAsync(sync, source.DbId, subs, code, user);
+        return await QueueUpdatesAsync(sync, source.DbId, subs, code, user, writeProvider);
     }
 
     private static async Task<(List<GlAccountRow> Rows, string? Error)> ReadChartAsync(
@@ -84,12 +86,13 @@ public static class AccountChartEdit
         int sourceDbId,
         IReadOnlyList<RegisteredDatabase> subs,
         string code,
-        string user)
+        string user,
+        string? writeProvider)
     {
         var queued = 0;
         var failed = 0;
         var messages = new List<string> { $"Master {code} updated." };
-        foreach (var sub in subs.Where(PartnerAutoPushTargets.HasApiCredentials))
+        foreach (var sub in subs.Where(s => PartnerAutoPushTargets.IsWriteReady(s, writeProvider)))
         {
             var (jobId, msg) = await sync.EnqueueMasterUpdateAsync(
                 sourceDbId, sub.DbId, EntityCodes.Account, code, user);

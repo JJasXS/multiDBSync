@@ -101,8 +101,8 @@ public partial class IndexModel
         if (db is null)
             return FlashToasts.Fail("Select a database.");
 
-        if (string.IsNullOrWhiteSpace(db.ApiBaseUrl) || string.IsNullOrWhiteSpace(db.ApiCredRef))
-            return FlashToasts.Fail($"{db.DisplayName} has no SQL Accounting API credentials configured.");
+        if (!PartnerAutoPushTargets.IsWriteReady(db, WriteProvider))
+            return FlashToasts.Fail(PartnerAutoPushTargets.DescribeMissingWriteConfig(db, WriteProvider));
 
         if (await _read.MasterExistsByCodeAsync(db, EntityCode, code))
             return FlashToasts.Fail($"{EntityTitle} code '{code}' already exists on {db.DisplayName}.");
@@ -152,8 +152,8 @@ public partial class IndexModel
     private async Task LoadPartnerSubTargetsAsync(RegisteredDatabase db)
     {
         var links = await _registry.ListLinksAsync();
-        SubTargets = PartnerAutoPushTargets.Resolve(db, Databases, links);
-        SubTargetsMissingApi = PartnerAutoPushTargets.ResolveSkippedMissingApi(db, Databases, links);
+        SubTargets = PartnerAutoPushTargets.Resolve(db, Databases, links, WriteProvider);
+        SubTargetsMissingApi = PartnerAutoPushTargets.ResolveSkippedMissingApi(db, Databases, links, WriteProvider);
     }
 
     private async Task LoadExistingPartnersAsync(RegisteredDatabase db)

@@ -1,7 +1,10 @@
-using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using SqlAccountSync.Authorization;
+using SqlAccountSync.Helpers;
+using SqlAccountSync.Models;
+using SqlAccountSync.Options;
 using SqlAccountSync.Services.Accounts;
 using SqlAccountSync.Services.Databases;
 using SqlAccountSync.Services.SqlAccount;
@@ -11,8 +14,8 @@ namespace SqlAccountSync.Controllers;
 /// <summary>
 /// Maintain Account (chart of accounts).
 /// GET  /api/accounts?dbCode=HQ           — full chart from Firebird GL_ACC (default)
-/// GET  /api/accounts?dbCode=HQ&amp;source=api — proxy SQL Acc GET /account/*
-/// POST /api/accounts?dbCode=HQ           — create via SQL Acc POST /account
+/// GET  /api/accounts?dbCode=HQ&amp;source=api — proxy SQL Acc GET /account/* (paid REST; blocked when Provider=Sdk)
+/// POST /api/accounts?dbCode=HQ           — create via <see cref="ISqlAccountWriteAdapter"/> (Rest or Sdk)
 /// </summary>
 [ApiController]
 [Route("api/accounts")]
@@ -22,15 +25,21 @@ public sealed class AccountsController : ControllerBase
     private readonly IDatabaseRegistry _registry;
     private readonly ISqlAccountApiClient _api;
     private readonly ISqlAccountReadAdapter _read;
+    private readonly ISqlAccountWriteAdapter _write;
+    private readonly SqlAccountingWriteOptions _writeOptions;
 
     public AccountsController(
         IDatabaseRegistry registry,
         ISqlAccountApiClient api,
-        ISqlAccountReadAdapter read)
+        ISqlAccountReadAdapter read,
+        ISqlAccountWriteAdapter write,
+        IOptions<SqlAccountingWriteOptions> writeOptions)
     {
         _registry = registry;
         _api = api;
         _read = read;
+        _write = write;
+        _writeOptions = writeOptions.Value;
     }
 
     /// <summary>List full GL chart for a registered database.</summary>
@@ -47,7 +56,20 @@ public sealed class AccountsController : ControllerBase
 
         var useApi = string.Equals(source, "api", StringComparison.OrdinalIgnoreCase);
         if (useApi)
+        {
+            if (string.Equals(
+                    _writeOptions.Provider?.Trim(),
+                    SqlAccountingWriteProviders.Sdk,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest(new
+                {
+                    error = "source=api is disabled when SqlAccountingWrite:Provider=Sdk. Use Firebird chart (omit source) via GetGlChartAsync."
+                });
+            }
+
             return await ListFromSqlApiAsync(db, cancellationToken).ConfigureAwait(false);
+        }
 
         var accounts = await _read.GetGlChartAsync(db, cancellationToken).ConfigureAwait(false);
         return Ok(new
@@ -61,7 +83,7 @@ public sealed class AccountsController : ControllerBase
         });
     }
 
-    /// <summary>Create a GL account (proxies POST /account).</summary>
+    /// <summary>Create a GL account through the configured write adapter (REST default; SDK when Provider=Sdk).</summary>
     [HttpPost]
     [Authorize(Policy = PolicyNames.Operator)]
     public async Task<IActionResult> CreateAsync(
@@ -77,27 +99,27 @@ public sealed class AccountsController : ControllerBase
         if (string.IsNullOrWhiteSpace(body.Code) || string.IsNullOrWhiteSpace(body.Description))
             return BadRequest(new { error = "code and description are required." });
 
-        if (string.IsNullOrWhiteSpace(db.ApiBaseUrl) || string.IsNullOrWhiteSpace(db.ApiCredRef))
-            return BadRequest(new { error = $"{db.DisplayName} has no SQL Accounting API credentials." });
-
-        var payload = JsonSerializer.Serialize(new Dictionary<string, object?>
+        var record = new MasterRecord
         {
-            ["dockey"] = body.DocKey,
-            ["parent"] = body.Parent,
-            ["code"] = body.Code.Trim(),
-            ["description"] = body.Description.Trim(),
-            ["description2"] = string.IsNullOrWhiteSpace(body.Description2) ? null : body.Description2.Trim(),
-            ["acctype"] = string.IsNullOrWhiteSpace(body.AccType) ? null : body.AccType.Trim(),
-            ["specialacctype"] = string.IsNullOrWhiteSpace(body.SpecialAccType) ? null : body.SpecialAccType.Trim(),
-            ["tax"] = string.IsNullOrWhiteSpace(body.Tax) ? null : body.Tax.Trim(),
-            ["cashflowtype"] = body.CashFlowType,
-            ["sic"] = string.IsNullOrWhiteSpace(body.Sic) ? null : body.Sic.Trim()
-        }, new JsonSerializerOptions
-        {
-            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-        });
+            Code = body.Code.Trim(),
+            Description = body.Description.Trim(),
+            Fields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["dockey"] = body.DocKey.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ["parent"] = body.Parent.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                [GlAccountMapper.FieldDestParent] = body.Parent.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                [GlAccountMapper.FieldDescription2] = (body.Description2 ?? "").Trim(),
+                [GlAccountMapper.FieldAccType] = (body.AccType ?? "").Trim(),
+                [GlAccountMapper.FieldSpecialAccType] = (body.SpecialAccType ?? "").Trim(),
+                [GlAccountMapper.FieldTax] = (body.Tax ?? "").Trim(),
+                [GlAccountMapper.FieldCashFlowType] = body.CashFlowType.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                [GlAccountMapper.FieldSic] = (body.Sic ?? "").Trim()
+            }
+        };
 
-        var write = await _api.PostAsync(db, "/account", payload, cancellationToken).ConfigureAwait(false);
+        var write = await _write.CreateMasterAsync(
+            db, EntityCodes.Account, record, $"API-CREATE-{record.Code}", cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
         if (!write.Success)
             return StatusCode(502, new { error = write.Message ?? "Create failed." });
 
@@ -106,7 +128,7 @@ public sealed class AccountsController : ControllerBase
             ok = true,
             dbId = db.DbId,
             dbCode = db.DbCode,
-            code = body.Code.Trim(),
+            code = record.Code,
             message = write.Message
         });
     }

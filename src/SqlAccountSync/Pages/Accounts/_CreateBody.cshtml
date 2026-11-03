@@ -53,7 +53,7 @@
                                 @if (Model.SubTargetsMissingApi.Count > 0)
                                 {
                                     <p class="field-hint warn">
-                                        Skipped (no API credentials):
+                                        @SqlAccountSync.Helpers.PartnerAutoPushTargets.SkippedTargetsHint(Model.WriteProvider)
                                         @string.Join(", ", Model.SubTargetsMissingApi.Select(s => s.DisplayName))
                                     </p>
                                 }

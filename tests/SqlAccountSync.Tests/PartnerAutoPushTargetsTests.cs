@@ -1,5 +1,6 @@
 using SqlAccountSync.Helpers;
 using SqlAccountSync.Models;
+using SqlAccountSync.Options;
 
 namespace SqlAccountSync.Tests;
 
@@ -24,6 +25,27 @@ public class PartnerAutoPushTargetsTests
         Assert.Contains(result, d => d.DbId == 7);
         Assert.Contains(result, d => d.DbId == 8);
         Assert.DoesNotContain(result, d => d.DbId == 9);
+    }
+
+    [Fact]
+    public void Resolve_sdk_uses_fbpath_not_api_credentials()
+    {
+        var hq = Db(6, "HQ", DatabaseRoles.Master, api: false, fb: true);
+        var s1 = Db(7, "S1", DatabaseRoles.Sub, api: false, fb: true);
+        var s2 = Db(8, "S2", DatabaseRoles.Sub, api: false, fb: false);
+        var links = new[] { Link(6, 7), Link(6, 8) };
+
+        var result = PartnerAutoPushTargets.Resolve(
+            hq, [hq, s1, s2], links, SqlAccountingWriteProviders.Sdk);
+        var skipped = PartnerAutoPushTargets.ResolveSkippedMissingApi(
+            hq, [hq, s1, s2], links, SqlAccountingWriteProviders.Sdk);
+
+        Assert.Single(result);
+        Assert.Equal(7, result[0].DbId);
+        Assert.Single(skipped);
+        Assert.Equal(8, skipped[0].DbId);
+        Assert.True(PartnerAutoPushTargets.IsWriteReady(s1, SqlAccountingWriteProviders.Sdk));
+        Assert.False(PartnerAutoPushTargets.HasApiCredentials(s1));
     }
 
     [Fact]
@@ -92,7 +114,8 @@ public class PartnerAutoPushTargetsTests
         Assert.Empty(PartnerAutoPushTargets.Resolve(hq, [hq, s1], links));
     }
 
-    private static RegisteredDatabase Db(int id, string code, string role, bool api, bool active = true) =>
+    private static RegisteredDatabase Db(
+        int id, string code, string role, bool api, bool active = true, bool fb = false) =>
         new()
         {
             DbId = id,
@@ -101,7 +124,8 @@ public class PartnerAutoPushTargetsTests
             DbRole = role,
             IsActive = active,
             ApiBaseUrl = api ? "https://api.example" : "",
-            ApiCredRef = api ? "sm:creds" : ""
+            ApiCredRef = api ? "sm:creds" : "",
+            FbPath = fb ? $@"C:\Data\{code}.FDB" : ""
         };
 
     private static DatabaseLink Link(int masterId, int subId) =>

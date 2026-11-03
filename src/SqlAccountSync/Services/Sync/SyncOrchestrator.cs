@@ -96,6 +96,7 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
     private readonly IFirebirdPartyMutate _partyFirebirdMutate;
     private readonly IFirebirdAccountMutate _accountFirebirdMutate;
     private readonly SyncOptions _sync;
+    private readonly SqlAccountingWriteOptions _writeOptions;
 
 
 
@@ -124,7 +125,8 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
         IFirebirdAccountInsert accountFirebirdInsert,
         IFirebirdPartyMutate partyFirebirdMutate,
         IFirebirdAccountMutate accountFirebirdMutate,
-        IOptions<SyncOptions> sync)
+        IOptions<SyncOptions> sync,
+        IOptions<SqlAccountingWriteOptions>? writeOptions = null)
 
     {
 
@@ -152,6 +154,7 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
         _partyFirebirdMutate = partyFirebirdMutate;
         _accountFirebirdMutate = accountFirebirdMutate;
         _sync = sync.Value;
+        _writeOptions = writeOptions?.Value ?? new SqlAccountingWriteOptions();
 
     }
 
@@ -1473,7 +1476,9 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
             return write;
 
         write = await apiCall().ConfigureAwait(false);
-        if (write.Success || !IsApiTimeout(write.Message) || !_sync.PartyFirebirdInsertFallbackEnabled)
+        // SDK path must never fall through to Firebird DML; Rest production keeps existing fallback.
+        if (write.Success || !IsApiTimeout(write.Message) || !_sync.PartyFirebirdInsertFallbackEnabled
+            || IsSdkWriteProvider())
             return write;
 
         write = await firebirdCall().ConfigureAwait(false);
@@ -1512,6 +1517,12 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
         // Unused same-code GL: allow create (API or Firebird fallback reuses it). Do not API-DELETE (hangs).
         return null;
     }
+
+    private bool IsSdkWriteProvider() =>
+        string.Equals(
+            _writeOptions.Provider?.Trim(),
+            SqlAccountingWriteProviders.Sdk,
+            StringComparison.OrdinalIgnoreCase);
 
     private static bool IsApiTimeout(string? message)
     {

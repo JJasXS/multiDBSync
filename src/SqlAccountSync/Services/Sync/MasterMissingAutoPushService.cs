@@ -27,6 +27,7 @@ public sealed class MasterMissingAutoPushService : IMasterMissingAutoPushService
     private readonly ISyncOrchestrator _sync;
     private readonly IMappingService _mapping;
     private readonly SyncOptions _options;
+    private readonly SqlAccountingWriteOptions _writeOptions;
     private readonly ILogger<MasterMissingAutoPushService> _logger;
 
     public MasterMissingAutoPushService(
@@ -36,6 +37,7 @@ public sealed class MasterMissingAutoPushService : IMasterMissingAutoPushService
         ISyncOrchestrator sync,
         IMappingService mapping,
         IOptions<SyncOptions> options,
+        IOptions<SqlAccountingWriteOptions> writeOptions,
         ILogger<MasterMissingAutoPushService> logger)
     {
         _settings = settings;
@@ -44,6 +46,7 @@ public sealed class MasterMissingAutoPushService : IMasterMissingAutoPushService
         _sync = sync;
         _mapping = mapping;
         _options = options.Value;
+        _writeOptions = writeOptions.Value;
         _logger = logger;
     }
 
@@ -83,7 +86,7 @@ public sealed class MasterMissingAutoPushService : IMasterMissingAutoPushService
         var skippedPairs = 0;
         foreach (var master in masters)
         {
-            var targets = PartnerAutoPushTargets.Resolve(master, databases, links);
+            var targets = PartnerAutoPushTargets.Resolve(master, databases, links, _writeOptions.Provider);
             if (targets.Count == 0)
             {
                 skippedPairs++;
