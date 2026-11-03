@@ -98,6 +98,8 @@ public interface ISqlAccountWriteAdapter
         RegisteredDatabase? sourceDb = null, string? sourceEntityCode = null);
     Task<WriteResult> DeleteMasterAsync(RegisteredDatabase db, string targetEntityCode, string code, CancellationToken cancellationToken = default);
     Task<WriteResult> CreateDocumentAsync(RegisteredDatabase db, string apiPath, DocumentHeader document, string txnStamp, CancellationToken cancellationToken = default);
+    /// <summary>Create stock group on destination (<c>/stockgroup</c> REST or <c>ST_GROUP</c> SDK).</summary>
+    Task<WriteResult> CreateStockGroupAsync(RegisteredDatabase db, StockGroupRecord group, CancellationToken cancellationToken = default);
 }
 
 /// <summary>Read-only Firebird adapter. All statements run in a Firebird read-only transaction.</summary>

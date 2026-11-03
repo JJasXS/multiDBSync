@@ -17,11 +17,13 @@ using SqlAccountSync.Services.Queue;
 using SqlAccountSync.Services.Secrets;
 using SqlAccountSync.Services.Items;
 using SqlAccountSync.Services.SqlAccount;
+using SqlAccountSync.Services.SqlAccount.Sdk;
 using SqlAccountSync.Services.Sync;
 using SqlAccountSync.Services.Tenants;
 using SqlAccountSync.Services.Transactions;
 using SqlAccountSync.Services.Validation;
 
+// Load local .env without clobbering Process/User vars already set (e.g. SQLACC_SDK_PASSWORD).
 foreach (var envPath in new[]
          {
              Path.Combine(Directory.GetCurrentDirectory(), ".env"),
@@ -30,9 +32,19 @@ foreach (var envPath in new[]
 {
     if (File.Exists(envPath))
     {
-        DotNetEnv.Env.Load(envPath);
+        DotNetEnv.Env.Load(
+            envPath,
+            new DotNetEnv.LoadOptions(setEnvVars: true, clobberExistingVars: false));
         break;
     }
+}
+
+// If SQLACC_SDK_PASSWORD (or configured PasswordSecretRef) exists only on User/Machine, promote to Process.
+{
+    var sdkPwdRef = Environment.GetEnvironmentVariable("SqlAccSdk__PasswordSecretRef")
+                    ?? "env:SQLACC_SDK_PASSWORD";
+    SqlAccountSync.Services.SqlAccount.Sdk.SqlAccSdkPasswordStatus.TryPromoteEnvPasswordToProcess(
+        sdkPwdRef, out _);
 }
 
 var builder = WebApplication.CreateBuilder(args);
@@ -68,6 +80,8 @@ builder.Services.Configure<SyncOptions>(builder.Configuration.GetSection(SyncOpt
 builder.Services.Configure<BootstrapOptions>(builder.Configuration.GetSection(BootstrapOptions.SectionName));
 builder.Services.Configure<AwsOptions>(builder.Configuration.GetSection(AwsOptions.SectionName));
 builder.Services.Configure<FeatureOptions>(builder.Configuration.GetSection(FeatureOptions.SectionName));
+builder.Services.Configure<SqlAccountingWriteOptions>(builder.Configuration.GetSection(SqlAccountingWriteOptions.SectionName));
+builder.Services.Configure<SqlAccSdkOptions>(builder.Configuration.GetSection(SqlAccSdkOptions.SectionName));
 
 var awsRegion = builder.Configuration["AWS:Region"]
     ?? Environment.GetEnvironmentVariable("AWS_REGION")
@@ -127,7 +141,18 @@ builder.Services.AddScoped<IFirebirdPartyInsert, FirebirdPartyInsert>();
 builder.Services.AddScoped<IFirebirdAccountInsert, FirebirdAccountInsert>();
 builder.Services.AddScoped<IFirebirdPartyMutate, FirebirdPartyMutate>();
 builder.Services.AddScoped<IFirebirdAccountMutate, FirebirdAccountMutate>();
-builder.Services.AddScoped<ISqlAccountWriteAdapter>(sp => sp.GetRequiredService<SqlAccountApiWriteAdapter>());
+builder.Services.AddSingleton<ISqlAccComAppFactory, SqlAccComAppFactory>();
+builder.Services.AddSingleton<ISqlAccSessionManager, SqlAccSessionManager>();
+builder.Services.AddScoped<ISqlAccSessionDiagnostics, SqlAccSessionDiagnostics>();
+builder.Services.AddScoped<SqlAccountSdkWriteAdapter>();
+builder.Services.AddScoped<ISqlAccountWriteAdapter>(sp =>
+{
+    var provider = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<SqlAccountingWriteOptions>>()
+        .Value.Provider?.Trim();
+    if (string.Equals(provider, SqlAccountingWriteProviders.Sdk, StringComparison.OrdinalIgnoreCase))
+        return sp.GetRequiredService<SqlAccountSdkWriteAdapter>();
+    return sp.GetRequiredService<SqlAccountApiWriteAdapter>();
+});
 builder.Services.AddScoped<IMappingService, MappingService>();
 builder.Services.AddScoped<IValidationService, ValidationService>();
 builder.Services.AddScoped<IJobQueue, JobQueue>();
@@ -236,6 +261,26 @@ try
 catch (Exception ex)
 {
     app.Logger.LogWarning(ex, "Central database bootstrap skipped or failed. Configure CentralDb and restart.");
+}
+
+try
+{
+    using var scope = app.Services.CreateScope();
+    var diag = scope.ServiceProvider.GetRequiredService<ISqlAccSessionDiagnostics>();
+    var status = diag.GetProviderStatus();
+    app.Logger.LogInformation(
+        "Write provider effective={Provider}; SdkSelected={Sdk}; AllowLiveCom={Live}; PasswordConfigured={Pwd}; BackgroundWriteWorkers={Workers}; AllowDevSingleJobProcess={DevJob}; {Message}",
+        status.WriteProvider,
+        status.SdkSelected,
+        status.AllowLiveCom,
+        status.PasswordConfigured,
+        status.BackgroundWriteWorkersEnabled,
+        app.Configuration.GetValue("Sync:AllowDevSingleJobProcess", false),
+        status.Message);
+}
+catch (Exception ex)
+{
+    app.Logger.LogDebug(ex, "SDK provider status log skipped.");
 }
 
 app.Run();

@@ -24,6 +24,7 @@ public sealed class SqlAccountApiClient : ISqlAccountApiClient
     private readonly ISecretResolver _secrets;
     private readonly ISqlApiCredentialBundle _bundle;
     private readonly SyncOptions _sync;
+    private readonly SqlAccountingWriteOptions _writeOptions;
     private readonly IAmazonSecretsManager? _aws;
     private readonly ILogger<SqlAccountApiClient> _logger;
     private const string Region = "ap-southeast-1";
@@ -34,12 +35,14 @@ public sealed class SqlAccountApiClient : ISqlAccountApiClient
         ISqlApiCredentialBundle bundle,
         IOptions<SyncOptions> sync,
         ILogger<SqlAccountApiClient> logger,
+        IOptions<SqlAccountingWriteOptions>? writeOptions = null,
         IAmazonSecretsManager? aws = null)
     {
         _http = http;
         _secrets = secrets;
         _bundle = bundle;
         _sync = sync.Value;
+        _writeOptions = writeOptions?.Value ?? new SqlAccountingWriteOptions();
         _logger = logger;
         _aws = aws;
     }
@@ -99,6 +102,14 @@ public sealed class SqlAccountApiClient : ISqlAccountApiClient
     private async Task<SqlApiResponse> SendAsync(
         RegisteredDatabase db, HttpMethod method, string path, string? json, CancellationToken cancellationToken)
     {
+        if (SqlAccountingWriteProviders.IsSdk(_writeOptions.Provider))
+        {
+            _logger.LogWarning(
+                "Refusing SQL Accounting REST {Method} {Path}: Provider=Sdk (no silent REST fallback).",
+                method.Method, path);
+            return SqlApiResponse.Unavailable;
+        }
+
         if (string.IsNullOrWhiteSpace(db.ApiBaseUrl) || string.IsNullOrWhiteSpace(db.ApiCredRef))
             return SqlApiResponse.Unavailable;
 

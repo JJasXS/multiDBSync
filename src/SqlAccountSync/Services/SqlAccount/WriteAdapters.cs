@@ -23,13 +23,17 @@ public sealed record SqlApiResponse(bool Available, int Status, string Body)
 
 public sealed record SqlApiCredentials(string AccessKey, string SecretKey);
 
-/// <summary>Official SQL Accounting REST API is the only write path.</summary>
+/// <summary>
+/// Official SQL Accounting REST API write path (SigV4). Remains the default and rollback
+/// when <c>SqlAccountingWrite:Provider</c> is <c>Rest</c>.
+/// </summary>
 public sealed class SqlAccountApiWriteAdapter : ISqlAccountWriteAdapter
 {
     private readonly HttpClient _http;
     private readonly ISecretResolver _secrets;
     private readonly ISqlApiCredentialBundle _bundle;
     private readonly SyncOptions _sync;
+    private readonly SqlAccountingWriteOptions _writeOptions;
     private readonly IAmazonSecretsManager? _aws;
     private readonly ILogger<SqlAccountApiWriteAdapter> _logger;
 
@@ -39,12 +43,14 @@ public sealed class SqlAccountApiWriteAdapter : ISqlAccountWriteAdapter
         ISqlApiCredentialBundle bundle,
         IOptions<SyncOptions> sync,
         ILogger<SqlAccountApiWriteAdapter> logger,
+        IOptions<SqlAccountingWriteOptions>? writeOptions = null,
         IAmazonSecretsManager? aws = null)
     {
         _http = http;
         _secrets = secrets;
         _bundle = bundle;
         _sync = sync.Value;
+        _writeOptions = writeOptions?.Value ?? new SqlAccountingWriteOptions();
         _logger = logger;
         _aws = aws;
     }
@@ -221,6 +227,13 @@ public sealed class SqlAccountApiWriteAdapter : ISqlAccountWriteAdapter
         return PostAsync(db, path, payload, cancellationToken);
     }
 
+    public Task<WriteResult> CreateStockGroupAsync(
+        RegisteredDatabase db, StockGroupRecord group, CancellationToken cancellationToken = default)
+    {
+        var payload = StockGroupMapper.SerializePayload(StockGroupMapper.ToApiPayload(group));
+        return PostAsync(db, "/stockgroup", payload, cancellationToken);
+    }
+
     private Task<WriteResult> PostAsync(RegisteredDatabase db, string path, string json, CancellationToken cancellationToken) =>
         SendAsync(db, HttpMethod.Post, path, json, "Created.", treatNotFoundAsSuccess: false, cancellationToken);
 
@@ -228,6 +241,18 @@ public sealed class SqlAccountApiWriteAdapter : ISqlAccountWriteAdapter
         RegisteredDatabase db, HttpMethod method, string path, string? json,
         string successMessage, bool treatNotFoundAsSuccess, CancellationToken cancellationToken)
     {
+        if (SqlAccountingWriteProviders.IsSdk(_writeOptions.Provider))
+        {
+            _logger.LogError(
+                "Refusing SQL Accounting REST write {Method} {Path}: Provider=Sdk (no silent REST fallback).",
+                method.Method, path);
+            return new WriteResult
+            {
+                Success = false,
+                Message = "SQL Accounting REST write refused: Provider=Sdk. Use SqlAccountSdkWriteAdapter."
+            };
+        }
+
         if (string.IsNullOrWhiteSpace(db.ApiBaseUrl) || string.IsNullOrWhiteSpace(db.ApiCredRef))
             return new WriteResult { Success = false, Message = "SQL Accounting API is not configured for this database." };
 
@@ -535,5 +560,12 @@ public sealed class DryRunWriteAdapter : ISqlAccountWriteAdapter
     {
         Actions.Add($"WOULD POST {apiPath} as {document.DocType} on {db.DisplayName} ({document.Lines.Count} lines, {document.Amount:N2})");
         return Task.FromResult(new WriteResult { Success = true, Message = "Dry run: no data was modified." });
+    }
+
+    public Task<WriteResult> CreateStockGroupAsync(
+        RegisteredDatabase db, StockGroupRecord group, CancellationToken cancellationToken = default)
+    {
+        Actions.Add($"WOULD create stock group {group.Code} on {db.DisplayName}");
+        return Task.FromResult(new WriteResult { Success = true, Message = "Dry run: no data was modified.", DocNo = group.Code });
     }
 }

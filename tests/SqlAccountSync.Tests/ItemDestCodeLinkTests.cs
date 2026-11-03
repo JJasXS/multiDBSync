@@ -245,6 +245,10 @@ public class ItemDestCodeLinkTests
 
         public Task<WriteResult> CreateDocumentAsync(RegisteredDatabase db, string apiPath, DocumentHeader document, string txnStamp, CancellationToken cancellationToken = default) =>
             Task.FromResult(new WriteResult { Success = true });
+
+        public Task<WriteResult> CreateStockGroupAsync(
+            RegisteredDatabase db, StockGroupRecord group, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new WriteResult { Success = true, DocNo = group.Code });
     }
 
     private sealed class TestMappingService : IMappingService
