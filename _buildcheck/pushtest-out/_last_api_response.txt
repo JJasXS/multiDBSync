@@ -1,4 +1,0 @@
-PATH /stockitem
-STATUS 500
-
-{"error":{"message":"No corresponding master record found."}}

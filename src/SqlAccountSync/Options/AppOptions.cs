@@ -103,15 +103,21 @@ public sealed class SyncOptions
     public int AccountAutoDeleteMaxPerCycle { get; set; } = 25;
     public int MaxAttempts { get; set; } = 5;
     /// <summary>
-    /// HttpClient timeout for SQL Accounting write API calls (POST/PUT/DELETE).
-    /// Default 30. Clamped to 5–300 at registration.
+    /// HTTP timeout for SQL Accounting REST writes when <c>SqlAccountingWrite:Provider=Rest</c>.
+    /// Default 30. Clamped to 5–300 at runtime.
     /// </summary>
     public int WriteHttpTimeoutSeconds { get; set; } = 30;
     /// <summary>
     /// When true, after SQL Acc API create/update/delete times out (and one immediate retry),
     /// write customer/supplier/account directly into the destination Firebird DB.
+    /// Never used when <c>SqlAccountingWrite:Provider=Sdk</c>.
     /// </summary>
     public bool PartyFirebirdInsertFallbackEnabled { get; set; } = true;
+    /// <summary>
+    /// Max seconds for one SDK COM call (login/save). On timeout BizApp is recreated.
+    /// Default 60. Clamped to 5–600 at runtime.
+    /// </summary>
+    public int SdkCallTimeoutSeconds { get; set; } = 60;
     /// <summary>
     /// Seconds a job may stay PROCESSING before the worker reclaims it as RETRYING (crash recovery).
     /// Default 900 (15 minutes). Clamped to 60–86400 at runtime.
@@ -119,18 +125,31 @@ public sealed class SyncOptions
     public int ProcessingLeaseSeconds { get; set; } = 900;
     public bool AllowProductionConnections { get; set; }
     public bool AllowCrossEnvironment { get; set; }
+    /// <summary>
+    /// <c>dev</c> = may return OTP to the login UI only when ASPNETCORE_ENVIRONMENT=Development.
+    /// <c>prod</c> = email OTP only (default). Env: <c>APP_MODE</c> or <c>Sync__AppMode</c>.
+    /// Never enables debug OTP under Production hosting.
+    /// </summary>
+    public string AppMode { get; set; } = "prod";
+    /// <summary>Obsolete: ignored. Kept so old config keys do not break binding.</summary>
     public bool DebugOtpToConsole { get; set; }
-    /// <summary>Fixed OTP used only when DebugOtpToConsole is true (Development).</summary>
+    /// <summary>Obsolete: ignored. Fixed OTPs are no longer supported.</summary>
     public string MockSignInCode { get; set; } = "";
-    /// <summary>Tenant code used for standardized SQL API secret paths (e.g. TNT10006).</summary>
+
+    public bool IsDevAppMode =>
+        string.Equals((AppMode ?? "").Trim(), "dev", StringComparison.OrdinalIgnoreCase);
+    /// <summary>Tenant code used for SDK Secrets Manager path (e.g. TNT10006).</summary>
     public string TenantCode { get; set; } = "";
     /// <summary>
-    /// When true and <see cref="TenantCode"/> is set, blank/convention ApiCredRef is filled as
-    /// <c>sm:proacc/tenant/{TenantCode}/sqlApiCredentials</c>. Company keys live in that secret's databases array.
+    /// Optional override for the SDK connections secret id.
+    /// Default is <c>proacc/tenant/{TenantCode}/sdkConnections</c>. Env <c>SDK_SECRET_ID</c> also works.
     /// </summary>
-    public bool AutoAssignSqlApiCredRefByDbId { get; set; } = true;
-    /// <summary>Kept for existing config. Secrets are written only when access and secret keys are entered.</summary>
-    public bool EnsureSqlApiSecretPlaceholder { get; set; } = true;
+    public string SdkSecretId { get; set; } = "";
+    /// <summary>
+    /// Company DbCode to leave the SDK logged into when the job queue is idle (so SQL Account stays on Master).
+    /// Empty = first active MASTER/BOTH database that has SDK credentials.
+    /// </summary>
+    public string SdkHomeDbCode { get; set; } = "";
     public string[] RequiredTables { get; set; } = ["ST_ITEM", "AR_CUSTOMER", "SY_USER"];
 }
 

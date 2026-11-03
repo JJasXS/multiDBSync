@@ -1,0 +1,50 @@
+================================================================================
+SqlAccountSync — BEFORE SDK CONVERSION CHECKPOINT
+================================================================================
+Date: 2026-11-02
+
+Repo:   C:\Users\sqlsupport\SqlAccountSync
+Commit: 418a948
+Message: Checkpoint: before conversion to SQL Account SDK.
+Tag:    before-sdk-conversion
+Branch (SDK work): sdk-conversion
+
+This is the last known-good API-based stage before SDK / bridge work.
+Working tree was clean when this marker was created.
+
+--------------------------------------------------------------------------------
+HOW TO COME BACK TO THIS STAGE
+--------------------------------------------------------------------------------
+
+Option A — inspect / temporary checkout:
+  cd C:\Users\sqlsupport\SqlAccountSync
+  git checkout before-sdk-conversion
+
+Option B — reset master hard to the checkpoint (discards later work):
+  cd C:\Users\sqlsupport\SqlAccountSync
+  git reset --hard before-sdk-conversion
+
+Option C — by commit hash:
+  git checkout 418a948
+  -or-
+  git reset --hard 418a948
+
+--------------------------------------------------------------------------------
+PUSH (optional — only if you want this on GitHub too)
+--------------------------------------------------------------------------------
+
+  git push origin master
+  git push origin before-sdk-conversion
+  git push -u origin sdk-conversion
+
+--------------------------------------------------------------------------------
+SDK SETUP / DEPLOY
+--------------------------------------------------------------------------------
+
+  docs\SDK_SETUP.md
+  DeployCommands\SqlAccountSync-SDK\deploy-SqlAccountSync-SDK-github.cmd
+  scripts\create-sdk-secret.ps1
+
+Secret: proacc/tenant/{TENANT_CODE}/sdkConnections
+
+================================================================================

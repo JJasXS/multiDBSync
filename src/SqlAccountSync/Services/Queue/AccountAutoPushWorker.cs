@@ -13,15 +13,18 @@ public sealed class AccountAutoPushWorker : BackgroundService
 {
     private readonly IServiceScopeFactory _scopes;
     private readonly SyncOptions _options;
+    private readonly IAutoPushSchedule _schedule;
     private readonly ILogger<AccountAutoPushWorker> _logger;
 
     public AccountAutoPushWorker(
         IServiceScopeFactory scopes,
         IOptions<SyncOptions> options,
+        IAutoPushSchedule schedule,
         ILogger<AccountAutoPushWorker> logger)
     {
         _scopes = scopes;
         _options = options.Value;
+        _schedule = schedule;
         _logger = logger;
     }
 
@@ -36,19 +39,22 @@ public sealed class AccountAutoPushWorker : BackgroundService
             return;
         }
 
-        // Preserve prior runtime: AccountAutoPushSeconds<=0 uses a 60s poll (checkbox gate still applies).
-        var delay = TimeSpan.FromSeconds(Math.Clamp(
-            _options.AccountAutoPushSeconds <= 0 ? 60 : _options.AccountAutoPushSeconds, 15, 3600));
+        var seconds = Math.Clamp(_options.AccountAutoPushSeconds <= 0 ? 60 : _options.AccountAutoPushSeconds, 15, 3600);
+        var delay = TimeSpan.FromSeconds(seconds);
+        _schedule.SetIntervalSeconds(seconds);
         _logger.LogInformation(
             "Master auto-push checks every {Seconds}s. A cycle runs only when a Customer, Supplier, or Account checkbox is on.",
             delay.TotalSeconds);
 
-        if (!await WaitAsync(TimeSpan.FromSeconds(10), stoppingToken).ConfigureAwait(false))
+        var startup = TimeSpan.FromSeconds(10);
+        _schedule.ArmAfter(startup);
+        if (!await WaitAsync(startup, stoppingToken).ConfigureAwait(false))
             return;
 
         while (!stoppingToken.IsCancellationRequested)
         {
             await RunCycleAsync(stoppingToken).ConfigureAwait(false);
+            _schedule.ArmNextFromNow();
             if (!await WaitAsync(delay, stoppingToken).ConfigureAwait(false))
                 return;
         }

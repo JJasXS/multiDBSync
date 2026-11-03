@@ -1,6 +1,7 @@
-using Amazon;
+﻿using Amazon;
 using Amazon.SecretsManager;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Hosting;
 using SqlAccountSync.Authorization;
@@ -14,6 +15,7 @@ using SqlAccountSync.Services.Connections;
 using SqlAccountSync.Services.Databases;
 using SqlAccountSync.Services.Mapping;
 using SqlAccountSync.Services.Queue;
+using SqlAccountSync.Services.Sdk;
 using SqlAccountSync.Services.Secrets;
 using SqlAccountSync.Services.Items;
 using SqlAccountSync.Services.SqlAccount;
@@ -47,8 +49,36 @@ foreach (var envPath in new[]
         sdkPwdRef, out _);
 }
 
+// Optional master-branch SDK CLI hosts (discover / smoke). Website DI still uses Rest|Sdk provider selection.
+if (args.Any(a => string.Equals(a, "--sdk-discover", StringComparison.OrdinalIgnoreCase)))
+{
+    await SdkDiscoverHost.RunAsync(args).ConfigureAwait(false);
+    return;
+}
+
+if (args.Any(a => string.Equals(a, "--sdk-write-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    await SdkWriteSmokeHost.RunAsync(args).ConfigureAwait(false);
+    return;
+}
+
+if (args.Any(a => string.Equals(a, "--sdk-smoke", StringComparison.OrdinalIgnoreCase)))
+{
+    await SdkSmokeHost.RunAsync(args).ConfigureAwait(false);
+    return;
+}
+
 var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseWindowsService();
+
+// Persist antiforgery/auth keys outside publish so redeploys do not invalidate browser cookies.
+var dpKeysDir = Path.Combine(
+    Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+    "SqlAccountSync", "dp-keys");
+Directory.CreateDirectory(dpKeysDir);
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(dpKeysDir))
+    .SetApplicationName("SqlAccountSync");
 
 // Standard ProAcc .env keys (same names as ApprovalPO / eQuotation).
 var envOverrides = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
@@ -69,6 +99,18 @@ var bootstrapUrlFromEnv = (Environment.GetEnvironmentVariable("TENANT_BOOTSTRAP_
     ?? Environment.GetEnvironmentVariable("TenantBootstrap__AwsApiBaseUrl"))?.Trim();
 if (!string.IsNullOrEmpty(bootstrapUrlFromEnv))
     envOverrides["TenantBootstrap:AwsApiBaseUrl"] = bootstrapUrlFromEnv;
+
+var sdkSecretFromEnv = (Environment.GetEnvironmentVariable("SDK_SECRET_ID")
+    ?? builder.Configuration["SDK_SECRET_ID"])?.Trim();
+if (!string.IsNullOrEmpty(sdkSecretFromEnv))
+    envOverrides["Sync:SdkSecretId"] = sdkSecretFromEnv;
+
+var appModeFromEnv = (Environment.GetEnvironmentVariable("APP_MODE")
+    ?? Environment.GetEnvironmentVariable("Sync__AppMode")
+    ?? builder.Configuration["APP_MODE"]
+    ?? builder.Configuration["Sync:AppMode"])?.Trim();
+if (!string.IsNullOrEmpty(appModeFromEnv))
+    envOverrides["Sync:AppMode"] = appModeFromEnv;
 
 if (envOverrides.Count > 0)
     builder.Configuration.AddInMemoryCollection(envOverrides);
@@ -123,6 +165,9 @@ builder.Services.AddSingleton<TenantMenuFlags>();
 builder.Services.AddSingleton<ISecretResolver, SecretResolver>();
 builder.Services.AddSingleton<ISqlApiCredentialBundle, SqlApiCredentialBundle>();
 builder.Services.AddSingleton<ISqlApiSecretProvisioner, SqlApiSecretProvisioner>();
+// Master SDK connection/session helpers (CLI smoke /health/detail). Website writes use SqlAccountingWrite:Provider.
+builder.Services.AddSingleton<ISdkConnectionBundle, SdkConnectionBundle>();
+builder.Services.AddSingleton<ISdkSessionManager, SdkSessionManager>();
 builder.Services.AddSingleton<CentralDb>();
 builder.Services.AddSingleton<IRegistryReadGateway, RegistryReadGateway>();
 builder.Services.AddSingleton<CompanyConnectionFactory>();
@@ -163,6 +208,7 @@ builder.Services.AddScoped<ITransferMasterEnsure, TransferMasterEnsure>();
 builder.Services.AddScoped<ITransactionEngine, TransactionEngine>();
 builder.Services.AddScoped<IAccountAutoPushService, AccountAutoPushService>();
 builder.Services.AddScoped<IAutoPushSettings, AutoPushSettings>();
+builder.Services.AddSingleton<IAutoPushSchedule, AutoPushSchedule>();
 builder.Services.AddScoped<IMasterMissingAutoPushService, MasterMissingAutoPushService>();
 builder.Services.AddHostedService<TenantConfigRefreshWorker>();
 builder.Services.AddHostedService<SyncWorker>();
@@ -241,12 +287,18 @@ if (app.Environment.IsDevelopment())
             "Development: Document Transfer menu forced on (Features:ForceShowDocumentTransferUi).");
     }
 }
-app.MapGet("/health", async (IJobQueue queue) =>
+// Public liveness only — no queue/SDK internals (master security hardening).
+app.MapGet("/health", () => Results.Json(new { status = "ok" })).AllowAnonymous();
+// Detailed health for authenticated admins.
+app.MapGet("/health/detail", async (HttpContext http, IJobQueue queue, ISdkSessionManager sdk, IConfiguration config) =>
 {
     var snap = await queue.GetHealthAsync();
-    var lease = builder.Configuration.GetValue("Sync:ProcessingLeaseSeconds", 900);
+    var lease = config.GetValue("Sync:ProcessingLeaseSeconds", 900);
+    var sdkHealth = sdk.GetHealth();
     var status = "ok";
-    if (snap.OldestProcessingAgeSec is double age && age > Math.Max(lease, 60) * 2)
+    if (!sdkHealth.ProgIdRegistered)
+        status = "sdk-offline";
+    else if (snap.OldestProcessingAgeSec is double age && age > Math.Max(lease, 60) * 2)
         status = "degraded";
     double? oldestAge = snap.OldestProcessingAgeSec is null
         ? null
@@ -254,6 +306,13 @@ app.MapGet("/health", async (IJobQueue queue) =>
     return Results.Json(new
     {
         status,
+        requestId = RequestId.Current(http),
+        sdk = new
+        {
+            progIdRegistered = sdkHealth.ProgIdRegistered,
+            loggedIn = sdkHealth.LoggedIn,
+            currentCompany = sdkHealth.CurrentCompany
+        },
         queue = new
         {
             pending = snap.Pending,
@@ -262,7 +321,7 @@ app.MapGet("/health", async (IJobQueue queue) =>
             oldestProcessingAgeSec = oldestAge
         }
     });
-}).AllowAnonymous();
+}).RequireAuthorization(PolicyNames.Admin);
 app.MapControllers();
 app.MapRazorPages();
 
@@ -295,6 +354,19 @@ try
 catch (Exception ex)
 {
     app.Logger.LogDebug(ex, "SDK provider status log skipped.");
+}
+
+try
+{
+    var syncOpts = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<SyncOptions>>().Value;
+    var schedule = app.Services.GetRequiredService<IAutoPushSchedule>();
+    var seconds = Math.Clamp(syncOpts.AccountAutoPushSeconds <= 0 ? 60 : syncOpts.AccountAutoPushSeconds, 15, 3600);
+    schedule.SetIntervalSeconds(seconds);
+    schedule.ArmNextFromNow();
+}
+catch (Exception ex)
+{
+    app.Logger.LogDebug(ex, "Auto-push schedule arm skipped.");
 }
 
 app.Run();

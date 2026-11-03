@@ -1,71 +1,62 @@
-# SQL Account Sync
+# SQL Account Sync (SDK Live)
 
-Orchestration layer for Master and Sub SQL Accounting Firebird databases: mapping, jobs, and API-backed writes.
+Orchestration layer for Master and Sub SQL Accounting Firebird databases: mapping, jobs, and **SQL Account SDK Live (COM)** writes.
+
+Branch `sdk-conversion` replaces the former HTTP SigV4 SQL Accounting API with local `SQLAcc.BizApp`. Rollback tag: `before-sdk-conversion`.
 
 ## Overview
 
-SQL Account Sync (GitHub repository name `multiDBSync`) is an ASP.NET Core 8 Razor Pages control plane. It does not copy SQL Accounting. Company `.FDB` files stay the source of accounting data. The central Firebird database holds `SYNC_*` control tables. Reads against company files use read-only Firebird transactions; writes go through the official SQL Accounting REST API (SigV4), never raw INSERT into company databases.
+ASP.NET Core 8 Razor Pages control plane. Company `.FDB` files stay the source of accounting data. The central Firebird database holds `SYNC_*` control tables.
 
-It is intended for operators who need to keep master and sub company books aligned under explicit mappings and job control.
-
-## Key Features
-
-- Bootstrap admin OTP sign-in (`Bootstrap:AdminEmail`)
-- Roles: ADMIN, MANAGER, OPERATOR, VIEWER
-- Database registry (master/sub connections)
-- Relationship and mapping screens
-- Job queue and transaction history
-- Audit and error logs
-- Secret references (`env:` / Secrets Manager) instead of plaintext passwords in config
-- Dry-run path with no write adapter to the API
-- `SqlGuard` allows only SELECT/WITH against company databases
+- **Reads** against company files: read-only Firebird transactions (`FirebirdReadAdapter`)
+- **Writes**: SQL Account SDK Live via `SdkWriteAdapter` / `SdkSessionManager` (one STA thread, one company login at a time)
+- **SDK credentials**: one AWS Secrets Manager secret per tenant — `proacc/tenant/{TENANT_CODE}/sdkConnections`
 
 ## Architecture
 
 ```mermaid
 flowchart TD
-    UI[Razor Pages UI] --> Auth[OTP and Roles]
-    Auth --> Orch[Sync Orchestrator and Job Queue]
+    UI[Razor Pages UI] --> Orch[Sync Orchestrator and Job Queue]
     Orch --> Central[(Central Firebird SYNC tables)]
     Orch --> Read[Read-only Firebird SELECT]
     Read --> Company[(Company Master or Sub FDB)]
-    Orch --> Api[SQL Accounting REST API SigV4]
-    Api --> Company
-    Orch --> Secrets[SecretResolver env or Secrets Manager]
+    Orch --> Sdk[SdkSessionManager STA COM]
+    Sdk --> SQLACC[SQLACC.exe]
+    SQLACC --> Company
+    Sdk --> Secrets[AWS Secrets Manager sdkConnections]
 ```
 
-## Tech Stack
-
-- C# / ASP.NET Core 8 (`net8.0-windows`)
-- Firebird 10.3.4 client
-- MailKit, DotNetEnv, AWS Secrets Manager
-- xUnit test project `tests/SqlAccountSync.Tests`
-
-## Setup
+## Setup (dev)
 
 ```powershell
 copy src\SqlAccountSync\.env.example src\SqlAccountSync\.env
-# Set CENTRAL_FB_MASTERKEY and CentralDb path to an empty central Firebird database
+# TENANT_CODE, AWS_*, optional SDK_SECRET_ID, CentralDb path
 dotnet run --project src\SqlAccountSync --launch-profile http
 ```
 
-Sign in with `Bootstrap:AdminEmail` (default `admin@localhost`). In Development, OTP is written to the console when SMTP is not configured.
+SDK smoke / discover (requires SQL Account installed + secret with UAMAT row):
 
-Do not set `ApiCredRef` or `Sync:AllowProductionConnections` until backup/recovery in [`docs/BACKUP_AND_RECOVERY.md`](docs/BACKUP_AND_RECOVERY.md) is complete.
+```powershell
+dotnet run --project src\SqlAccountSync -- --sdk-smoke --db=UAMAT
+dotnet run --project src\SqlAccountSync -- --sdk-discover --db=UAMAT
+```
+
+## Deploy (SDK)
+
+Use [`DeployCommands/SqlAccountSync-SDK/deploy-SqlAccountSync-SDK-github.cmd`](../DeployCommands/SqlAccountSync-SDK/deploy-SqlAccountSync-SDK-github.cmd):
+
+- Auto UAC elevation
+- Publishes branch `sdk-conversion`
+- Disables the old Windows **service**
+- Registers scheduled task **SqlAccountSync-SDK** (At log on, highest privileges)
+
+See `BEFORE_SDK_CHECKPOINT.txt` and `docs/SDK_SETUP.md` for Secrets Manager / DynamoDB checklist.
 
 ## Testing
 
 ```powershell
 dotnet test tests\SqlAccountSync.Tests\SqlAccountSync.Tests.csproj
 ```
-
-Automated tests use fakes and do not touch a company database.
-
-## Security
-
-- Company writes are API-only; `SqlGuard` blocks non-SELECT SQL.
-- Passwords use `PasswordSecretRef` (for example `env:CENTRAL_FB_MASTERKEY`).
-- See [`docs/ENTERPRISE.md`](docs/ENTERPRISE.md) and [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
 
 ## License
 

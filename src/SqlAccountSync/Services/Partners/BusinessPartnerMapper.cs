@@ -251,6 +251,59 @@ public static class BusinessPartnerMapper
         return payload;
     }
 
+    /// <summary>
+    /// Slim payload for SQL Acc SDK Live. Full HTTP API payload sets many optionals that
+    /// leave Null variants and crash Save with "Could not convert Null into Integer".
+    /// </summary>
+    public static Dictionary<string, object?> ToSdkPayload(
+        BusinessPartner partner, string targetEntityCode, string suggestedCode, string txnStamp)
+    {
+        var isCustomer = string.Equals(targetEntityCode, EntityCodes.Customer, StringComparison.OrdinalIgnoreCase);
+        var code = (suggestedCode ?? "").Trim();
+        if (code.Length == 0)
+            code = partner.SourceCode;
+
+        var controlAccount = isCustomer ? "300-000" : "400-000";
+        if (string.Equals(partner.SourceType, targetEntityCode, StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrWhiteSpace(partner.ControlAccount))
+            controlAccount = partner.ControlAccount.Trim();
+
+        var remark = string.IsNullOrWhiteSpace(partner.Remark) ? "" : partner.Remark;
+        if (!string.IsNullOrWhiteSpace(txnStamp))
+            remark = string.IsNullOrWhiteSpace(remark) ? $"SYNC|{txnStamp}" : $"{remark} | SYNC|{txnStamp}";
+
+        var branch = partner.Branches.Count > 0 ? partner.Branches[0] : new PartnerBranch();
+        // Keep this close to the eStream wiki sample (CODE + CompanyName + cdsBranch.Edit).
+        // Extra numeric optionals on some company DBs crash Save with Null→Integer.
+        var payload = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["code"] = code,
+            ["companyname"] = partner.CompanyName,
+            ["companyname2"] = NullIfEmpty(partner.CompanyName2),
+            ["remark"] = NullIfEmpty(remark),
+            ["note"] = NullIfEmpty(partner.Note),
+            ["sdsbranch"] = new List<Dictionary<string, object?>>
+            {
+                new(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["branchname"] = NullIfEmpty(branch.BranchName) ?? "BILLING",
+                    ["address1"] = NullIfEmpty(branch.Address1),
+                    ["address2"] = NullIfEmpty(branch.Address2),
+                    ["address3"] = NullIfEmpty(branch.Address3),
+                    ["address4"] = NullIfEmpty(branch.Address4),
+                    ["attention"] = NullIfEmpty(branch.Attention),
+                    ["phone1"] = NullIfEmpty(branch.Phone1),
+                    ["fax1"] = NullIfEmpty(branch.Fax1),
+                    ["email"] = NullIfEmpty(branch.Email)
+                }
+            }
+        };
+        // Do not force CONTROLACCOUNT — missing codes (e.g. 300-000) crash some DBs with Null→Integer.
+        // SQL Acc assigns the default debtor/creditor control account on New().
+        _ = controlAccount;
+        return payload;
+    }
+
     public static string SerializePayload(Dictionary<string, object?> payload) =>
         JsonSerializer.Serialize(payload, new JsonSerializerOptions
         {

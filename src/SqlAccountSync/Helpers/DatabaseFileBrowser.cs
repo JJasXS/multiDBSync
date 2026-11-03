@@ -23,18 +23,10 @@ public static class DatabaseFileBrowser
         if (name is null)
             return [];
 
+        // Only approved database roots — never scan entire fixed drives (path disclosure / DoS).
         var state = new SearchState(name, DateTime.UtcNow + SearchLimit);
         foreach (var root in Preferred.Where(Directory.Exists))
             Search(root, state);
-        if (state.Found.Count > 0)
-            return state.Found;
-
-        foreach (var drive in DriveInfo.GetDrives())
-        {
-            if (state.Stop) break;
-            if (!drive.IsReady || drive.DriveType != DriveType.Fixed) continue;
-            Search(drive.RootDirectory.FullName, state);
-        }
         return state.Found;
     }
 

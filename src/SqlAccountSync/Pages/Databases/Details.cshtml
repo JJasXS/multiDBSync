@@ -144,16 +144,8 @@
                                 <label class="role-choice"><input type="radio" name="Db.DbRole" value="SUB" @(roleIsSub ? "checked" : null) /> Sub</label>
                             </div>
                         </div>
-                        <h4 class="db-create-subhead">SQL API</h4>
-                        <div class="field">
-                            <label for="editAccessKey">Access key</label>
-                            <input id="editAccessKey" name="ApiAccessKey" type="password" autocomplete="off" />
-                        </div>
-                        <div class="field">
-                            <label for="editSecretKey">Secret key</label>
-                            <input id="editSecretKey" name="ApiSecretKey" type="password" autocomplete="off" />
-                        </div>
-                        <p class="field-hint">Leave both blank to keep the current secret. Filling both stores them for this company.</p>
+                        <h4 class="db-create-subhead">SDK login</h4>
+                        <p class="field-hint">SDK username/password/DCF/database for this company code are managed in AWS Secrets Manager (<code>sdkConnections</code>), not on this form.</p>
                     </div>
                 </div>
             </div>

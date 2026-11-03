@@ -186,15 +186,3 @@ public class MappingSuggestTests
     }
 }
 
-public class AwsV4SignerTests
-{
-    [Fact]
-    public void Produces_authorization_header()
-    {
-        var headers = AwsV4Signer.SignedHeaders(
-            "POST", new Uri("https://api.sql.my/goodsreceived"), "{}"u8.ToArray(), "application/json",
-            "AKIA", "secret", "ap-southeast-1", "execute-api", new DateTime(2026, 8, 18, 1, 2, 3, DateTimeKind.Utc));
-        Assert.True(headers.ContainsKey("Authorization"));
-        Assert.StartsWith("AWS4-HMAC-SHA256", headers["Authorization"]);
-    }
-}
