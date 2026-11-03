@@ -92,6 +92,17 @@ var sdkSecretFromEnv = (Environment.GetEnvironmentVariable("SDK_SECRET_ID")
 if (!string.IsNullOrEmpty(sdkSecretFromEnv))
     envOverrides["Sync:SdkSecretId"] = sdkSecretFromEnv;
 
+var appModeFromEnv = (Environment.GetEnvironmentVariable("APP_MODE")
+    ?? Environment.GetEnvironmentVariable("Sync__AppMode")
+    ?? builder.Configuration["APP_MODE"]
+    ?? builder.Configuration["Sync:AppMode"])?.Trim();
+if (!string.IsNullOrEmpty(appModeFromEnv))
+{
+    envOverrides["Sync:AppMode"] = appModeFromEnv;
+    if (appModeFromEnv.Equals("dev", StringComparison.OrdinalIgnoreCase))
+        envOverrides["Sync:DebugOtpToConsole"] = "true";
+}
+
 if (envOverrides.Count > 0)
     builder.Configuration.AddInMemoryCollection(envOverrides);
 

@@ -87,7 +87,13 @@ public sealed class OtpAuthService
         return (false, string.IsNullOrWhiteSpace(err) ? "Could not send the sign-in email." : err, null);
     }
 
-    private bool DevDebugOtpEnabled => _env.IsDevelopment() && _sync.DebugOtpToConsole;
+    /// <summary>
+    /// Show OTP on the login UI when APP_MODE=dev, or classic Development + DebugOtpToConsole.
+    /// Prod never returns the code to the browser.
+    /// </summary>
+    private bool DevDebugOtpEnabled =>
+        _sync.IsDevAppMode
+        || (_env.IsDevelopment() && _sync.DebugOtpToConsole);
 
     private string GenerateOtpCode()
     {

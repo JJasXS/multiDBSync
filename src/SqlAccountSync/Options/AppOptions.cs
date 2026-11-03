@@ -91,9 +91,18 @@ public sealed class SyncOptions
     public int ProcessingLeaseSeconds { get; set; } = 900;
     public bool AllowProductionConnections { get; set; }
     public bool AllowCrossEnvironment { get; set; }
+    /// <summary>
+    /// <c>dev</c> = show OTP on the login page (and allow mock code).
+    /// <c>prod</c> = email OTP only (default for public sites).
+    /// Env: <c>APP_MODE</c> or <c>Sync__AppMode</c>.
+    /// </summary>
+    public string AppMode { get; set; } = "prod";
     public bool DebugOtpToConsole { get; set; }
-    /// <summary>Fixed OTP used only when DebugOtpToConsole is true (Development).</summary>
+    /// <summary>Fixed OTP used only when AppMode is dev (or DebugOtpToConsole).</summary>
     public string MockSignInCode { get; set; } = "";
+
+    public bool IsDevAppMode =>
+        string.Equals((AppMode ?? "").Trim(), "dev", StringComparison.OrdinalIgnoreCase);
     /// <summary>Tenant code used for SDK Secrets Manager path (e.g. TNT10006).</summary>
     public string TenantCode { get; set; } = "";
     /// <summary>
