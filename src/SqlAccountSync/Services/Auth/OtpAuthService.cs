@@ -7,6 +7,7 @@ using MailKit.Net.Smtp;
 using MailKit.Security;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using MimeKit;
@@ -32,6 +33,8 @@ public sealed class OtpAuthService
 
     private readonly ILoginUserResolver _loginUsers;
     private readonly IMemoryCache _cache;
+    private readonly IDistributedCache _distributed;
+    private readonly OtpHashPepper _pepper;
     private readonly ISecretResolver _secrets;
     private readonly ITenantEmailBootstrap _tenantEmail;
     private readonly IAmazonSecretsManager? _aws;
@@ -44,6 +47,8 @@ public sealed class OtpAuthService
     public OtpAuthService(
         ILoginUserResolver loginUsers,
         IMemoryCache cache,
+        IDistributedCache distributed,
+        OtpHashPepper pepper,
         ISecretResolver secrets,
         ITenantEmailBootstrap tenantEmail,
         IConfiguration config,
@@ -55,6 +60,8 @@ public sealed class OtpAuthService
     {
         _loginUsers = loginUsers;
         _cache = cache;
+        _distributed = distributed;
+        _pepper = pepper;
         _secrets = secrets;
         _tenantEmail = tenantEmail;
         _config = config;
@@ -67,7 +74,7 @@ public sealed class OtpAuthService
 
     /// <summary>
     /// Requests an OTP. Always returns a generic success-shaped message for unknown emails
-    /// (no account enumeration). Dev may receive <paramref name="DebugCode"/> only in local Development.
+    /// (no account enumeration). Debug OTP is returned only for local loopback + explicit opt-in.
     /// </summary>
     public async Task<(bool Ok, string Message, string? DebugCode)> SendOtpAsync(
         string email,
@@ -78,11 +85,10 @@ public sealed class OtpAuthService
         if (normalized.Length == 0 || !normalized.Contains('@', StringComparison.Ordinal))
             return (false, "Enter a valid email address.", null);
 
-        if (!TryAcquireSendQuota(normalized, clientIp, out var throttleMsg))
-            return (false, throttleMsg, null);
+        if (!await TryAcquireSendQuotaAsync(normalized, clientIp, cancellationToken).ConfigureAwait(false))
+            return (false, "Please wait before requesting another code.", null);
 
         var user = await _loginUsers.ResolveForLoginAsync(normalized, cancellationToken).ConfigureAwait(false);
-        // Same UX whether or not the account exists — prevents email enumeration.
         const string genericOk = "If that email is registered, a sign-in code was sent.";
 
         if (user is null)
@@ -104,15 +110,16 @@ public sealed class OtpAuthService
 </body></html>";
 
         var (sent, err) = await TrySendEmailAsync(normalized, subject, html, cancellationToken).ConfigureAwait(false);
-        var debugCode = DevDebugOtpEnabled ? code : null;
+        var debugCode = CanRevealDebugOtp(clientIp) ? code : null;
 
         if (sent)
             return (true, genericOk, debugCode);
 
-        if (DevDebugOtpEnabled)
+        if (debugCode is not null)
         {
-            // Local Development only: allow login without SMTP; never log the code.
-            _logger.LogWarning("OTP email not delivered in Development ({Error}); debug OTP returned to local UI only.", err);
+            _logger.LogWarning(
+                "OTP email not delivered in local Development ({Error}); debug OTP returned to loopback UI only.",
+                err);
             return (true, "Development mode: use the code shown on this page.", debugCode);
         }
 
@@ -120,11 +127,14 @@ public sealed class OtpAuthService
     }
 
     /// <summary>
-    /// Local Development + APP_MODE=dev only. Never active when ASPNETCORE_ENVIRONMENT is Production.
-    /// Fixed MockSignInCode is ignored — always cryptographically random.
+    /// Debug OTP in HTTP responses requires Development + AppMode=dev + AllowLocalOtpReveal + loopback IP.
+    /// Never active for non-loopback clients (publicly reachable deployments).
     /// </summary>
-    private bool DevDebugOtpEnabled =>
-        _env.IsDevelopment() && _sync.IsDevAppMode;
+    internal bool CanRevealDebugOtp(string? clientIp) =>
+        _env.IsDevelopment()
+        && _sync.IsDevAppMode
+        && _sync.AllowLocalOtpReveal
+        && HostHardening.IsLoopbackIp(clientIp);
 
     private static string GenerateOtpCode() =>
         RandomNumberGenerator.GetInt32(100000, 1000000).ToString("D6");
@@ -140,8 +150,8 @@ public sealed class OtpAuthService
         if (normalized.Length == 0 || trimmedCode.Length == 0)
             return (false, null, "Invalid or expired code.");
 
-        if (!TryAcquireVerifyIpQuota(clientIp, out var throttleMsg))
-            return (false, null, throttleMsg);
+        if (!await TryAcquireVerifyIpQuotaAsync(clientIp, cancellationToken).ConfigureAwait(false))
+            return (false, null, "Too many verification attempts. Try again later.");
 
         var key = OtpKey(normalized);
         var gate = KeyLocks.GetOrAdd(key, static _ => new object());
@@ -151,7 +161,7 @@ public sealed class OtpAuthService
             if (!_cache.TryGetValue(key, out entry) || entry is null)
                 return (false, null, "Invalid or expired code.");
 
-            if (!FixedTimeEquals(entry.CodeHash, HashOtp(trimmedCode)))
+            if (!FixedTimeEquals(entry.CodeHash, _pepper.HashOtp(trimmedCode)))
             {
                 entry.Failures++;
                 if (entry.Failures >= MaxVerifyFailures)
@@ -165,7 +175,6 @@ public sealed class OtpAuthService
                 return (false, null, "Invalid or expired code.");
             }
 
-            // Atomic single-use: remove before resolving the user.
             _cache.Remove(key);
         }
 
@@ -186,7 +195,6 @@ public sealed class OtpAuthService
             new(ClaimTypes.Role, user.Role)
         };
         var id = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-        // Fresh identity on each login mitigates session fixation.
         await http.SignInAsync(
             CookieAuthenticationDefaults.AuthenticationScheme,
             new ClaimsPrincipal(id),
@@ -198,58 +206,78 @@ public sealed class OtpAuthService
         var key = OtpKey(normalizedEmail);
         var entry = new OtpEntry
         {
-            CodeHash = HashOtp(code),
+            CodeHash = _pepper.HashOtp(code),
             Failures = 0,
             AbsoluteExpiration = DateTimeOffset.UtcNow.Add(lifetime)
         };
         _cache.Set(key, entry, entry.AbsoluteExpiration);
     }
 
-    private bool TryAcquireSendQuota(string email, string? clientIp, out string message)
+    private async Task<bool> TryAcquireSendQuotaAsync(string email, string? clientIp, CancellationToken cancellationToken)
     {
-        message = "Please wait before requesting another code.";
         var cooldownKey = $"otp:send:cd:{email}";
         if (_cache.TryGetValue(cooldownKey, out _))
             return false;
 
-        if (!TryIncrementWindow($"otp:send:email:{email}", MaxSendsPerEmailPerHour, TimeSpan.FromHours(1)))
-        {
-            message = "Too many sign-in attempts for this email. Try again later.";
+        if (!await TryIncrementWindowAsync($"otp:send:email:{email}", MaxSendsPerEmailPerHour, TimeSpan.FromHours(1), cancellationToken)
+                .ConfigureAwait(false))
             return false;
-        }
 
         var ip = NormalizeIp(clientIp);
         if (ip.Length > 0
-            && !TryIncrementWindow($"otp:send:ip:{ip}", MaxSendsPerIpPerHour, TimeSpan.FromHours(1)))
-        {
-            message = "Too many sign-in attempts from this network. Try again later.";
+            && !await TryIncrementWindowAsync($"otp:send:ip:{ip}", MaxSendsPerIpPerHour, TimeSpan.FromHours(1), cancellationToken)
+                .ConfigureAwait(false))
             return false;
-        }
 
         _cache.Set(cooldownKey, 1, TimeSpan.FromSeconds(SendCooldownSeconds));
         return true;
     }
 
-    private bool TryAcquireVerifyIpQuota(string? clientIp, out string message)
+    private async Task<bool> TryAcquireVerifyIpQuotaAsync(string? clientIp, CancellationToken cancellationToken)
     {
-        message = "Too many verification attempts. Try again later.";
         var ip = NormalizeIp(clientIp);
         if (ip.Length == 0)
             return true;
-        return TryIncrementWindow($"otp:verify:ip:{ip}", MaxVerifyPerIpPerHour, TimeSpan.FromHours(1));
+        return await TryIncrementWindowAsync(
+                $"otp:verify:ip:{ip}", MaxVerifyPerIpPerHour, TimeSpan.FromHours(1), cancellationToken)
+            .ConfigureAwait(false);
     }
 
-    private bool TryIncrementWindow(string key, int max, TimeSpan window)
+    /// <summary>
+    /// Process-local lock + distributed counter so multi-instance hosts share soft rate limits
+    /// when a shared <see cref="IDistributedCache"/> (e.g. Redis) is configured.
+    /// </summary>
+    private async Task<bool> TryIncrementWindowAsync(string key, int max, TimeSpan window, CancellationToken cancellationToken)
     {
         var gate = KeyLocks.GetOrAdd(key, static _ => new object());
         lock (gate)
         {
-            var count = _cache.TryGetValue(key, out int n) ? n : 0;
+            var local = _cache.TryGetValue(key, out int n) ? n : 0;
+            if (local >= max)
+                return false;
+            _cache.Set(key, local + 1, window);
+        }
+
+        try
+        {
+            var existing = await _distributed.GetAsync(key, cancellationToken).ConfigureAwait(false);
+            var count = existing is { Length: >= 4 } ? BitConverter.ToInt32(existing, 0) : 0;
             if (count >= max)
                 return false;
-            _cache.Set(key, count + 1, window);
-            return true;
+            var next = BitConverter.GetBytes(count + 1);
+            await _distributed.SetAsync(
+                    key,
+                    next,
+                    new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = window },
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Distributed OTP rate-limit cache unavailable; using process-local limits only.");
+        }
+
+        return true;
     }
 
     private static string OtpKey(string normalizedEmail) => "otp:" + normalizedEmail;
@@ -262,12 +290,6 @@ public sealed class OtpAuthService
         if (t.Length == 0 || t.Equals("unknown", StringComparison.OrdinalIgnoreCase))
             return "";
         return t.Length > 64 ? t[..64] : t;
-    }
-
-    private static string HashOtp(string code)
-    {
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(code));
-        return Convert.ToHexString(bytes);
     }
 
     private static bool FixedTimeEquals(string a, string b)

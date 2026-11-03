@@ -126,15 +126,23 @@ public sealed class SyncOptions
     public bool AllowProductionConnections { get; set; }
     public bool AllowCrossEnvironment { get; set; }
     /// <summary>
-    /// <c>dev</c> = may return OTP to the login UI only when ASPNETCORE_ENVIRONMENT=Development.
-    /// <c>prod</c> = email OTP only (default). Env: <c>APP_MODE</c> or <c>Sync__AppMode</c>.
-    /// Never enables debug OTP under Production hosting.
+    /// <c>dev</c> = developer testing phase. <c>prod</c> = email OTP only (default).
+    /// Debug OTP reveal also requires <see cref="AllowLocalOtpReveal"/>, Development env, and loopback client.
     /// </summary>
     public string AppMode { get; set; } = "prod";
     /// <summary>Obsolete: ignored. Kept so old config keys do not break binding.</summary>
     public bool DebugOtpToConsole { get; set; }
     /// <summary>Obsolete: ignored. Fixed OTPs are no longer supported.</summary>
     public string MockSignInCode { get; set; } = "";
+    /// <summary>
+    /// Explicit opt-in to return OTP in the login JSON response. Still requires Development + AppMode=dev
+    /// and a loopback client IP. Default false — never enable on publicly reachable hosts.
+    /// </summary>
+    public bool AllowLocalOtpReveal { get; set; }
+    /// <summary>
+    /// Secret ref (<c>env:</c> / <c>sm:</c>) for HMAC pepper used to hash OTPs. Required for multi-instance.
+    /// </summary>
+    public string OtpHashPepperSecretRef { get; set; } = "";
 
     public bool IsDevAppMode =>
         string.Equals((AppMode ?? "").Trim(), "dev", StringComparison.OrdinalIgnoreCase);

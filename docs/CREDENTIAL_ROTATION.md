@@ -28,6 +28,19 @@ Never commit the new password. Never use Firebird’s default `masterkey` outsid
 3. Request a login OTP and confirm delivery.
 4. Revoke the previous app password.
 
+## OTP HMAC pepper (multi-instance)
+
+1. Generate a long random string and store it in Secrets Manager or the host environment.
+2. Set `Sync__OtpHashPepperSecretRef=env:OTP_HMAC_PEPPER` (or `sm:your-secret-id`).
+3. Restart every app instance so they share the same pepper.
+4. Do not commit the pepper value.
+
+## AllowedHosts / reverse proxy
+
+1. Production **requires** an explicit `AllowedHosts` value (semicolon-separated public DNS names). Startup refuses `*` or empty.
+2. List only trusted reverse-proxy addresses under `ForwardedHeaders:KnownProxies` / `KnownNetworks` (CIDR). Do not clear the default loopback trust to “allow all”.
+3. Auth cookies use `Secure` in Production — TLS (or trusted `X-Forwarded-Proto`) is required.
+
 ## If secrets appeared in Git history
 
 1. Rotate the exposed credential immediately (do not wait for history cleanup).

@@ -141,6 +141,10 @@ catch
 }
 
 builder.Services.AddMemoryCache();
+// Default in-process distributed cache; replace with Redis in DI for multi-instance rate limits.
+builder.Services.AddDistributedMemoryCache();
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+    ForwardedHeadersSetup.Configure(options, builder.Configuration));
 var writeHttpTimeoutSeconds = Math.Clamp(
     builder.Configuration.GetValue("Sync:WriteHttpTimeoutSeconds", 30), 5, 300);
 builder.Services.AddHttpClient<SqlAccountApiWriteAdapter>(client =>
@@ -163,12 +167,12 @@ builder.Services.AddTransient<ITenantEmailBootstrap>(sp => sp.GetRequiredService
 builder.Services.AddTransient<ITenantDatabaseBootstrap>(sp => sp.GetRequiredService<TenantEmailBootstrap>());
 builder.Services.AddSingleton<TenantMenuFlags>();
 builder.Services.AddSingleton<ISecretResolver, SecretResolver>();
+builder.Services.AddSingleton<OtpHashPepper>();
 builder.Services.AddSingleton<ISqlApiCredentialBundle, SqlApiCredentialBundle>();
 builder.Services.AddSingleton<ISqlApiSecretProvisioner, SqlApiSecretProvisioner>();
 // Master SDK connection/session helpers (CLI smoke /health/detail). Website writes use SqlAccountingWrite:Provider.
 builder.Services.AddSingleton<ISdkConnectionBundle, SdkConnectionBundle>();
-builder.Services.AddSingleton<ISdkSessionManager, SdkSessionManager>();
-builder.Services.AddSingleton<CentralDb>();
+builder.Services.AddSingleton<ISdkSessionManager, SdkSessionManager>();builder.Services.AddSingleton<CentralDb>();
 builder.Services.AddSingleton<IRegistryReadGateway, RegistryReadGateway>();
 builder.Services.AddSingleton<CompanyConnectionFactory>();
 builder.Services.AddSingleton<SchemaBootstrap>();
@@ -215,6 +219,9 @@ builder.Services.AddHostedService<SyncWorker>();
 builder.Services.AddHostedService<AccountAutoPushWorker>();
 
 var sessionHours = builder.Configuration.GetValue("Sync:SessionHours", 8);
+var cookieSecure = builder.Environment.IsDevelopment()
+    ? CookieSecurePolicy.SameAsRequest
+    : CookieSecurePolicy.Always;
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
@@ -227,6 +234,8 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.Cookie.HttpOnly = true;
         options.Cookie.Name = "SqlAccountSync.Auth";
         options.Cookie.SameSite = SameSiteMode.Lax;
+        // Production: HTTPS-only auth cookie (requires TLS or a trusted proxy setting X-Forwarded-Proto).
+        options.Cookie.SecurePolicy = cookieSecure;
         options.Events.OnValidatePrincipal = AuthCookieEvents.ValidatePrincipalAsync;
     });
 
@@ -250,8 +259,9 @@ if (builder.Environment.IsDevelopment())
     razorPages.AddRazorRuntimeCompilation();
 
 var app = builder.Build();
+HostHardening.EnsureProductionAllowedHosts(app.Environment, app.Configuration, app.Logger);
 
-app.UseForwardedHeaders(new ForwardedHeadersOptions { ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto });
+app.UseForwardedHeaders();
 
 app.Use(async (ctx, next) =>
 {
