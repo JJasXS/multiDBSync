@@ -48,11 +48,11 @@ public sealed class AutoPushSchedule : IAutoPushSchedule
     {
         lock (_gate)
         {
-            if (!anyEnabled || _nextDueUtc is null)
+            if (_nextDueUtc is null)
             {
                 return new AutoPushScheduleSnapshot
                 {
-                    Active = false,
+                    Active = anyEnabled,
                     IntervalSeconds = _intervalSeconds,
                     NextDueUnixMs = null,
                     RemainingSeconds = 0
@@ -65,7 +65,7 @@ public sealed class AutoPushSchedule : IAutoPushSchedule
 
             return new AutoPushScheduleSnapshot
             {
-                Active = true,
+                Active = anyEnabled,
                 IntervalSeconds = _intervalSeconds,
                 NextDueUnixMs = _nextDueUtc.Value.ToUnixTimeMilliseconds(),
                 RemainingSeconds = remaining

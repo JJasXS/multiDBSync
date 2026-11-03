@@ -30,7 +30,6 @@
               data-active="@(Model.AutoPushAny ? "true" : "false")"
               data-next-due="@(Model.AutoPushCountdown.NextDueUnixMs?.ToString() ?? "")"
               data-interval="@(Model.AutoPushCountdown.IntervalSeconds > 0 ? Model.AutoPushCountdown.IntervalSeconds : 60)"
-              @(Model.AutoPushAny ? null : "hidden")
               aria-live="polite">Auto push in —</span>
         <div class="master-section-menu @(Model.AutoPushPanelOpen ? "is-open" : "")" data-master-menu>
             <button type="button"

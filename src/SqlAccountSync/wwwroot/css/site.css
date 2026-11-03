@@ -1413,8 +1413,12 @@ code {
   font-weight: 700;
   letter-spacing: .02em;
   color: var(--ice-danger);
+  opacity: .55;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+.auto-push-countdown.is-armed {
+  opacity: 1;
 }
 .master-section-menu {
   position: relative;

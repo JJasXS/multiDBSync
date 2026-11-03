@@ -14,7 +14,6 @@
   }
 
   function ensureDue() {
-    if (!active) return;
     if (!nextDueMs || nextDueMs <= Date.now())
       nextDueMs = Date.now() + intervalSec * 1000;
   }
@@ -26,15 +25,17 @@
     return m + ":" + String(r).padStart(2, "0");
   }
 
+  function label(remaining) {
+    const when = remaining <= 0 ? "now…" : format(remaining);
+    if (active)
+      return remaining <= 0 ? "Auto push now…" : "Auto push in " + when;
+    return remaining <= 0 ? "Next check now…" : "Next check in " + when;
+  }
+
   function paint(remaining) {
-    if (!active) {
-      el.hidden = true;
-      el.textContent = "";
-      return;
-    }
     el.hidden = false;
-    el.textContent =
-      remaining <= 0 ? "Auto push now…" : "Auto push in " + format(remaining);
+    el.textContent = label(remaining);
+    el.classList.toggle("is-armed", active);
   }
 
   async function refresh() {
@@ -54,9 +55,9 @@
       if (Number(data.intervalSeconds) > 0)
         intervalSec = Math.max(15, Number(data.intervalSeconds));
       const serverDue = parseDue(data.nextDueUnixMs);
-      if (active && serverDue && serverDue > Date.now() - 1000)
+      if (serverDue && serverDue > Date.now() - 1000)
         nextDueMs = serverDue;
-      else if (active)
+      else
         ensureDue();
       el.setAttribute("data-active", active ? "true" : "false");
       el.setAttribute("data-interval", String(intervalSec));
@@ -68,10 +69,6 @@
   }
 
   function tick() {
-    if (!active) {
-      paint(0);
-      return;
-    }
     ensureDue();
     const remaining = Math.ceil((nextDueMs - Date.now()) / 1000);
     if (remaining <= 0) {

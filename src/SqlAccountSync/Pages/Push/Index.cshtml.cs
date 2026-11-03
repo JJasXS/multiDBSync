@@ -75,7 +75,7 @@ public class IndexModel : SyncPageModel
     public async Task<IActionResult> OnGetAutoPushStatusAsync()
     {
         var flags = await _autoPush.GetAsync().ConfigureAwait(false);
-        if (flags.Any && _autoPushSchedule.Snapshot(true).NextDueUnixMs is null)
+        if (_autoPushSchedule.Snapshot(true).NextDueUnixMs is null)
             _autoPushSchedule.ArmNextFromNow();
         var snap = _autoPushSchedule.Snapshot(flags.Any);
         return new JsonResult(new
@@ -202,6 +202,9 @@ public class IndexModel : SyncPageModel
         AutoPushSupplier = flags.Supplier;
         AutoPushAccount = flags.Account;
         AutoPushAny = flags.Any;
+        // Always expose the worker clock so the header timer can show even when toggles are off.
+        if (_autoPushSchedule.Snapshot(true).NextDueUnixMs is null)
+            _autoPushSchedule.ArmNextFromNow();
         AutoPushCountdown = _autoPushSchedule.Snapshot(flags.Any);
     }
 
