@@ -75,6 +75,8 @@ public class IndexModel : SyncPageModel
     public async Task<IActionResult> OnGetAutoPushStatusAsync()
     {
         var flags = await _autoPush.GetAsync().ConfigureAwait(false);
+        if (flags.Any && _autoPushSchedule.Snapshot(true).NextDueUnixMs is null)
+            _autoPushSchedule.ArmNextFromNow();
         var snap = _autoPushSchedule.Snapshot(flags.Any);
         return new JsonResult(new
         {
@@ -136,12 +138,15 @@ public class IndexModel : SyncPageModel
         Tab = "push";
         try
         {
-            await _autoPush.SaveAsync(new AutoPushFlags
+            var flags = new AutoPushFlags
             {
                 Customer = AutoPushCustomer,
                 Supplier = AutoPushSupplier,
                 Account = AutoPushAccount
-            });
+            };
+            await _autoPush.SaveAsync(flags);
+            if (flags.Any)
+                _autoPushSchedule.ArmNextFromNow();
             FlashToast = FlashToasts.Ok("Auto-push settings saved.");
         }
         catch (Exception ex)

@@ -23,15 +23,15 @@
         <div class="master-section-current">
             <span class="master-section-label">Multi Push</span>
             <span class="master-section-hint">Multiple rows</span>
-            <span class="auto-push-countdown"
-                  data-auto-push-timer
-                  data-status-url="@Url.Page("/Push/Index", "AutoPushStatus")"
-                  data-active="@(Model.AutoPushAny ? "true" : "false")"
-                  data-next-due="@(Model.AutoPushCountdown.NextDueUnixMs?.ToString() ?? "")"
-                  data-interval="@Model.AutoPushCountdown.IntervalSeconds"
-                  @(Model.AutoPushAny ? null : "hidden")
-                  aria-live="polite">Auto push in —</span>
         </div>
+        <span class="auto-push-countdown"
+              data-auto-push-timer
+              data-status-url="/push?handler=AutoPushStatus"
+              data-active="@(Model.AutoPushAny ? "true" : "false")"
+              data-next-due="@(Model.AutoPushCountdown.NextDueUnixMs?.ToString() ?? "")"
+              data-interval="@(Model.AutoPushCountdown.IntervalSeconds > 0 ? Model.AutoPushCountdown.IntervalSeconds : 60)"
+              @(Model.AutoPushAny ? null : "hidden")
+              aria-live="polite">Auto push in —</span>
         <div class="master-section-menu @(Model.AutoPushPanelOpen ? "is-open" : "")" data-master-menu>
             <button type="button"
                     class="master-section-dots"
