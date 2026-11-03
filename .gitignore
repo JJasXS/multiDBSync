@@ -13,8 +13,6 @@ out/
 *.cache
 .idea/
 *.nupkg
-.env
-.env.*.local
 .DS_Store
 Thumbs.db
 coverage*.json
@@ -24,3 +22,36 @@ Data/*.fdb
 Data/*.FDB
 /secrets/
 src/SqlAccountSync/secrets/
+**/secrets/
+
+# Environment files (any directory). Keep committed templates only.
+.env
+.env.*
+!.env.example
+!**/.env.example
+!.env*.example
+!**/.env*.example
+
+# Local credential / secret filenames (never commit)
+*credentials*.json
+credentials.json
+client_secret*.json
+.aws/credentials
+.aws/config
+user-secrets.json
+*.usersecrets.json
+appsettings.*.local.json
+appsettings.Local.json
+secrets.json
+*secret*.local.*
+
+# Private keys and certificate material
+*.pem
+*.pfx
+*.p12
+*.key
+*.ppk
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
