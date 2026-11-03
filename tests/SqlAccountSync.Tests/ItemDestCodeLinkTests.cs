@@ -317,6 +317,7 @@ public class ItemDestCodeLinkTests
         public Task<JobEnqueueResult> EnqueueAsync(SyncJob job, CancellationToken cancellationToken = default, bool reviveCancelled = true) =>
             Task.FromResult(new JobEnqueueResult(job.JobId, true));
         public Task<SyncJob?> ClaimAsync(string workerId, CancellationToken cancellationToken = default) => Task.FromResult<SyncJob?>(null);
+        public Task<SyncJob?> ClaimExactAsync(int jobId, string workerId, CancellationToken cancellationToken = default) => Task.FromResult<SyncJob?>(null);
         public Task<List<SyncJob>> ListAsync(string? status = null, int take = 200, CancellationToken cancellationToken = default) => Task.FromResult(new List<SyncJob>());
         public Task<SyncJob?> GetAsync(int jobId, CancellationToken cancellationToken = default) => Task.FromResult<SyncJob?>(null);
         public Task CancelAsync(int jobId, CancellationToken cancellationToken = default) => Task.CompletedTask;

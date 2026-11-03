@@ -21,6 +21,15 @@ public sealed class SyncWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        if (!_options.EnableBackgroundWriteWorkers)
+        {
+            _logger.LogInformation(
+                "SyncWorker idle: Sync:EnableBackgroundWriteWorkers=false (no job claim / no writes).");
+            try { await Task.Delay(Timeout.Infinite, stoppingToken).ConfigureAwait(false); }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
+            return;
+        }
+
         var workerId = $"{Environment.MachineName}:{Environment.ProcessId}";
         var delay = TimeSpan.FromSeconds(Math.Clamp(_options.WorkerPollSeconds, 2, 60));
         while (!stoppingToken.IsCancellationRequested)
@@ -48,10 +57,7 @@ public sealed class SyncWorker : BackgroundService
                 }
 
                 _logger.LogInformation("Processing job {JobId} kind {Kind}", job.JobId, job.JobKind);
-                if (job.JobKind.StartsWith("TXN", StringComparison.OrdinalIgnoreCase))
-                    await txns.ProcessJobAsync(job, stoppingToken).ConfigureAwait(false);
-                else
-                    await sync.ProcessJobAsync(job, stoppingToken).ConfigureAwait(false);
+                await SyncJobDispatch.ProcessAsync(job, sync, txns, stoppingToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

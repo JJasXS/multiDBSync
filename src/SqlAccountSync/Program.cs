@@ -156,6 +156,7 @@ builder.Services.AddScoped<ISqlAccountWriteAdapter>(sp =>
 builder.Services.AddScoped<IMappingService, MappingService>();
 builder.Services.AddScoped<IValidationService, ValidationService>();
 builder.Services.AddScoped<IJobQueue, JobQueue>();
+builder.Services.AddScoped<IDevSingleJobProcessor, DevSingleJobProcessor>();
 builder.Services.AddScoped<ISyncOrchestrator, SyncOrchestrator>();
 builder.Services.AddScoped<ITransferMasterEnsure, TransferMasterEnsure>();
 builder.Services.AddScoped<ITransactionEngine, TransactionEngine>();

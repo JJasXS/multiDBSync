@@ -14,4 +14,12 @@ public sealed class TenantMenuFlags
         _sync = showSynchronization ? 1 : 0;
         _docs = showDocumentTransfer ? 1 : 0;
     }
+
+    /// <summary>
+    /// Applies tenant plan flags, optionally forcing Document Transfer on for local Development labs.
+    /// </summary>
+    public void ApplyTenantPlan(bool showSynchronization, bool showDocumentTransfer, bool forceShowDocumentTransfer)
+    {
+        Apply(showSynchronization, showDocumentTransfer || forceShowDocumentTransfer);
+    }
 }

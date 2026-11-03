@@ -27,7 +27,18 @@ public sealed class AccountAutoPushWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var delay = TimeSpan.FromSeconds(Math.Clamp(_options.AccountAutoPushSeconds <= 0 ? 60 : _options.AccountAutoPushSeconds, 15, 3600));
+        if (!_options.EnableBackgroundWriteWorkers)
+        {
+            _logger.LogInformation(
+                "AccountAutoPushWorker idle: Sync:EnableBackgroundWriteWorkers=false (no auto-push enqueue).");
+            try { await Task.Delay(Timeout.Infinite, stoppingToken).ConfigureAwait(false); }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
+            return;
+        }
+
+        // Preserve prior runtime: AccountAutoPushSeconds<=0 uses a 60s poll (checkbox gate still applies).
+        var delay = TimeSpan.FromSeconds(Math.Clamp(
+            _options.AccountAutoPushSeconds <= 0 ? 60 : _options.AccountAutoPushSeconds, 15, 3600));
         _logger.LogInformation(
             "Master auto-push checks every {Seconds}s. A cycle runs only when a Customer, Supplier, or Account checkbox is on.",
             delay.TotalSeconds);

@@ -62,6 +62,12 @@ public sealed class SyncOptions
     /// </summary>
     public bool EnableBackgroundWriteWorkers { get; set; } = true;
     /// <summary>
+    /// Development-only: allow POST /api/dev/jobs/{jobId}/process to claim and run one
+    /// explicitly selected job via SyncOrchestrator / TransactionEngine without enabling
+    /// background workers. Default false. Must stay false in Production.
+    /// </summary>
+    public bool AllowDevSingleJobProcess { get; set; }
+    /// <summary>
     /// How often to auto-push missing ACCOUNT codes from MASTER/BOTH to linked subs.
     /// Set 0 to disable. Default 60 (one minute).
     /// </summary>
@@ -136,4 +142,10 @@ public sealed class FeatureOptions
     public bool ShowMappingsUi { get; set; }
     /// <summary>When false, Sync configuration nav/links are hidden and /SyncConfig redirects away. Rules still apply if configured.</summary>
     public bool ShowSyncConfigUi { get; set; }
+
+    /// <summary>
+    /// Development lab only: keep Document Transfer visible even when the AWS tenant plan hides it.
+    /// Never enable in Production appsettings.
+    /// </summary>
+    public bool ForceShowDocumentTransferUi { get; set; }
 }
