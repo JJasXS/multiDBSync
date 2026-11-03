@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SqlAccountSync.Authorization;
+using SqlAccountSync.Helpers;
 using SqlAccountSync.Models;
 using SqlAccountSync.Services.Accounts;
 using SqlAccountSync.Services.Databases;
@@ -21,15 +22,18 @@ public sealed class AccountsController : ControllerBase
     private readonly IDatabaseRegistry _registry;
     private readonly ISqlAccountWriteAdapter _write;
     private readonly ISqlAccountReadAdapter _read;
+    private readonly ILogger<AccountsController> _logger;
 
     public AccountsController(
         IDatabaseRegistry registry,
         ISqlAccountWriteAdapter write,
-        ISqlAccountReadAdapter read)
+        ISqlAccountReadAdapter read,
+        ILogger<AccountsController> logger)
     {
         _registry = registry;
         _write = write;
         _read = read;
+        _logger = logger;
     }
 
     [HttpGet]
@@ -91,7 +95,13 @@ public sealed class AccountsController : ControllerBase
             db, EntityCodes.Account, record, "API|" + DateTime.UtcNow.ToString("o"),
             cancellationToken: cancellationToken).ConfigureAwait(false);
         if (!write.Success)
-            return StatusCode(502, new { error = write.Message ?? "Create failed." });
+        {
+            var rid = RequestId.Current(HttpContext);
+            _logger.LogWarning(
+                "Account create failed db={DbCode} requestId={RequestId}: {Detail}",
+                db.DbCode, rid, CredentialRedactor.Redact(write.Message));
+            return StatusCode(502, new { error = "Create failed.", requestId = rid });
+        }
 
         return Ok(new
         {
@@ -99,7 +109,7 @@ public sealed class AccountsController : ControllerBase
             dbId = db.DbId,
             dbCode = db.DbCode,
             code = body.Code.Trim(),
-            message = write.Message
+            requestId = RequestId.Current(HttpContext)
         });
     }
 

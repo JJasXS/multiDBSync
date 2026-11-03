@@ -92,13 +92,14 @@ public sealed class SyncOptions
     public bool AllowProductionConnections { get; set; }
     public bool AllowCrossEnvironment { get; set; }
     /// <summary>
-    /// <c>dev</c> = show OTP on the login page (and allow mock code).
-    /// <c>prod</c> = email OTP only (default for public sites).
-    /// Env: <c>APP_MODE</c> or <c>Sync__AppMode</c>.
+    /// <c>dev</c> = may return OTP to the login UI only when ASPNETCORE_ENVIRONMENT=Development.
+    /// <c>prod</c> = email OTP only (default). Env: <c>APP_MODE</c> or <c>Sync__AppMode</c>.
+    /// Never enables debug OTP under Production hosting.
     /// </summary>
     public string AppMode { get; set; } = "prod";
+    /// <summary>Obsolete: ignored. Kept so old config keys do not break binding.</summary>
     public bool DebugOtpToConsole { get; set; }
-    /// <summary>Fixed OTP used only when AppMode is dev (or DebugOtpToConsole).</summary>
+    /// <summary>Obsolete: ignored. Fixed OTPs are no longer supported.</summary>
     public string MockSignInCode { get; set; } = "";
 
     public bool IsDevAppMode =>

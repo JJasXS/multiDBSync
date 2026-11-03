@@ -1,4 +1,7 @@
+using System.Collections.Concurrent;
+using System.Net;
 using System.Security.Cryptography;
+using System.Text;
 using Amazon.SecretsManager;
 using MailKit.Net.Smtp;
 using MailKit.Security;
@@ -19,6 +22,14 @@ namespace SqlAccountSync.Services.Auth;
 
 public sealed class OtpAuthService
 {
+    public const int MaxVerifyFailures = 5;
+    public const int SendCooldownSeconds = 30;
+    public const int MaxSendsPerEmailPerHour = 10;
+    public const int MaxSendsPerIpPerHour = 30;
+    public const int MaxVerifyPerIpPerHour = 60;
+
+    private static readonly ConcurrentDictionary<string, object> KeyLocks = new(StringComparer.Ordinal);
+
     private readonly ILoginUserResolver _loginUsers;
     private readonly IMemoryCache _cache;
     private readonly ISecretResolver _secrets;
@@ -54,68 +65,114 @@ public sealed class OtpAuthService
         _aws = aws;
     }
 
-    public async Task<(bool Ok, string Message, string? DebugCode)> SendOtpAsync(string email, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Requests an OTP. Always returns a generic success-shaped message for unknown emails
+    /// (no account enumeration). Dev may receive <paramref name="DebugCode"/> only in local Development.
+    /// </summary>
+    public async Task<(bool Ok, string Message, string? DebugCode)> SendOtpAsync(
+        string email,
+        string? clientIp = null,
+        CancellationToken cancellationToken = default)
     {
-        var user = await _loginUsers.ResolveForLoginAsync(email, cancellationToken).ConfigureAwait(false);
+        var normalized = NormalizeEmail(email);
+        if (normalized.Length == 0 || !normalized.Contains('@', StringComparison.Ordinal))
+            return (false, "Enter a valid email address.", null);
+
+        if (!TryAcquireSendQuota(normalized, clientIp, out var throttleMsg))
+            return (false, throttleMsg, null);
+
+        var user = await _loginUsers.ResolveForLoginAsync(normalized, cancellationToken).ConfigureAwait(false);
+        // Same UX whether or not the account exists — prevents email enumeration.
+        const string genericOk = "If that email is registered, a sign-in code was sent.";
+
         if (user is null)
-            return (false, "No active user matches that email.", null);
+        {
+            _logger.LogInformation("OTP requested for unknown or inactive email (not enumerated to client).");
+            return (true, genericOk, null);
+        }
 
         var code = GenerateOtpCode();
         var minutes = Math.Clamp(_sync.OtpMinutes, 2, 30);
-        _cache.Set("otp:" + email.Trim().ToLowerInvariant(), code, TimeSpan.FromMinutes(minutes));
-        var debugCode = DevDebugOtpEnabled ? code : null;
+        StoreOtp(normalized, code, TimeSpan.FromMinutes(minutes));
 
         var subject = "Your Login OTP Code";
         var html = $@"
 <html><body>
   <p>Your OTP code is:</p>
-  <h2 style=""letter-spacing:4px"">{code}</h2>
+  <h2 style=""letter-spacing:4px"">{WebUtility.HtmlEncode(code)}</h2>
   <p>This code expires in {minutes} minutes.</p>
 </body></html>";
 
-        var (sent, err) = await TrySendEmailAsync(email, subject, html, cancellationToken).ConfigureAwait(false);
+        var (sent, err) = await TrySendEmailAsync(normalized, subject, html, cancellationToken).ConfigureAwait(false);
+        var debugCode = DevDebugOtpEnabled ? code : null;
+
         if (sent)
-            return (true, "A sign-in code was sent to your email.", debugCode);
+            return (true, genericOk, debugCode);
 
         if (DevDebugOtpEnabled)
         {
-            Console.WriteLine($"[OTP] {email}: {code}");
-            _logger.LogWarning("OTP email not delivered ({Error}); code written to console in development.", err);
-            return (true, "Development mode: OTP auto-filled below.", debugCode);
+            // Local Development only: allow login without SMTP; never log the code.
+            _logger.LogWarning("OTP email not delivered in Development ({Error}); debug OTP returned to local UI only.", err);
+            return (true, "Development mode: use the code shown on this page.", debugCode);
         }
 
-        return (false, string.IsNullOrWhiteSpace(err) ? "Could not send the sign-in email." : err, null);
+        return (false, "Could not send the sign-in email. Try again later.", null);
     }
 
     /// <summary>
-    /// Show OTP on the login UI when APP_MODE=dev, or classic Development + DebugOtpToConsole.
-    /// Prod never returns the code to the browser.
+    /// Local Development + APP_MODE=dev only. Never active when ASPNETCORE_ENVIRONMENT is Production.
+    /// Fixed MockSignInCode is ignored — always cryptographically random.
     /// </summary>
     private bool DevDebugOtpEnabled =>
-        _sync.IsDevAppMode
-        || (_env.IsDevelopment() && _sync.DebugOtpToConsole);
+        _env.IsDevelopment() && _sync.IsDevAppMode;
 
-    private string GenerateOtpCode()
+    private static string GenerateOtpCode() =>
+        RandomNumberGenerator.GetInt32(100000, 1000000).ToString("D6");
+
+    public async Task<(bool Ok, AppUser? User, string Message)> VerifyAsync(
+        string email,
+        string code,
+        string? clientIp = null,
+        CancellationToken cancellationToken = default)
     {
-        if (DevDebugOtpEnabled)
+        var normalized = NormalizeEmail(email);
+        var trimmedCode = (code ?? "").Trim();
+        if (normalized.Length == 0 || trimmedCode.Length == 0)
+            return (false, null, "Invalid or expired code.");
+
+        if (!TryAcquireVerifyIpQuota(clientIp, out var throttleMsg))
+            return (false, null, throttleMsg);
+
+        var key = OtpKey(normalized);
+        var gate = KeyLocks.GetOrAdd(key, static _ => new object());
+        OtpEntry? entry;
+        lock (gate)
         {
-            var mock = (_sync.MockSignInCode ?? "").Trim();
-            if (mock.Length == 6 && mock.All(char.IsDigit))
-                return mock;
+            if (!_cache.TryGetValue(key, out entry) || entry is null)
+                return (false, null, "Invalid or expired code.");
+
+            if (!FixedTimeEquals(entry.CodeHash, HashOtp(trimmedCode)))
+            {
+                entry.Failures++;
+                if (entry.Failures >= MaxVerifyFailures)
+                {
+                    _cache.Remove(key);
+                    _logger.LogWarning("OTP invalidated after {Failures} failed attempts.", entry.Failures);
+                    return (false, null, "Too many invalid attempts. Request a new code.");
+                }
+
+                _cache.Set(key, entry, entry.AbsoluteExpiration);
+                return (false, null, "Invalid or expired code.");
+            }
+
+            // Atomic single-use: remove before resolving the user.
+            _cache.Remove(key);
         }
 
-        return RandomNumberGenerator.GetInt32(100000, 999999).ToString();
-    }
-
-    public async Task<(bool Ok, AppUser? User, string Message)> VerifyAsync(string email, string code, CancellationToken cancellationToken = default)
-    {
-        var key = "otp:" + email.Trim().ToLowerInvariant();
-        if (!_cache.TryGetValue(key, out string? stored) || stored != code.Trim())
-            return (false, null, "Invalid or expired code.");
-        _cache.Remove(key);
-        var user = await _loginUsers.ResolveForLoginAsync(email, cancellationToken).ConfigureAwait(false);
+        var user = await _loginUsers.ResolveForLoginAsync(normalized, cancellationToken).ConfigureAwait(false);
         if (user is null)
-            return (false, null, "User is no longer active.");
+            return (false, null, "Invalid or expired code.");
+
         return (true, user, "Signed in.");
     }
 
@@ -129,7 +186,102 @@ public sealed class OtpAuthService
             new(ClaimTypes.Role, user.Role)
         };
         var id = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-        await http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(id));
+        // Fresh identity on each login mitigates session fixation.
+        await http.SignInAsync(
+            CookieAuthenticationDefaults.AuthenticationScheme,
+            new ClaimsPrincipal(id),
+            new AuthenticationProperties { IsPersistent = false });
+    }
+
+    private void StoreOtp(string normalizedEmail, string code, TimeSpan lifetime)
+    {
+        var key = OtpKey(normalizedEmail);
+        var entry = new OtpEntry
+        {
+            CodeHash = HashOtp(code),
+            Failures = 0,
+            AbsoluteExpiration = DateTimeOffset.UtcNow.Add(lifetime)
+        };
+        _cache.Set(key, entry, entry.AbsoluteExpiration);
+    }
+
+    private bool TryAcquireSendQuota(string email, string? clientIp, out string message)
+    {
+        message = "Please wait before requesting another code.";
+        var cooldownKey = $"otp:send:cd:{email}";
+        if (_cache.TryGetValue(cooldownKey, out _))
+            return false;
+
+        if (!TryIncrementWindow($"otp:send:email:{email}", MaxSendsPerEmailPerHour, TimeSpan.FromHours(1)))
+        {
+            message = "Too many sign-in attempts for this email. Try again later.";
+            return false;
+        }
+
+        var ip = NormalizeIp(clientIp);
+        if (ip.Length > 0
+            && !TryIncrementWindow($"otp:send:ip:{ip}", MaxSendsPerIpPerHour, TimeSpan.FromHours(1)))
+        {
+            message = "Too many sign-in attempts from this network. Try again later.";
+            return false;
+        }
+
+        _cache.Set(cooldownKey, 1, TimeSpan.FromSeconds(SendCooldownSeconds));
+        return true;
+    }
+
+    private bool TryAcquireVerifyIpQuota(string? clientIp, out string message)
+    {
+        message = "Too many verification attempts. Try again later.";
+        var ip = NormalizeIp(clientIp);
+        if (ip.Length == 0)
+            return true;
+        return TryIncrementWindow($"otp:verify:ip:{ip}", MaxVerifyPerIpPerHour, TimeSpan.FromHours(1));
+    }
+
+    private bool TryIncrementWindow(string key, int max, TimeSpan window)
+    {
+        var gate = KeyLocks.GetOrAdd(key, static _ => new object());
+        lock (gate)
+        {
+            var count = _cache.TryGetValue(key, out int n) ? n : 0;
+            if (count >= max)
+                return false;
+            _cache.Set(key, count + 1, window);
+            return true;
+        }
+    }
+
+    private static string OtpKey(string normalizedEmail) => "otp:" + normalizedEmail;
+
+    private static string NormalizeEmail(string? email) => (email ?? "").Trim().ToLowerInvariant();
+
+    private static string NormalizeIp(string? ip)
+    {
+        var t = (ip ?? "").Trim();
+        if (t.Length == 0 || t.Equals("unknown", StringComparison.OrdinalIgnoreCase))
+            return "";
+        return t.Length > 64 ? t[..64] : t;
+    }
+
+    private static string HashOtp(string code)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(code));
+        return Convert.ToHexString(bytes);
+    }
+
+    private static bool FixedTimeEquals(string a, string b)
+    {
+        var ba = Encoding.UTF8.GetBytes(a);
+        var bb = Encoding.UTF8.GetBytes(b);
+        return ba.Length == bb.Length && CryptographicOperations.FixedTimeEquals(ba, bb);
+    }
+
+    private sealed class OtpEntry
+    {
+        public required string CodeHash { get; init; }
+        public int Failures { get; set; }
+        public DateTimeOffset AbsoluteExpiration { get; init; }
     }
 
     /// <summary>

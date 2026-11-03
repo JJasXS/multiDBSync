@@ -97,11 +97,7 @@ var appModeFromEnv = (Environment.GetEnvironmentVariable("APP_MODE")
     ?? builder.Configuration["APP_MODE"]
     ?? builder.Configuration["Sync:AppMode"])?.Trim();
 if (!string.IsNullOrEmpty(appModeFromEnv))
-{
     envOverrides["Sync:AppMode"] = appModeFromEnv;
-    if (appModeFromEnv.Equals("dev", StringComparison.OrdinalIgnoreCase))
-        envOverrides["Sync:DebugOtpToConsole"] = "true";
-}
 
 if (envOverrides.Count > 0)
     builder.Configuration.AddInMemoryCollection(envOverrides);
@@ -183,6 +179,7 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.Cookie.HttpOnly = true;
         options.Cookie.Name = "SqlAccountSync.Auth";
         options.Cookie.SameSite = SameSiteMode.Lax;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
         options.Events.OnValidatePrincipal = AuthCookieEvents.ValidatePrincipalAsync;
     });
 
@@ -226,15 +223,26 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.Use(async (ctx, next) =>
+{
+    ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    ctx.Response.Headers["X-Frame-Options"] = "DENY";
+    ctx.Response.Headers["Referrer-Policy"] = "no-referrer";
+    ctx.Response.Headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()";
+    await next();
+});
 app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<TenantMenuMiddleware>();
-app.MapGet("/health", async (IJobQueue queue, ISdkSessionManager sdk) =>
+// Public liveness only — no queue/SDK internals.
+app.MapGet("/health", () => Results.Json(new { status = "ok" })).AllowAnonymous();
+// Detailed health for authenticated admins (monitoring UIs that can sign in).
+app.MapGet("/health/detail", async (HttpContext http, IJobQueue queue, ISdkSessionManager sdk, IConfiguration config) =>
 {
     var snap = await queue.GetHealthAsync();
-    var lease = builder.Configuration.GetValue("Sync:ProcessingLeaseSeconds", 900);
+    var lease = config.GetValue("Sync:ProcessingLeaseSeconds", 900);
     var sdkHealth = sdk.GetHealth();
     var status = "ok";
     if (!sdkHealth.ProgIdRegistered)
@@ -247,13 +255,12 @@ app.MapGet("/health", async (IJobQueue queue, ISdkSessionManager sdk) =>
     return Results.Json(new
     {
         status,
+        requestId = RequestId.Current(http),
         sdk = new
         {
             progIdRegistered = sdkHealth.ProgIdRegistered,
             loggedIn = sdkHealth.LoggedIn,
-            currentCompany = sdkHealth.CurrentCompany,
-            guidance = sdkHealth.Guidance,
-            lastError = sdkHealth.LastError
+            currentCompany = sdkHealth.CurrentCompany
         },
         queue = new
         {
@@ -263,7 +270,7 @@ app.MapGet("/health", async (IJobQueue queue, ISdkSessionManager sdk) =>
             oldestProcessingAgeSec = oldestAge
         }
     });
-}).AllowAnonymous();
+}).RequireAuthorization(PolicyNames.Admin);
 app.MapControllers();
 app.MapRazorPages();
 
