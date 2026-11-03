@@ -20,7 +20,9 @@ public sealed record SqlAccWebsiteFunctionalRequest(
     bool AuthorizeLanRead,
     string AuthorizedExactTarget,
     string? VerifyOtherDatabaseFileName = null,
-    string? SupervisorManagedBackupConfirm = null);
+    string? SupervisorManagedBackupConfirm = null,
+    /// <summary>When true, skip document create steps (master CUD only — no Document Transfer / POC docs).</summary>
+    bool SkipDocuments = false);
 
 public sealed record SqlAccWebsiteFunctionalStep(
     string Feature,
@@ -142,7 +144,16 @@ public sealed class SqlAccSdkWebsiteFunctionalProbe
             if (!failed) RunSupplier(write, sessions, db, token, supplierControl, steps, ref failed, ref message);
             if (!failed) RunStockGroupAndItem(write, sessions, db, token, steps, ref failed, ref message);
             if (!failed) RunGlAccount(write, sessions, db, token, steps, ref failed, ref message);
-            if (!failed) RunDocumentRoutingAndSafeGr(write, sessions, db, token, steps, ref failed, ref message);
+            if (!failed && request.SkipDocuments)
+            {
+                steps.Add(new SqlAccWebsiteFunctionalStep(
+                    "Document", "skipped", true,
+                    "Document creates skipped (SkipDocuments=true). Master CUD only; no Document Transfer against business docs."));
+            }
+            else if (!failed)
+            {
+                RunDocumentRoutingAndSafeGr(write, sessions, db, token, steps, ref failed, ref message);
+            }
 
             steps.Add(new SqlAccWebsiteFunctionalStep(
                 "Sync/Push/AutoPush", "routing", true,

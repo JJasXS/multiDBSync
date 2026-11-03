@@ -21,7 +21,9 @@ public interface ISqlAccSessionManager
 }
 
 /// <summary>
-/// Multi-company SDK session: single COM app, Logout+Login when the target company changes.
+/// Multi-company SDK session: reuses one COM app for the active company; on company change
+/// disposes the LocalServer and creates a fresh <c>SQLAcc.BizApp</c> before Login.
+/// Logout+Login on the same instance is unreliable (IsLogin=false / AccountUI AV) — see SdkSessionManager.
 /// Does not open Firebird directly and does not perform BizObject writes.
 /// </summary>
 public sealed class SqlAccSessionManager : ISqlAccSessionManager, IAsyncDisposable, IDisposable
@@ -72,12 +74,22 @@ public sealed class SqlAccSessionManager : ISqlAccSessionManager, IAsyncDisposab
         RegisteredDatabase db, Func<ISqlAccComApp, T> action, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(action);
+        var expectedKey = ResolveCompanyTarget(db).Key;
         await using var lease = new AsyncSessionLease(
             await UseCompanyAsync(db, cancellationToken).ConfigureAwait(false));
         return await _sta.RunAsync(() =>
         {
             if (_app is null)
                 throw new InvalidOperationException("SDK COM app is not initialized after Login.");
+            if (!string.Equals(_activeCompanyKey, expectedKey, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"SDK session company mismatch (fail closed): active={_activeCompanyKey ?? "(none)"}, requested={expectedKey}.");
+            }
+
+            if (!_app.IsLogin)
+                throw new InvalidOperationException(
+                    $"SDK session is not logged in for requested company {expectedKey}.");
             return action(_app);
         }, cancellationToken).ConfigureAwait(false);
     }
@@ -94,28 +106,76 @@ public sealed class SqlAccSessionManager : ISqlAccSessionManager, IAsyncDisposab
 
         await _sta.RunAsync(() =>
         {
-            _app ??= _factory.Create();
             var key = company.Key;
-            if (_app.IsLogin && string.Equals(_activeCompanyKey, key, StringComparison.OrdinalIgnoreCase))
+            if (IsUsableSessionFor(key))
                 return;
 
-            if (_app.IsLogin)
-            {
-                _logger.LogInformation("SDK Logout before switching company from {From} to {To}", _activeCompanyKey, key);
-                _app.Logout();
-                _activeCompanyKey = null;
-            }
+            // Different company (or dead session): never Logout+Login on the same BizApp instance.
+            ReleaseComApp_NoThrow(reason: "company-switch-or-relogin", fromKey: _activeCompanyKey, toKey: key);
 
-            _logger.LogInformation("SDK Login company file {DatabaseFile}", company.DatabaseFileName);
-            _app.Login(user, password.Trim(), company.DcfPath, company.DatabaseFileName);
-            if (!_app.IsLogin)
+            _app = _factory.Create();
+            _logger.LogInformation(
+                "SDK Login company file {DatabaseFile} (fresh COM instance)", company.DatabaseFileName);
+            try
             {
-                var diag = _app is SqlAccComApp com ? com.LastComDiagnostics : _app.LastComDiagnostics;
-                throw new InvalidOperationException(
-                    "SQLAcc.BizApp Login did not establish a session (IsLogin=false). diag={" + diag + "}");
+                _app.Login(user, password.Trim(), company.DcfPath, company.DatabaseFileName);
+                if (!_app.IsLogin)
+                {
+                    var diag = _app is SqlAccComApp com ? com.LastComDiagnostics : _app.LastComDiagnostics;
+                    throw new InvalidOperationException(
+                        "SQLAcc.BizApp Login did not establish a session (IsLogin=false). diag={" + diag + "}");
+                }
+
+                _activeCompanyKey = key;
             }
-            _activeCompanyKey = key;
+            catch
+            {
+                // Fail closed: never leave a half-logged session that could serve the wrong company.
+                ReleaseComApp_NoThrow(reason: "login-failed", fromKey: key, toKey: null);
+                throw;
+            }
         }, cancellationToken).ConfigureAwait(false);
+    }
+
+    private bool IsUsableSessionFor(string companyKey)
+    {
+        if (_app is null || string.IsNullOrEmpty(_activeCompanyKey))
+            return false;
+        if (!string.Equals(_activeCompanyKey, companyKey, StringComparison.OrdinalIgnoreCase))
+            return false;
+        try
+        {
+            return _app.IsLogin;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "SDK IsLogin check failed for {Company}; treating session as unusable", companyKey);
+            return false;
+        }
+    }
+
+    private void ReleaseComApp_NoThrow(string reason, string? fromKey, string? toKey)
+    {
+        if (_app is null)
+        {
+            _activeCompanyKey = null;
+            return;
+        }
+
+        _logger.LogInformation(
+            "SDK releasing COM session ({Reason}) from {From} to {To}",
+            reason, fromKey ?? "(none)", toKey ?? "(none)");
+        try
+        {
+            _app.Dispose();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "SDK COM dispose failed during {Reason}", reason);
+        }
+
+        _app = null;
+        _activeCompanyKey = null;
     }
 
     internal static CompanyTarget ResolveCompanyTarget(RegisteredDatabase db, string? defaultDcfPath = null)

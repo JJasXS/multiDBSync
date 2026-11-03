@@ -241,15 +241,15 @@ public sealed class SqlAccountApiWriteAdapter : ISqlAccountWriteAdapter
         RegisteredDatabase db, HttpMethod method, string path, string? json,
         string successMessage, bool treatNotFoundAsSuccess, CancellationToken cancellationToken)
     {
-        if (SqlAccountingWriteProviders.IsSdk(_writeOptions.Provider))
+        if (_writeOptions.ShouldRefuseRestHttp())
         {
             _logger.LogError(
-                "Refusing SQL Accounting REST write {Method} {Path}: Provider=Sdk (no silent REST fallback).",
-                method.Method, path);
+                "Refusing SQL Accounting REST write {Method} {Path}: Provider={Provider} BlockRestHttp={Block} (no silent REST fallback).",
+                method.Method, path, _writeOptions.Provider, _writeOptions.BlockRestHttp);
             return new WriteResult
             {
                 Success = false,
-                Message = "SQL Accounting REST write refused: Provider=Sdk. Use SqlAccountSdkWriteAdapter."
+                Message = "SQL Accounting REST write refused: Provider=Sdk / BlockRestHttp. Use SqlAccountSdkWriteAdapter."
             };
         }
 

@@ -102,11 +102,11 @@ public sealed class SqlAccountApiClient : ISqlAccountApiClient
     private async Task<SqlApiResponse> SendAsync(
         RegisteredDatabase db, HttpMethod method, string path, string? json, CancellationToken cancellationToken)
     {
-        if (SqlAccountingWriteProviders.IsSdk(_writeOptions.Provider))
+        if (_writeOptions.ShouldRefuseRestHttp())
         {
             _logger.LogWarning(
-                "Refusing SQL Accounting REST {Method} {Path}: Provider=Sdk (no silent REST fallback).",
-                method.Method, path);
+                "Refusing SQL Accounting REST {Method} {Path}: Provider={Provider} BlockRestHttp={Block} (no silent REST fallback).",
+                method.Method, path, _writeOptions.Provider, _writeOptions.BlockRestHttp);
             return SqlApiResponse.Unavailable;
         }
 

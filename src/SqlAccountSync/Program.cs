@@ -68,6 +68,30 @@ if (args.Any(a => string.Equals(a, "--sdk-smoke", StringComparison.OrdinalIgnore
     return;
 }
 
+if (args.Any(a => string.Equals(a, "--sdk-read-probe", StringComparison.OrdinalIgnoreCase)))
+{
+    await SdkReadProbeHost.RunAsync(args).ConfigureAwait(false);
+    return;
+}
+
+if (args.Any(a => string.Equals(a, "--sdk-website-session-probe", StringComparison.OrdinalIgnoreCase)))
+{
+    await SdkWebsiteSessionProbeHost.RunAsync(args).ConfigureAwait(false);
+    return;
+}
+
+if (args.Any(a => string.Equals(a, "--sdk-website-functional", StringComparison.OrdinalIgnoreCase)))
+{
+    await SdkWebsiteFunctionalHost.RunAsync(args).ConfigureAwait(false);
+    return;
+}
+
+if (args.Any(a => string.Equals(a, "--sdk-live-cud", StringComparison.OrdinalIgnoreCase)))
+{
+    await SdkLiveCudHost.RunAsync(args).ConfigureAwait(false);
+    return;
+}
+
 var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseWindowsService();
 
@@ -125,6 +149,12 @@ builder.Services.Configure<AwsOptions>(builder.Configuration.GetSection(AwsOptio
 builder.Services.Configure<FeatureOptions>(builder.Configuration.GetSection(FeatureOptions.SectionName));
 builder.Services.Configure<SqlAccountingWriteOptions>(builder.Configuration.GetSection(SqlAccountingWriteOptions.SectionName));
 builder.Services.Configure<SqlAccSdkOptions>(builder.Configuration.GetSection(SqlAccSdkOptions.SectionName));
+// SDK-only labs: BlockRestHttp forces Provider=Sdk so DI never selects the REST write adapter.
+builder.Services.PostConfigure<SqlAccountingWriteOptions>(opts =>
+{
+    if (opts.BlockRestHttp)
+        opts.Provider = SqlAccountingWriteProviders.Sdk;
+});
 
 var awsRegion = builder.Configuration["AWS:Region"]
     ?? Environment.GetEnvironmentVariable("AWS_REGION")
@@ -147,18 +177,25 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     ForwardedHeadersSetup.Configure(options, builder.Configuration));
 var writeHttpTimeoutSeconds = Math.Clamp(
     builder.Configuration.GetValue("Sync:WriteHttpTimeoutSeconds", 30), 5, 300);
+var sqlAccWriteSection = builder.Configuration.GetSection(SqlAccountingWriteOptions.SectionName);
+var blockSqlAccRestHttp = sqlAccWriteSection.GetValue("BlockRestHttp", false)
+    || SqlAccountingWriteProviders.IsSdk(sqlAccWriteSection["Provider"]);
+HttpMessageHandler CreateSqlAccRestHandler() =>
+    blockSqlAccRestHttp
+        ? new BlockSqlAccountingRestHandler(new HttpClientHandler { UseCookies = false })
+        : new HttpClientHandler { UseCookies = false };
 builder.Services.AddHttpClient<SqlAccountApiWriteAdapter>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(writeHttpTimeoutSeconds);
     // SQL Accounting IntraWeb BFF rejects clients without a modern browser User-Agent (HTTP 500 HTML).
     client.DefaultRequestHeaders.UserAgent.ParseAdd(
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36");
-}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { UseCookies = false });
+}).ConfigurePrimaryHttpMessageHandler(CreateSqlAccRestHandler);
 builder.Services.AddHttpClient<ISqlAccountApiClient, SqlAccountApiClient>(client =>
 {
     client.DefaultRequestHeaders.UserAgent.ParseAdd(
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36");
-}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { UseCookies = false });
+}).ConfigurePrimaryHttpMessageHandler(CreateSqlAccRestHandler);
 builder.Services.AddHttpClient<TenantEmailBootstrap>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(30);
@@ -351,15 +388,22 @@ try
     using var scope = app.Services.CreateScope();
     var diag = scope.ServiceProvider.GetRequiredService<ISqlAccSessionDiagnostics>();
     var status = diag.GetProviderStatus();
+    var writeOpts = scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<SqlAccountingWriteOptions>>().Value;
     app.Logger.LogInformation(
-        "Write provider effective={Provider}; SdkSelected={Sdk}; AllowLiveCom={Live}; PasswordConfigured={Pwd}; BackgroundWriteWorkers={Workers}; AllowDevSingleJobProcess={DevJob}; {Message}",
+        "Write provider effective={Provider}; SdkSelected={Sdk}; BlockRestHttp={BlockRest}; AllowLiveCom={Live}; PasswordConfigured={Pwd}; BackgroundWriteWorkers={Workers}; AllowDevSingleJobProcess={DevJob}; {Message}",
         status.WriteProvider,
         status.SdkSelected,
+        writeOpts.BlockRestHttp,
         status.AllowLiveCom,
         status.PasswordConfigured,
         status.BackgroundWriteWorkersEnabled,
         app.Configuration.GetValue("Sync:AllowDevSingleJobProcess", false),
         status.Message);
+    if (writeOpts.ShouldRefuseRestHttp())
+    {
+        app.Logger.LogInformation(
+            "SDK-only SQL Accounting mode: REST adapter refused and HttpClient handler blocks api.sql.my.");
+    }
 }
 catch (Exception ex)
 {

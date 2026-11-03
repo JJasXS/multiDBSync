@@ -79,6 +79,8 @@ public sealed class SqlAccSessionDiagnostics : ISqlAccSessionDiagnostics
             message = "Provider=Sdk but SqlAccSdk:UserName is empty.";
         else if (!pwdConfigured)
             message = "Provider=Sdk ready except password: " + pwdDetail;
+        else if (_writeOptions.BlockRestHttp)
+            message = "Provider=Sdk + BlockRestHttp; SQL Acc REST HTTP blocked. COM session probe available (SELECT-only). " + pwdDetail;
         else
             message = "Provider=Sdk selected; COM session probe available (SELECT-only). " + pwdDetail;
 
@@ -119,16 +121,18 @@ public sealed class SqlAccSessionDiagnostics : ISqlAccSessionDiagnostics
         try
         {
             var target = SqlAccSessionManager.ResolveCompanyTarget(db, _sdkOptions.DefaultDcfPath);
+            string? comDiag = null;
             var count = await _sessions.RunAsync(db, app =>
             {
                 if (!app.IsLogin)
                     throw new InvalidOperationException("IsLogin=false after session Login.");
+                comDiag = app.LastComDiagnostics;
                 return app.QueryRecordCount(ProbeSql);
             }, cancellationToken).ConfigureAwait(false);
 
             return new SqlAccSessionProbeResult(
                 Success: true,
-                Message: "Login + SELECT-only read + session release OK (no CUD).",
+                Message: "Login + SELECT-only read via ISqlAccSessionManager OK (no CUD). comDiag={" + (comDiag ?? "") + "}",
                 DbCode: db.DbCode,
                 DcfPath: target.DcfPath,
                 DatabaseFileName: target.DatabaseFileName,
