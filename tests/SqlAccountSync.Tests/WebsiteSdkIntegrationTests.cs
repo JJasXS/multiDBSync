@@ -391,6 +391,10 @@ public class WebsiteSdkIntegrationTests
             => Task.FromResult(new WriteResult { Success = true });
         public Task<WriteResult> CreateStockGroupAsync(RegisteredDatabase db, StockGroupRecord group, CancellationToken cancellationToken = default)
             => Task.FromResult(new WriteResult { Success = true });
+        public Task<WriteResult> UpdateStockGroupAsync(RegisteredDatabase db, StockGroupRecord group, CancellationToken cancellationToken = default)
+            => Task.FromResult(new WriteResult { Success = true });
+        public Task<WriteResult> DeleteStockGroupAsync(RegisteredDatabase db, string code, CancellationToken cancellationToken = default)
+            => Task.FromResult(new WriteResult { Success = true });
     }
 
     private sealed class NoopSecrets : ISecretResolver

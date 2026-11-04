@@ -92,6 +92,12 @@ if (args.Any(a => string.Equals(a, "--sdk-live-cud", StringComparison.OrdinalIgn
     return;
 }
 
+if (args.Any(a => string.Equals(a, "--sdk-stockgroup-poc", StringComparison.OrdinalIgnoreCase)))
+{
+    await SdkStockGroupPocHost.RunAsync(args).ConfigureAwait(false);
+    return;
+}
+
 var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseWindowsService();
 

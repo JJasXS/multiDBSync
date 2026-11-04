@@ -125,6 +125,12 @@ public class ItemPrerequisiteSdkModeTests
             StockGroupCreates++;
             return Task.FromResult(new WriteResult { Success = true, Message = "created" });
         }
+
+        public Task<WriteResult> UpdateStockGroupAsync(RegisteredDatabase db, StockGroupRecord group, CancellationToken cancellationToken = default)
+            => Task.FromResult(new WriteResult { Success = true, Message = "updated" });
+
+        public Task<WriteResult> DeleteStockGroupAsync(RegisteredDatabase db, string code, CancellationToken cancellationToken = default)
+            => Task.FromResult(new WriteResult { Success = true, Message = "deleted" });
     }
 
     private sealed class StubRead : ISqlAccountReadAdapter
