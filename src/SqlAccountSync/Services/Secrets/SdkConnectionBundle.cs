@@ -18,6 +18,10 @@ public interface ISdkConnectionBundle
     Task<(bool Ok, string Message)> SaveCompanyAsync(
         SdkCompanyCredentials company, CancellationToken cancellationToken = default);
 
+    /// <summary>Removes one company from the tenant sdkConnections secret (no-op if missing).</summary>
+    Task<(bool Ok, string Message)> RemoveCompanyAsync(
+        string dbCode, CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<string>> ListCompanyNamesAsync(CancellationToken cancellationToken = default);
 }
 
@@ -111,6 +115,40 @@ public sealed class SdkConnectionBundle : ISdkConnectionBundle
         {
             _logger.LogWarning(ex, "Could not save SDK connection for {Code}", code);
             return (false, $"Could not save {code}: {ex.Message}");
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public async Task<(bool Ok, string Message)> RemoveCompanyAsync(
+        string dbCode, CancellationToken cancellationToken = default)
+    {
+        var code = Sanitize(dbCode);
+        if (code.Length == 0)
+            return (false, "Company code is required.");
+        if (_sm is null)
+            return (false, "AWS Secrets Manager client is not configured.");
+
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var map = await ReadFreshAsync(cancellationToken).ConfigureAwait(false);
+            if (!map.Remove(code))
+            {
+                _cache.Set(CacheKey(), map, CacheFor);
+                return (true, $"No SDK connection for {code} in {SecretId} (already absent).");
+            }
+
+            await WriteMapAsync(map, cancellationToken).ConfigureAwait(false);
+            _cache.Set(CacheKey(), map, CacheFor);
+            return (true, $"Removed SDK connection for {code} from {SecretId}.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not remove SDK connection for {Code}", code);
+            return (false, $"Could not remove {code}: {ex.Message}");
         }
         finally
         {

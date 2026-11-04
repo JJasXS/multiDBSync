@@ -19,18 +19,24 @@ public class IndexModel : SyncPageModel
     private readonly IDatabaseRegistry _registry;
     private readonly IAuditService _audit;
     private readonly ITenantDatabaseBootstrap _tenants;
+    private readonly ISdkConnectionBundle _sdkBundle;
     private readonly SyncOptions _sync;
+    private readonly ILogger<IndexModel> _logger;
 
     public IndexModel(
         IDatabaseRegistry registry,
         IAuditService audit,
         ITenantDatabaseBootstrap tenants,
-        IOptions<SyncOptions> sync)
+        ISdkConnectionBundle sdkBundle,
+        IOptions<SyncOptions> sync,
+        ILogger<IndexModel> logger)
     {
         _registry = registry;
         _audit = audit;
         _tenants = tenants;
+        _sdkBundle = sdkBundle;
         _sync = sync.Value;
+        _logger = logger;
     }
 
     public List<RegisteredDatabase> Databases { get; set; } = [];
@@ -74,6 +80,18 @@ public class IndexModel : SyncPageModel
             return RedirectToPage();
         }
 
+        var (secretOk, secretMsg) = await _sdkBundle
+            .RemoveCompanyAsync(existing.DbCode)
+            .ConfigureAwait(false);
+        if (!secretOk)
+        {
+            _logger.LogWarning(
+                "Deleted company {Code} from registry but Secrets Manager remove failed: {Detail}",
+                existing.DbCode, secretMsg);
+            TempData["DbStatusError"] =
+                $"Company removed locally, but AWS secret was not updated: {secretMsg}";
+        }
+
         await _audit.WriteAsync(new AuditEntry
         {
             UserEmail = CurrentEmail,
@@ -81,7 +99,8 @@ public class IndexModel : SyncPageModel
             DbId = id,
             Entity = "DATABASE",
             RecordId = existing.DbCode,
-            Result = "SUCCESS"
+            Result = secretOk ? "SUCCESS" : "PARTIAL",
+            AfterJson = secretOk ? "" : secretMsg
         });
         return RedirectToPage();
     }
@@ -529,7 +548,14 @@ public class EditModel : SyncPageModel
             || text.Contains("duplicate", StringComparison.OrdinalIgnoreCase)
             || text.Contains("-803", StringComparison.Ordinal))
             return "A company with that code already exists.";
-        return "Could not save this company. Check the code and database path, then try again.";
+
+        // Surface the real cause (AWS / Firebird / validation) — path/code looking fine is not the check.
+        var detail = (ex.GetBaseException().Message ?? "").Trim();
+        if (detail.Length == 0)
+            return "Could not save this company. Check the code and database path, then try again.";
+        if (detail.Length > 220)
+            detail = detail[..220] + "…";
+        return "Could not save this company: " + detail;
     }
 
     private bool FromDashboard =>
