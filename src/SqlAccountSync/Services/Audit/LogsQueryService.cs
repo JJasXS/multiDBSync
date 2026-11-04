@@ -17,13 +17,17 @@ public interface ILogsQueryService
 {
     bool IsRemote { get; }
     string DescribeSource();
-    Task<(int Transaction, int Audit, int Error)> CountAllAsync(CancellationToken cancellationToken = default);
+    Task<(int Transaction, int Audit, int Error)> CountAllAsync(
+        DateTime? fromInclusive = null, DateTime? toExclusive = null, CancellationToken cancellationToken = default);
     Task<List<SyncTransaction>> ListTransactionsPageAsync(
-        DateTime? before, string? beforeKind, int beforeId, int take, CancellationToken cancellationToken = default);
+        DateTime? before, string? beforeKind, int beforeId, int take,
+        DateTime? fromInclusive = null, DateTime? toExclusive = null, CancellationToken cancellationToken = default);
     Task<List<AuditListItem>> ListAuditsPageAsync(
-        DateTime? before, string? beforeKind, int beforeId, int take, CancellationToken cancellationToken = default);
+        DateTime? before, string? beforeKind, int beforeId, int take,
+        DateTime? fromInclusive = null, DateTime? toExclusive = null, CancellationToken cancellationToken = default);
     Task<List<ErrorEntry>> ListErrorsPageAsync(
-        DateTime? before, string? beforeKind, int beforeId, int take, CancellationToken cancellationToken = default);
+        DateTime? before, string? beforeKind, int beforeId, int take,
+        DateTime? fromInclusive = null, DateTime? toExclusive = null, CancellationToken cancellationToken = default);
     Task ResolveErrorAsync(int errorId, CancellationToken cancellationToken = default);
     Task RetryTransactionAsync(int txnPk, string user, CancellationToken cancellationToken = default);
 }
@@ -82,22 +86,34 @@ WHERE T.TXNPK=@TXNPK", MapTxn, new { TXNPK = txnPk }, cancellationToken).Configu
         await _db.QueueTxnRetryAsync(txn, payload, idemKey, user, maxAttempts, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<(int Transaction, int Audit, int Error)> CountAllAsync(CancellationToken cancellationToken = default)
+    public async Task<(int Transaction, int Audit, int Error)> CountAllAsync(
+        DateTime? fromInclusive = null, DateTime? toExclusive = null, CancellationToken cancellationToken = default)
     {
         if (!_db.IsConfigured)
             return (0, 0, 0);
-        var txn = await CountAsync("SELECT COUNT(*) FROM SYNC_TXN", cancellationToken).ConfigureAwait(false);
-        var audit = await CountAsync("SELECT COUNT(*) FROM SYNC_AUDIT", cancellationToken).ConfigureAwait(false);
-        var error = await CountAsync("SELECT COUNT(*) FROM SYNC_ERROR", cancellationToken).ConfigureAwait(false);
+        var bounds = NormalizeBounds(fromInclusive, toExclusive);
+        var txn = await CountAsync($@"
+SELECT COUNT(*) FROM SYNC_TXN T
+WHERE (@HASFROM = 0 OR (CASE WHEN T.UPDATEDAT IS NOT NULL AND EXTRACT(YEAR FROM T.UPDATEDAT) > 2000 THEN T.UPDATEDAT ELSE T.CREATEDAT END) >= @FROMAT)
+  AND (@HASTO = 0 OR (CASE WHEN T.UPDATEDAT IS NOT NULL AND EXTRACT(YEAR FROM T.UPDATEDAT) > 2000 THEN T.UPDATEDAT ELSE T.CREATEDAT END) < @TOEX)",
+            bounds, cancellationToken).ConfigureAwait(false);
+        var audit = await CountAsync(
+            "SELECT COUNT(*) FROM SYNC_AUDIT WHERE (@HASFROM = 0 OR ATUTC >= @FROMAT) AND (@HASTO = 0 OR ATUTC < @TOEX)",
+            bounds, cancellationToken).ConfigureAwait(false);
+        var error = await CountAsync(
+            "SELECT COUNT(*) FROM SYNC_ERROR WHERE (@HASFROM = 0 OR ATUTC >= @FROMAT) AND (@HASTO = 0 OR ATUTC < @TOEX)",
+            bounds, cancellationToken).ConfigureAwait(false);
         return (txn, audit, error);
     }
 
     public Task<List<SyncTransaction>> ListTransactionsPageAsync(
-        DateTime? before, string? beforeKind, int beforeId, int take, CancellationToken cancellationToken = default)
+        DateTime? before, string? beforeKind, int beforeId, int take,
+        DateTime? fromInclusive = null, DateTime? toExclusive = null, CancellationToken cancellationToken = default)
     {
         if (!_db.IsConfigured)
             return Task.FromResult(new List<SyncTransaction>());
         var limit = Math.Clamp(take, 1, 500);
+        var bounds = NormalizeBounds(fromInclusive, toExclusive);
         return _db.QueryAsync($@"
 SELECT FIRST {limit} * FROM (
     SELECT T.*, S.DISPLAYNAME AS SOURCENAME, D.DISPLAYNAME AS DESTNAME,
@@ -106,39 +122,45 @@ SELECT FIRST {limit} * FROM (
     JOIN SYNC_DATABASE S ON S.DBID=T.SOURCEDBID
     JOIN SYNC_DATABASE D ON D.DBID=T.DESTDBID
 ) X
-WHERE @HASCURSOR = 0
+WHERE (@HASFROM = 0 OR LOGAT >= @FROMAT)
+  AND (@HASTO = 0 OR LOGAT < @TOEX)
+  AND (@HASCURSOR = 0
    OR LOGAT < @CURSORAT
-   OR (LOGAT = @CURSORAT AND @CURSORKIND = 'transaction' AND TXNPK < @CURSORID)
-ORDER BY LOGAT DESC, TXNPK DESC", MapTxn, new
+   OR (LOGAT = @CURSORAT AND @CURSORKIND = 'transaction' AND TXNPK < @CURSORID))
+ORDER BY LOGAT DESC, TXNPK DESC", MapTxn, MergeArgs(bounds, new
         {
             HASCURSOR = before.HasValue ? 1 : 0,
             CURSORAT = before ?? DateTime.MinValue,
             CURSORKIND = beforeKind ?? "",
             CURSORID = beforeId
-        }, cancellationToken);
+        }), cancellationToken);
     }
 
     public async Task<List<AuditListItem>> ListAuditsPageAsync(
-        DateTime? before, string? beforeKind, int beforeId, int take, CancellationToken cancellationToken = default)
+        DateTime? before, string? beforeKind, int beforeId, int take,
+        DateTime? fromInclusive = null, DateTime? toExclusive = null, CancellationToken cancellationToken = default)
     {
         if (!_db.IsConfigured)
             return [];
 
         var limit = Math.Clamp(take, 1, 500);
+        var bounds = NormalizeBounds(fromInclusive, toExclusive);
         var entries = await _db.QueryAsync($@"
 SELECT FIRST {limit}
     AUDITID, ATUTC, USEREMAIL, ACTION, DBID, ENTITY, RECORDID, RESULT, IPADDR, SESSIONID, REQUESTID
 FROM SYNC_AUDIT
-WHERE @HASCURSOR = 0
+WHERE (@HASFROM = 0 OR ATUTC >= @FROMAT)
+  AND (@HASTO = 0 OR ATUTC < @TOEX)
+  AND (@HASCURSOR = 0
    OR ATUTC < @CURSORAT
-   OR (ATUTC = @CURSORAT AND @CURSORKIND = 'audit' AND AUDITID < @CURSORID)
-ORDER BY ATUTC DESC, AUDITID DESC", MapAudit, new
+   OR (ATUTC = @CURSORAT AND @CURSORKIND = 'audit' AND AUDITID < @CURSORID))
+ORDER BY ATUTC DESC, AUDITID DESC", MapAudit, MergeArgs(bounds, new
         {
             HASCURSOR = before.HasValue ? 1 : 0,
             CURSORAT = before ?? DateTime.MinValue,
             CURSORKIND = beforeKind ?? "",
             CURSORID = beforeId
-        }, cancellationToken).ConfigureAwait(false);
+        }), cancellationToken).ConfigureAwait(false);
 
         var jobs = await LoadRecentJobsAsync(Math.Min(limit * 3, 500), cancellationToken).ConfigureAwait(false);
         jobs.AddRange(await LoadMissingJobsAsync(entries, jobs, cancellationToken).ConfigureAwait(false));
@@ -161,29 +183,51 @@ FROM SYNC_TXN ORDER BY TXNPK DESC", MapAuditTxn, cancellationToken: cancellation
     }
 
     public Task<List<ErrorEntry>> ListErrorsPageAsync(
-        DateTime? before, string? beforeKind, int beforeId, int take, CancellationToken cancellationToken = default)
+        DateTime? before, string? beforeKind, int beforeId, int take,
+        DateTime? fromInclusive = null, DateTime? toExclusive = null, CancellationToken cancellationToken = default)
     {
         if (!_db.IsConfigured)
             return Task.FromResult(new List<ErrorEntry>());
         var limit = Math.Clamp(take, 1, 500);
+        var bounds = NormalizeBounds(fromInclusive, toExclusive);
         return _db.QueryAsync($@"
 SELECT FIRST {limit} * FROM SYNC_ERROR
-WHERE @HASCURSOR = 0
+WHERE (@HASFROM = 0 OR ATUTC >= @FROMAT)
+  AND (@HASTO = 0 OR ATUTC < @TOEX)
+  AND (@HASCURSOR = 0
    OR ATUTC < @CURSORAT
-   OR (ATUTC = @CURSORAT AND @CURSORKIND = 'error' AND ERRORID < @CURSORID)
-ORDER BY ATUTC DESC, ERRORID DESC", MapError, new
+   OR (ATUTC = @CURSORAT AND @CURSORKIND = 'error' AND ERRORID < @CURSORID))
+ORDER BY ATUTC DESC, ERRORID DESC", MapError, MergeArgs(bounds, new
         {
             HASCURSOR = before.HasValue ? 1 : 0,
             CURSORAT = before ?? DateTime.MinValue,
             CURSORKIND = beforeKind ?? "",
             CURSORID = beforeId
-        }, cancellationToken);
+        }), cancellationToken);
     }
 
-    private async Task<int> CountAsync(string sql, CancellationToken cancellationToken)
+    private async Task<int> CountAsync(string sql, object args, CancellationToken cancellationToken)
     {
-        var value = await _db.ScalarAsync(sql, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var value = await _db.ScalarAsync(sql, args, cancellationToken).ConfigureAwait(false);
         return value is null or DBNull ? 0 : Convert.ToInt32(value, CultureInfo.InvariantCulture);
+    }
+
+    private static object NormalizeBounds(DateTime? fromInclusive, DateTime? toExclusive) => new
+    {
+        HASFROM = fromInclusive.HasValue ? 1 : 0,
+        FROMAT = fromInclusive ?? DateTime.MinValue,
+        HASTO = toExclusive.HasValue ? 1 : 0,
+        TOEX = toExclusive ?? DateTime.MaxValue
+    };
+
+    private static Dictionary<string, object?> MergeArgs(object bounds, object cursor)
+    {
+        var map = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var prop in bounds.GetType().GetProperties())
+            map[prop.Name] = prop.GetValue(bounds);
+        foreach (var prop in cursor.GetType().GetProperties())
+            map[prop.Name] = prop.GetValue(cursor);
+        return map;
     }
 
     private Task<List<AuditJobRow>> LoadRecentJobsAsync(int take, CancellationToken cancellationToken) =>

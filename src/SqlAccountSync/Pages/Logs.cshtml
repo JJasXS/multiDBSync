@@ -7,12 +7,16 @@
         !string.IsNullOrWhiteSpace(r.LinkUrl) || r.RetryTxnPk is not null || r.ResolveErrorId is not null);
     var columns = anyRowAction ? 5 : 4;
     var totals = Model.Totals;
+    var fromValue = Model.FromDate.ToString("yyyy-MM-dd");
+    var toValue = Model.ToDate.ToString("yyyy-MM-dd");
 }
 <div class="card logs-page"
      data-log-total-all="@totals.All"
      data-log-total-transaction="@totals.Transaction"
      data-log-total-audit="@totals.Audit"
      data-log-total-error="@totals.Error"
+     data-log-from="@fromValue"
+     data-log-to="@toValue"
      data-log-source="@(Model.IsRemoteSource ? "remote-readonly" : "local")">
     @if (Model.IsRemoteSource)
     {
@@ -20,11 +24,24 @@
             Logs from remote TEST SYNC.FDB — @Model.SourceDescription. Retry queues a TXN job here; Resolve updates SYNC_ERROR on this database.
         </p>
     }
-    <div class="logs-filters" role="tablist" aria-label="Log type">
-        <button type="button" class="logs-filter is-active" data-log-filter="all">All <span class="count-pill">@totals.All</span></button>
-        <button type="button" class="logs-filter" data-log-filter="transaction">Transactions <span class="count-pill">@totals.Transaction</span></button>
-        <button type="button" class="logs-filter" data-log-filter="audit">Audit <span class="count-pill">@totals.Audit</span></button>
-        <button type="button" class="logs-filter" data-log-filter="error">Errors <span class="count-pill">@totals.Error</span></button>
+    <div class="logs-toolbar">
+        <div class="logs-filters" role="tablist" aria-label="Log type">
+            <button type="button" class="logs-filter is-active" data-log-filter="all">All <span class="count-pill">@totals.All</span></button>
+            <button type="button" class="logs-filter" data-log-filter="transaction">Transactions <span class="count-pill">@totals.Transaction</span></button>
+            <button type="button" class="logs-filter" data-log-filter="audit">Audit <span class="count-pill">@totals.Audit</span></button>
+            <button type="button" class="logs-filter" data-log-filter="error">Errors <span class="count-pill">@totals.Error</span></button>
+        </div>
+        <form class="logs-date-range" id="logDateRange" autocomplete="off">
+            <label class="logs-date-field">
+                <span>From</span>
+                <input id="logFrom" type="date" name="from" value="@fromValue" required />
+            </label>
+            <label class="logs-date-field">
+                <span>To</span>
+                <input id="logTo" type="date" name="to" value="@toValue" required />
+            </label>
+            <button type="submit" class="btn small" id="logDateApply">Apply</button>
+        </form>
     </div>
     <section class="push-panel logs-panel">
         <div class="push-panel-head">
@@ -41,7 +58,7 @@
             <table class="push-panel-table@(showActions && !anyRowAction ? " is-actions-hidden" : "")" id="logsTable">
                 <thead>
                     <tr>
-                        <th>When</th>
+                        <th>Date</th>
                         <th>Kind</th>
                         <th>Detail</th>
                         <th>Status</th>
@@ -83,6 +100,16 @@
   const count = document.querySelector('[data-log-count]');
   const filters = Array.from(document.querySelectorAll('[data-log-filter]'));
   const pills = Object.fromEntries(filters.map((btn) => [btn.getAttribute('data-log-filter'), btn.querySelector('.count-pill')]));
+  const fromInput = document.getElementById('logFrom');
+  const toInput = document.getElementById('logTo');
+  const dateForm = document.getElementById('logDateRange');
+  const todayIso = () => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
   const readAttr = (name) => {
     const n = Number.parseInt((root?.getAttribute(name) || '0').trim(), 10);
     return Number.isFinite(n) && n >= 0 ? n : 0;
@@ -99,6 +126,10 @@
   let loading = false;
   let generation = 0;
   const showActions = scroller?.getAttribute('data-log-actions') === '1' ? '1' : '0';
+  let appliedFrom = (root?.getAttribute('data-log-from') || todayIso()).trim();
+  let appliedTo = (root?.getAttribute('data-log-to') || todayIso()).trim();
+  if (fromInput && !fromInput.value) fromInput.value = appliedFrom;
+  if (toInput && !toInput.value) toInput.value = appliedTo;
   const table = document.getElementById('logsTable');
   const rows = () => Array.from(document.querySelectorAll('#logRows tr[data-log-row]'));
   const selectedTotal = () => {
@@ -168,7 +199,7 @@
         else if (kind === 'error') msg.textContent = 'No error logs.';
         else if (kind === 'audit') msg.textContent = 'No audit logs.';
         else if (kind === 'transaction') msg.textContent = 'No transaction logs.';
-        else msg.textContent = 'No logs yet.';
+        else msg.textContent = 'No logs in this date range.';
       }
     }
     // Summary: category total from DB; when searching, show matches among currently loaded rows.
@@ -182,6 +213,18 @@
     beforeKind: tr?.getAttribute('data-log-kind') || '',
     beforeId: tr?.getAttribute('data-log-id') || '0'
   });
+  const normalizeRangeInputs = () => {
+    let from = (fromInput?.value || '').trim() || todayIso();
+    let to = (toInput?.value || '').trim() || todayIso();
+    if (from && to && from > to) {
+      const swap = from;
+      from = to;
+      to = swap;
+    }
+    if (fromInput) fromInput.value = from;
+    if (toInput) toInput.value = to;
+    return { from, to };
+  };
   const loadMore = async (reset) => {
     if ((loading && !reset) || (!hasMore && !reset)) return 0;
     const gen = reset ? ++generation : generation;
@@ -198,6 +241,8 @@
     url.searchParams.set('handler', 'More');
     url.searchParams.set('kind', kind);
     url.searchParams.set('actions', showActions);
+    url.searchParams.set('from', appliedFrom);
+    url.searchParams.set('to', appliedTo);
     if (cursor.before) {
       url.searchParams.set('before', cursor.before);
       url.searchParams.set('beforeKind', cursor.beforeKind);
@@ -207,7 +252,7 @@
     try {
       const res = await fetch(url, { headers: { 'X-Requested-With': 'fetch' } });
       const html = (await res.text()).trim();
-      // Ignore stale responses after a newer tab switch.
+      // Ignore stale responses after a newer tab switch / date apply.
       if (gen !== generation) return 0;
       applyTotalsFromHeaders(res);
       hasMore = res.headers.get('X-Has-More') === '1';
@@ -233,6 +278,24 @@
       if (!added) break;
     }
   };
+  const applyDateRange = () => {
+    const range = normalizeRangeInputs();
+    appliedFrom = range.from;
+    appliedTo = range.to;
+    root?.setAttribute('data-log-from', appliedFrom);
+    root?.setAttribute('data-log-to', appliedTo);
+    const qs = new URLSearchParams(location.search);
+    qs.set('from', appliedFrom);
+    qs.set('to', appliedTo);
+    const next = `${location.pathname}?${qs.toString()}${location.hash || ''}`;
+    history.replaceState(null, '', next);
+    apply();
+    loadMore(true).then(fill);
+  };
+  dateForm?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    applyDateRange();
+  });
   filters.forEach((btn) => {
     btn.addEventListener('click', () => {
       const next = btn.getAttribute('data-log-filter') || 'all';

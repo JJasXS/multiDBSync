@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using SqlAccountSync.Helpers;
 using SqlAccountSync.Models;
@@ -29,8 +30,12 @@ public class LogsModel : SyncPageModel
     public LogTotals Totals { get; set; } = new();
     public bool IsRemoteSource { get; set; }
     public string SourceDescription { get; set; } = "";
+    /// <summary>Inclusive calendar day (local) shown in the From control.</summary>
+    public DateTime FromDate { get; set; }
+    /// <summary>Inclusive calendar day (local) shown in the To control.</summary>
+    public DateTime ToDate { get; set; }
 
-    public async Task<IActionResult> OnGetAsync(string? tab)
+    public async Task<IActionResult> OnGetAsync(string? tab, string? from, string? to)
     {
         var t = (tab ?? "").Trim().ToLowerInvariant();
         if (t is "transactions" or "transfer" or "docs" or "documents")
@@ -40,10 +45,14 @@ public class LogsModel : SyncPageModel
         if (t is "audit")
             return Redirect("/logs#audit-logs");
 
+        var range = ResolveDateRange(from, to);
+        FromDate = range.FromDay;
+        ToDate = range.ToDay;
+
         IsRemoteSource = _logs.IsRemote;
         SourceDescription = _logs.DescribeSource();
-        Totals = await LoadTotalsAsync();
-        var page = await LoadPageAsync("all", null, null, 0);
+        Totals = await LoadTotalsAsync(range.FromInclusive, range.ToExclusive);
+        var page = await LoadPageAsync("all", null, null, 0, range.FromInclusive, range.ToExclusive);
         Rows = page.Rows;
         HasMore = page.HasMore;
         // Actions column: Open / Retry / Resolve. Retry stays local-only; Resolve works on the
@@ -52,15 +61,19 @@ public class LogsModel : SyncPageModel
         return Page();
     }
 
-    public async Task<IActionResult> OnGetMoreAsync(string? kind, string? before, string? beforeKind, int beforeId, int actions)
+    public async Task<IActionResult> OnGetMoreAsync(
+        string? kind, string? before, string? beforeKind, int beforeId, int actions, string? from, string? to)
     {
-        var totals = await LoadTotalsAsync();
+        var range = ResolveDateRange(from, to);
+        var totals = await LoadTotalsAsync(range.FromInclusive, range.ToExclusive);
         WriteTotalHeaders(totals);
         Response.Headers["X-Log-Source"] = _logs.IsRemote ? "remote-readonly" : "local";
-        var page = await LoadPageAsync(kind, ParseCursor(before), beforeKind, beforeId);
+        Response.Headers["X-Log-From"] = range.FromDay.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        Response.Headers["X-Log-To"] = range.ToDay.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        var page = await LoadPageAsync(kind, ParseCursor(before), beforeKind, beforeId, range.FromInclusive, range.ToExclusive);
         Response.Headers["X-Has-More"] = page.HasMore ? "1" : "0";
         Response.Headers["X-Log-Kind"] = NormalizeKind(kind);
-        Response.Headers["X-Log-Page-Count"] = page.Rows.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        Response.Headers["X-Log-Page-Count"] = page.Rows.Count.ToString(CultureInfo.InvariantCulture);
         var showActions = actions == 1;
         return Partial("_LogRows", new LogTableBody { Rows = page.Rows, ShowActions = showActions });
     }
@@ -84,32 +97,36 @@ public class LogsModel : SyncPageModel
         return Redirect("/logs#error-logs");
     }
 
-    private async Task<LogTotals> LoadTotalsAsync()
+    private Task<LogTotals> LoadTotalsAsync(DateTime fromInclusive, DateTime toExclusive) =>
+        LoadTotalsCoreAsync(fromInclusive, toExclusive);
+
+    private async Task<LogTotals> LoadTotalsCoreAsync(DateTime fromInclusive, DateTime toExclusive)
     {
-        var (txn, audit, error) = await _logs.CountAllAsync();
+        var (txn, audit, error) = await _logs.CountAllAsync(fromInclusive, toExclusive);
         return new LogTotals(txn, audit, error);
     }
 
     private void WriteTotalHeaders(LogTotals totals)
     {
-        Response.Headers["X-Log-Count-Transaction"] = totals.Transaction.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        Response.Headers["X-Log-Count-Audit"] = totals.Audit.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        Response.Headers["X-Log-Count-Error"] = totals.Error.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        Response.Headers["X-Log-Count-All"] = totals.All.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        Response.Headers["X-Log-Count-Transaction"] = totals.Transaction.ToString(CultureInfo.InvariantCulture);
+        Response.Headers["X-Log-Count-Audit"] = totals.Audit.ToString(CultureInfo.InvariantCulture);
+        Response.Headers["X-Log-Count-Error"] = totals.Error.ToString(CultureInfo.InvariantCulture);
+        Response.Headers["X-Log-Count-All"] = totals.All.ToString(CultureInfo.InvariantCulture);
     }
 
     private async Task<(List<LogRow> Rows, bool HasMore)> LoadPageAsync(
-        string? kind, DateTime? before, string? beforeKind, int beforeId)
+        string? kind, DateTime? before, string? beforeKind, int beforeId,
+        DateTime fromInclusive, DateTime toExclusive)
     {
         var filter = NormalizeKind(kind);
         var txns = filter is "all" or "transaction"
-            ? await _logs.ListTransactionsPageAsync(before, beforeKind, beforeId, PageSize)
+            ? await _logs.ListTransactionsPageAsync(before, beforeKind, beforeId, PageSize, fromInclusive, toExclusive)
             : [];
         var audits = filter is "all" or "audit"
-            ? await _logs.ListAuditsPageAsync(before, beforeKind, beforeId, PageSize)
+            ? await _logs.ListAuditsPageAsync(before, beforeKind, beforeId, PageSize, fromInclusive, toExclusive)
             : [];
         var errors = filter is "all" or "error"
-            ? await _logs.ListErrorsPageAsync(before, beforeKind, beforeId, PageSize)
+            ? await _logs.ListErrorsPageAsync(before, beforeKind, beforeId, PageSize, fromInclusive, toExclusive)
             : [];
 
         Transactions = txns;
@@ -134,9 +151,33 @@ public class LogsModel : SyncPageModel
     {
         if (string.IsNullOrWhiteSpace(before))
             return null;
-        return DateTime.TryParse(before, System.Globalization.CultureInfo.InvariantCulture,
-            System.Globalization.DateTimeStyles.RoundtripKind, out var at)
+        return DateTime.TryParse(before, CultureInfo.InvariantCulture,
+            DateTimeStyles.RoundtripKind, out var at)
             ? at
+            : null;
+    }
+
+    /// <summary>
+    /// Defaults both ends to today. Inclusive calendar days → [from 00:00, to+1 day).
+    /// </summary>
+    private static (DateTime FromDay, DateTime ToDay, DateTime FromInclusive, DateTime ToExclusive) ResolveDateRange(
+        string? from, string? to)
+    {
+        var today = DateTime.Today;
+        var fromDay = TryParseDay(from) ?? today;
+        var toDay = TryParseDay(to) ?? today;
+        if (toDay < fromDay)
+            (fromDay, toDay) = (toDay, fromDay);
+        return (fromDay, toDay, fromDay, toDay.AddDays(1));
+    }
+
+    private static DateTime? TryParseDay(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+        return DateTime.TryParseExact(value.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture,
+            DateTimeStyles.None, out var day)
+            ? day.Date
             : null;
     }
 
