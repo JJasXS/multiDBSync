@@ -20,6 +20,7 @@ public class IndexModel : SyncPageModel
     private readonly IAuditService _audit;
     private readonly ITenantDatabaseBootstrap _tenants;
     private readonly ISdkConnectionBundle _sdkBundle;
+    private readonly IWriteProviderSettings _writeProvider;
     private readonly SyncOptions _sync;
     private readonly ILogger<IndexModel> _logger;
 
@@ -28,6 +29,7 @@ public class IndexModel : SyncPageModel
         IAuditService audit,
         ITenantDatabaseBootstrap tenants,
         ISdkConnectionBundle sdkBundle,
+        IWriteProviderSettings writeProvider,
         IOptions<SyncOptions> sync,
         ILogger<IndexModel> logger)
     {
@@ -35,17 +37,34 @@ public class IndexModel : SyncPageModel
         _audit = audit;
         _tenants = tenants;
         _sdkBundle = sdkBundle;
+        _writeProvider = writeProvider;
         _sync = sync.Value;
         _logger = logger;
     }
 
     public List<RegisteredDatabase> Databases { get; set; } = [];
     public List<DatabaseLink> Links { get; set; } = [];
+    public bool IsSdkMode { get; private set; } = true;
+    public Dictionary<string, SdkCompanyCredentials> SdkByCode { get; private set; } =
+        new(StringComparer.OrdinalIgnoreCase);
 
     public async Task OnGetAsync()
     {
         Databases = await _registry.ListAsync(includeInactive: true);
         Links = await _registry.ListLinksAsync();
+        IsSdkMode = SqlAccountingWriteProviders.IsSdk(await _writeProvider.GetAsync().ConfigureAwait(false));
+        if (!IsSdkMode)
+            return;
+
+        foreach (var db in Databases)
+        {
+            var code = (db.DbCode ?? "").Trim();
+            if (code.Length == 0 || SdkByCode.ContainsKey(code))
+                continue;
+            var cred = await _sdkBundle.ResolveAsync(code).ConfigureAwait(false);
+            if (cred is not null)
+                SdkByCode[code] = cred;
+        }
     }
 
     public async Task<IActionResult> OnPostSetActiveAsync(int id, bool active, string scope = "")
@@ -655,15 +674,21 @@ public class DetailsModel : SyncPageModel
     private readonly IDatabaseRegistry _registry;
     private readonly IConnectionTestService _test;
     private readonly IAuditService _audit;
+    private readonly ISdkConnectionBundle _sdkBundle;
+    private readonly IWriteProviderSettings _writeProvider;
 
     public DetailsModel(
         IDatabaseRegistry registry,
         IConnectionTestService test,
-        IAuditService audit)
+        IAuditService audit,
+        ISdkConnectionBundle sdkBundle,
+        IWriteProviderSettings writeProvider)
     {
         _registry = registry;
         _test = test;
         _audit = audit;
+        _sdkBundle = sdkBundle;
+        _writeProvider = writeProvider;
     }
 
     public RegisteredDatabase? Db { get; set; }
@@ -671,6 +696,8 @@ public class DetailsModel : SyncPageModel
     public string Message { get; set; } = "";
     public ConnectionTestResult? LastTest { get; set; }
     public int ActiveSubCount { get; set; }
+    public bool IsSdkMode { get; private set; } = true;
+    public SdkCompanyCredentials? SdkCred { get; private set; }
 
     public async Task<IActionResult> OnGetAsync(int id)
     {
@@ -703,6 +730,9 @@ public class DetailsModel : SyncPageModel
         Links = (await _registry.ListLinksAsync()).Where(l => l.MasterDbId == id || l.SubDbId == id).ToList();
         var activeIds = (await _registry.ListAsync()).Select(d => d.DbId).ToHashSet();
         ActiveSubCount = Links.Count(l => l.MasterDbId == id && activeIds.Contains(l.SubDbId));
+        IsSdkMode = SqlAccountingWriteProviders.IsSdk(await _writeProvider.GetAsync().ConfigureAwait(false));
+        if (IsSdkMode)
+            SdkCred = await _sdkBundle.ResolveAsync(Db.DbCode).ConfigureAwait(false);
         return true;
     }
 }

@@ -4,6 +4,13 @@
     ViewData["Title"] = "Databases";
     var dbError = TempData["DbError"] as string;
     var dbEditId = TempData["DbEditId"]?.ToString() ?? "";
+    string FdbFile(string? path)
+    {
+        var raw = (path ?? "").Trim().Replace('\\', '/');
+        if (raw.Length == 0) return "";
+        var i = raw.LastIndexOf('/');
+        return i >= 0 ? raw[(i + 1)..] : raw;
+    }
 }
 @if (TempData["DbStatusError"] is string statusError)
 {
@@ -70,6 +77,18 @@
                         {
                             <td class="db-row-delete">
                                 <div class="accounts-row-actions">
+                                    @{
+                                        Model.SdkByCode.TryGetValue(d.DbCode ?? "", out var sdkCred);
+                                        var sdkDb = !string.IsNullOrWhiteSpace(sdkCred?.Database)
+                                            ? sdkCred!.Database
+                                            : FdbFile(d.FbPath);
+                                        var sdkDcf = !string.IsNullOrWhiteSpace(sdkCred?.DcfPath)
+                                            ? sdkCred!.DcfPath
+                                            : @"C:\eStream\SQLAccounting\Share\SQLACC.DCF";
+                                        var sdkUser = !string.IsNullOrWhiteSpace(sdkCred?.Username)
+                                            ? sdkCred!.Username
+                                            : "ADMIN";
+                                    }
                                     <button type="button"
                                             class="accounts-icon-btn accounts-status-edit"
                                             title="Edit @d.DisplayName"
@@ -88,7 +107,10 @@
                                             data-dialect="@d.FbDialect"
                                             data-apicred="@d.ApiCredRef"
                                             data-env="@d.Environment"
-                                            data-notes="@d.Notes">
+                                            data-notes="@d.Notes"
+                                            data-sdk-user="@sdkUser"
+                                            data-sdk-dcf="@sdkDcf"
+                                            data-sdk-db="@sdkDb">
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                             <path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
                                         </svg>
@@ -154,7 +176,7 @@
                         <div class="field">
                             <label for="editListPath">Database path</label>
                             <div class="path-input">
-                                <input id="editListPath" name="Db.FbPath" required data-db-path data-find-page="/Databases/Edit" />
+                                <input id="editListPath" name="Db.FbPath" required data-db-path data-sdk-db-source data-find-page="/Databases/Edit" />
                                 <button type="button" class="path-pin" data-db-path-pin aria-label="Choose database file" title="Choose database file">
                                     <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z"/></svg>
                                 </button>
@@ -162,16 +184,25 @@
                             </div>
                             <p class="field-hint" data-db-path-hint>Use the pin to choose the company .FDB.</p>
                         </div>
-                        <div class="field-row">
-                            <div class="field">
-                                <label for="editListUser">User</label>
-                                <input id="editListUser" name="Db.FbUser" />
+                        @if (Model.IsSdkMode)
+                        {
+                            <input type="hidden" id="editListUser" name="Db.FbUser" value="SYSDBA" />
+                            <input type="hidden" id="editListKey" name="Db.FbCredRef" value="masterkey" />
+                            <p class="field-hint">SDK Live mode: Firebird SYSDBA/master key stay as defaults (used for reads only).</p>
+                        }
+                        else
+                        {
+                            <div class="field-row">
+                                <div class="field">
+                                    <label for="editListUser">User</label>
+                                    <input id="editListUser" name="Db.FbUser" />
+                                </div>
+                                <div class="field">
+                                    <label for="editListKey">Master key reference</label>
+                                    <input id="editListKey" name="Db.FbCredRef" type="password" autocomplete="off" required />
+                                </div>
                             </div>
-                            <div class="field">
-                                <label for="editListKey">Master key reference</label>
-                                <input id="editListKey" name="Db.FbCredRef" type="password" autocomplete="off" required />
-                            </div>
-                        </div>
+                        }
                     </section>
                     <div class="db-create-side db-create-panel">
                         <h4>Company</h4>
@@ -229,12 +260,17 @@
             setEditValue("editListHost", btn.getAttribute("data-host"));
             setEditValue("editListPort", btn.getAttribute("data-port"));
             setEditValue("editListPath", btn.getAttribute("data-path"));
-            setEditValue("editListUser", btn.getAttribute("data-user"));
-            setEditValue("editListKey", btn.getAttribute("data-cred"));
+            setEditValue("editListUser", btn.getAttribute("data-user") || "SYSDBA");
+            setEditValue("editListKey", btn.getAttribute("data-cred") || "masterkey");
             setEditValue("editListCode", btn.getAttribute("data-code"));
             setEditValue("editListName", btn.getAttribute("data-name"));
             setEditValue("editListAccess", "");
             setEditValue("editListSecret", "");
+            setEditValue("editListSdkUser", btn.getAttribute("data-sdk-user") || "ADMIN");
+            setEditValue("editListSdkPass", "");
+            setEditValue("editListSdkDcf", btn.getAttribute("data-sdk-dcf") || "C:\\eStream\\SQLAccounting\\Share\\SQLACC.DCF");
+            const sdkDb = btn.getAttribute("data-sdk-db") || fileNameFromPath(btn.getAttribute("data-path"));
+            setEditValue("editListSdkDb", sdkDb);
             const path = document.getElementById("editListPath");
             if (path) path.setAttribute("data-find-page", "/Databases/Edit/" + (btn.getAttribute("data-db-id") || ""));
             const isSub = (btn.getAttribute("data-role") || "").toUpperCase() === "SUB";
@@ -244,6 +280,12 @@
             if (sub) sub.checked = isSub;
             const dialog = document.getElementById("editDatabaseDialog");
             if (dialog && typeof dialog.showModal === "function" && !dialog.open) dialog.showModal();
+        }
+        function fileNameFromPath(path) {
+            const raw = (path || "").trim().replace(/\\/g, "/");
+            if (!raw) return "";
+            const parts = raw.split("/");
+            return parts[parts.length - 1] || "";
         }
         document.querySelectorAll("[data-db-edit]").forEach((btn) => {
             btn.addEventListener("click", () => openEditDatabase(btn));
