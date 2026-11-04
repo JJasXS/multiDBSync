@@ -459,32 +459,28 @@ public sealed class SqlAccComAppFactory : ISqlAccComAppFactory
         var progId = string.IsNullOrWhiteSpace(_options.ProgId) ? "SQLAcc.BizApp" : _options.ProgId.Trim();
         var runningCount = ComRunningObject.CountSqlAccProcesses();
 
-        if (_options.PreferRunningInstance)
+        // Always prefer an already-registered automation object when the UI exposes one.
+        if (ComRunningObject.TryAttach(progId, out var attached) && attached is not null)
         {
-            if (ComRunningObject.TryGetActiveObject(progId, out var running) && running is not null)
-            {
-                _logger?.LogInformation(
-                    "SDK attached to running {ProgId} (SQLACC processes={Count}).", progId, runningCount);
-                return new SqlAccComApp(running, attached: true);
-            }
-
-            // Never CreateInstance while SQL Account is already open — that starts a second blank tab.
-            if (runningCount > 0)
-            {
-                throw new InvalidOperationException(
-                    "SQL Account is already open (" + runningCount +
-                    " SQLACC.exe) but COM attach failed. Click the SQL Account window once " +
-                    "(so it registers), leave only one SQL Account open, then retry. " +
-                    "Refusing to launch a second SQLACC.exe.");
-            }
-        }
-        else if (ComRunningObject.TryGetActiveObject(progId, out var existing) && existing is not null)
-        {
-            _logger?.LogInformation("SDK attached to running {ProgId}.", progId);
-            return new SqlAccComApp(existing, attached: true);
+            _logger?.LogInformation(
+                "SDK attached to running {ProgId} (SQLACC processes={Count}).", progId, runningCount);
+            return new SqlAccComApp(attached, attached: true);
         }
 
-        _logger?.LogInformation("SDK creating new {ProgId} instance (no SQLACC.exe running).", progId);
+        if (_options.PreferRunningInstance && runningCount > 0)
+        {
+            // Interactive SQL Account usually does NOT RegisterActiveObject, so attach fails.
+            // CreateInstance is required for writes; it may open a second SQLACC tab (SQL Acc limitation).
+            _logger?.LogWarning(
+                "SQLACC.exe is running ({Count}) but COM attach failed (not in ROT). " +
+                "Creating automation instance so auto-push can continue — a second SQL Account window may appear.",
+                runningCount);
+        }
+        else
+        {
+            _logger?.LogInformation("SDK creating new {ProgId} instance (SQLACC processes={Count}).", progId, runningCount);
+        }
+
         return new SqlAccComApp(progId);
     }
 }

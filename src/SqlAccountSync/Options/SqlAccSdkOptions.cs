@@ -46,9 +46,9 @@ public sealed class SqlAccSdkOptions
     public bool AllowLiveCom { get; set; }
 
     /// <summary>
-    /// When true (default), attach to the already-open SQL Account window via the Running Object Table
-    /// instead of <c>CreateInstance</c> starting a second SQLACC.exe tab. Company switches Login on
-    /// that same instance.
+    /// Prefer attaching to a running SQLAcc.BizApp (ROT / GetActiveObject). Interactive SQL Account
+    /// often does not register in the ROT, so attach fails and CreateInstance is used (may open a
+    /// second window). Kept true so we still attach whenever automation exposes the object.
     /// </summary>
     public bool PreferRunningInstance { get; set; } = true;
 
