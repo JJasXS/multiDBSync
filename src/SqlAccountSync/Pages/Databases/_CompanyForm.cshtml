@@ -53,7 +53,7 @@
                         <div class="field-pair equal">
                             <div>
                                 <label>Host</label>
-                                <input asp-for="Db.FbHost" required placeholder="localhost" />
+                                <input asp-for="Db.FbHost" placeholder="localhost" />
                             </div>
                             <div>
                                 <label>Port</label>
@@ -67,7 +67,7 @@
                             </div>
                             <div>
                                 <label>Master key</label>
-                                <input asp-for="Db.FbCredRef" type="password" autocomplete="off" placeholder="masterkey" required />
+                                <input name="Db.FbCredRef" type="password" autocomplete="off" placeholder="masterkey" value="@(string.IsNullOrWhiteSpace(Model.Db.FbCredRef) ? "masterkey" : Model.Db.FbCredRef)" />
                             </div>
                         </div>
                     </div>
