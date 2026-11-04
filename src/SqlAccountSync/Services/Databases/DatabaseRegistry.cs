@@ -11,6 +11,8 @@ public interface IDatabaseRegistry
 {
     Task<List<RegisteredDatabase>> ListAsync(bool includeInactive = false, CancellationToken cancellationToken = default);
     Task<RegisteredDatabase?> GetAsync(int dbId, CancellationToken cancellationToken = default);
+    /// <summary>Case-insensitive lookup by company Code. Used to block duplicates on create/edit.</summary>
+    Task<RegisteredDatabase?> FindByCodeAsync(string dbCode, CancellationToken cancellationToken = default);
     Task<int> SaveAsync(RegisteredDatabase db, string user, CancellationToken cancellationToken = default);
     Task DeactivateAsync(int dbId, string user, CancellationToken cancellationToken = default);
     Task DeleteAsync(int dbId, CancellationToken cancellationToken = default);
@@ -74,6 +76,20 @@ public sealed class DatabaseRegistry : IDatabaseRegistry
         if (!_db.IsConfigured)
             return Task.FromResult<RegisteredDatabase?>(null);
         return _db.QuerySingleAsync("SELECT * FROM SYNC_DATABASE WHERE DBID = @DBID", MapDb, new { DBID = dbId }, cancellationToken);
+    }
+
+    public Task<RegisteredDatabase?> FindByCodeAsync(string dbCode, CancellationToken cancellationToken = default)
+    {
+        if (!_db.IsConfigured)
+            return Task.FromResult<RegisteredDatabase?>(null);
+        var code = (dbCode ?? "").Trim();
+        if (code.Length == 0)
+            return Task.FromResult<RegisteredDatabase?>(null);
+        return _db.QuerySingleAsync(
+            "SELECT FIRST 1 * FROM SYNC_DATABASE WHERE UPPER(TRIM(DBCODE)) = UPPER(@DBCODE)",
+            MapDb,
+            new { DBCODE = code },
+            cancellationToken);
     }
 
     public async Task<int> SaveAsync(RegisteredDatabase db, string user, CancellationToken cancellationToken = default)

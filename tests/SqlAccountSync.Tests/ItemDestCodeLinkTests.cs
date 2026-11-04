@@ -288,6 +288,17 @@ public class ItemDestCodeLinkTests
         public Task<RegisteredDatabase?> GetAsync(int dbId, CancellationToken cancellationToken = default) =>
             Task.FromResult<RegisteredDatabase?>(dbId == source.DbId ? source : dbId == dest.DbId ? dest : null);
 
+        public Task<RegisteredDatabase?> FindByCodeAsync(string dbCode, CancellationToken cancellationToken = default)
+        {
+            foreach (var db in new[] { source, dest })
+            {
+                if (string.Equals((db.DbCode ?? "").Trim(), (dbCode ?? "").Trim(), StringComparison.OrdinalIgnoreCase))
+                    return Task.FromResult<RegisteredDatabase?>(db);
+            }
+
+            return Task.FromResult<RegisteredDatabase?>(null);
+        }
+
         public Task MarkSyncOkAsync(int dbId, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task<List<RegisteredDatabase>> ListAsync(bool includeInactive = false, CancellationToken cancellationToken = default) => Task.FromResult(new List<RegisteredDatabase> { source, dest });
         public Task<int> SaveAsync(RegisteredDatabase db, string user, CancellationToken cancellationToken = default) => Task.FromResult(db.DbId);

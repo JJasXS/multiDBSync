@@ -432,6 +432,22 @@ public class EditModel : SyncPageModel
         if (capMessage is not null)
             return await DbFailed(capMessage);
 
+        Db.DbCode = (Db.DbCode ?? "").Trim();
+        if (Db.DbCode.Length == 0)
+            return await DbFailed("Company Code is required.");
+
+        // Block duplicate Codes on create and on edit-to-another-code.
+        var codeOwner = await _registry.FindByCodeAsync(Db.DbCode).ConfigureAwait(false);
+        if (codeOwner is not null && codeOwner.DbId != Db.DbId)
+            return await DbFailed($"Company Code '{Db.DbCode}' is already used. Choose a different Code.");
+
+        string? previousCode = null;
+        if (Db.DbId > 0)
+        {
+            var prior = await _registry.GetAsync(Db.DbId).ConfigureAwait(false);
+            previousCode = prior?.DbCode?.Trim();
+        }
+
         Db.DbRole = MasterOrSub(Db.DbRole);
         Db.CompanyName = (Db.DisplayName ?? "").Trim();
         ApplyFirebirdDefaults(Db);
@@ -440,12 +456,27 @@ public class EditModel : SyncPageModel
         if (IsSdkMode && string.IsNullOrWhiteSpace(SdkDatabase) && !string.IsNullOrWhiteSpace(Db.FbPath))
             SdkDatabase = Path.GetFileName(Db.FbPath.Replace('/', '\\'));
 
+        // Create + edit: upsert SDK/API credentials in Secrets Manager under the (new) Code.
         var secretError = await SaveModeCredentialsAsync().ConfigureAwait(false);
         if (secretError is not null)
             return await DbFailed(secretError);
 
         var wasNew = Db.DbId == 0;
         var id = await _registry.SaveAsync(Db, CurrentEmail);
+
+        // If Code was renamed on edit, drop the old sdkConnections row.
+        if (!string.IsNullOrWhiteSpace(previousCode)
+            && !string.Equals(previousCode, Db.DbCode, StringComparison.OrdinalIgnoreCase)
+            && IsSdkMode)
+        {
+            var (removed, removeMsg) = await _sdkBundle.RemoveCompanyAsync(previousCode).ConfigureAwait(false);
+            if (!removed)
+            {
+                TempData["DbStatusError"] =
+                    $"Saved, but could not remove old AWS SDK login '{previousCode}': {removeMsg}";
+            }
+        }
+
         await WriteDatabaseAuditAsync(wasNew, id);
         if (FromDashboard)
             return RedirectToPage("/Index");

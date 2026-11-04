@@ -22,7 +22,8 @@
                 <div class="field-pair equal">
                     <div>
                         <label>Code</label>
-                        <input asp-for="Db.DbCode" required placeholder="HQ01" data-db-code data-tenant-code="@Model.TenantCode" />
+                        <input asp-for="Db.DbCode" required placeholder="MAIN" data-db-code data-tenant-code="@Model.TenantCode" />
+                        <p class="muted">Unique short id (no spaces). Create/edit update AWS; duplicate Codes are blocked.</p>
                     </div>
                     <div>
                         <label>Role</label>

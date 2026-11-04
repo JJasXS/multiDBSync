@@ -250,6 +250,13 @@ public class DevSingleJobProcessorTests
         public Task<RegisteredDatabase?> GetAsync(int dbId, CancellationToken cancellationToken = default) =>
             Task.FromResult(Db is not null && Db.DbId == dbId ? Db : null);
 
+        public Task<RegisteredDatabase?> FindByCodeAsync(string dbCode, CancellationToken cancellationToken = default) =>
+            Task.FromResult(
+                Db is not null
+                && string.Equals((Db.DbCode ?? "").Trim(), (dbCode ?? "").Trim(), StringComparison.OrdinalIgnoreCase)
+                    ? Db
+                    : null);
+
         public Task<List<RegisteredDatabase>> ListAsync(bool includeInactive = false, CancellationToken cancellationToken = default) =>
             Task.FromResult(Db is null ? new List<RegisteredDatabase>() : [Db]);
 

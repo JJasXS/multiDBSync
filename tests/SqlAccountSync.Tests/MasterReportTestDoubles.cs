@@ -20,6 +20,10 @@ internal sealed class ReportRegistry(params RegisteredDatabase[] databases) : ID
     public Task<RegisteredDatabase?> GetAsync(int dbId, CancellationToken cancellationToken = default) =>
         Task.FromResult(databases.FirstOrDefault(db => db.DbId == dbId));
 
+    public Task<RegisteredDatabase?> FindByCodeAsync(string dbCode, CancellationToken cancellationToken = default) =>
+        Task.FromResult(databases.FirstOrDefault(db =>
+            string.Equals((db.DbCode ?? "").Trim(), (dbCode ?? "").Trim(), StringComparison.OrdinalIgnoreCase)));
+
     public Task<int> SaveAsync(RegisteredDatabase db, string user, CancellationToken cancellationToken = default) =>
         Task.FromResult(db.DbId);
 
