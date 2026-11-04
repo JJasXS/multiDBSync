@@ -117,6 +117,55 @@ public class SdkWriteProviderDiTests
         Assert.False(post.Success);
     }
 
+    [Fact]
+    public async Task BlockRestHttp_Refuses_Even_When_Provider_Rest()
+    {
+        var opts = new SqlAccountingWriteOptions
+        {
+            Provider = SqlAccountingWriteProviders.Rest,
+            BlockRestHttp = true
+        };
+        Assert.True(opts.ShouldRefuseRestHttp());
+
+        var rest = new SqlAccountApiWriteAdapter(
+            new HttpClient(new BlockSqlAccountingRestHandler(new HttpClientHandler())),
+            new NoopSecrets(),
+            new NoopBundle(),
+            MsOptions.Create(new SyncOptions()),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<SqlAccountApiWriteAdapter>.Instance,
+            MsOptions.Create(opts));
+        var db = new RegisteredDatabase
+        {
+            DbCode = "LAB",
+            ApiBaseUrl = "https://api.sql.my",
+            ApiCredRef = "sm:test",
+            FbPath = @"C:\lab\ACC-0001.FDB"
+        };
+
+        var create = await rest.CreateMasterAsync(db, "CUSTOMER", new MasterRecord { Code = "C1", Description = "X" }, "DRY");
+        Assert.False(create.Success);
+        Assert.Contains("BlockRestHttp", create.Message, StringComparison.OrdinalIgnoreCase);
+
+        var client = new SqlAccountApiClient(
+            new HttpClient(new BlockSqlAccountingRestHandler(new HttpClientHandler())),
+            new NoopSecrets(),
+            new NoopBundle(),
+            MsOptions.Create(new SyncOptions()),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<SqlAccountApiClient>.Instance,
+            MsOptions.Create(opts));
+        var get = await client.GetAsync(db, "/account/*");
+        Assert.False(get.Available);
+    }
+
+    [Fact]
+    public async Task BlockSqlAccountingRestHandler_Throws_Before_Network()
+    {
+        using var http = new HttpClient(new BlockSqlAccountingRestHandler(new HttpClientHandler()));
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            http.GetAsync("https://api.sql.my/account"));
+        Assert.Contains("REST HTTP blocked", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static ServiceProvider BuildWriteProvider(string provider)
     {
         var services = new ServiceCollection();

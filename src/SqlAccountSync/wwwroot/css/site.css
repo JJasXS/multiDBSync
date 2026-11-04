@@ -1874,8 +1874,40 @@ code {
   overflow: auto;
 }
 .logs-page .push-panel-head {
+  padding: 8px 12px;
+  gap: 8px 12px;
   border-bottom: 1px solid var(--ice-border-soft);
   background: var(--ice-surface-muted);
+}
+.logs-page .logs-panel-title {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  min-width: 0;
+}
+.logs-page .push-panel-head h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.logs-page .push-panel-count {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--ice-text-muted);
+  white-space: nowrap;
+}
+.logs-page .push-panel-search {
+  flex: 1 1 160px;
+  max-width: 280px;
+  margin-left: auto;
+}
+.logs-page .push-panel-search input[type="search"] {
+  width: 100%;
+  background: var(--ice-surface);
 }
 .logs-page .push-panel-table thead th {
   position: sticky;

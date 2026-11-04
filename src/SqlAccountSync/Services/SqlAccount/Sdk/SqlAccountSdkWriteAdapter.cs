@@ -228,6 +228,50 @@ public sealed class SqlAccountSdkWriteAdapter : ISqlAccountWriteAdapter
         }
     }
 
+    public async Task<WriteResult> UpdateStockGroupAsync(
+        RegisteredDatabase db, StockGroupRecord group, CancellationToken cancellationToken = default)
+    {
+        var code = (group.Code ?? "").Trim();
+        if (code.Length == 0)
+            return new WriteResult { Success = false, Message = "Stock group code is required for update." };
+
+        try
+        {
+            return await _sessions.RunAsync(db, app =>
+            {
+                var native = SqlAccBizObjectWriter.NativeApp(app);
+                return SqlAccBizObjectWriter.UpdateStockGroup(native, group);
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "SDK UpdateStockGroup failed for {Code}", code);
+            return new WriteResult { Success = false, Message = "SDK UpdateStockGroup failed: " + ex.Message };
+        }
+    }
+
+    public async Task<WriteResult> DeleteStockGroupAsync(
+        RegisteredDatabase db, string code, CancellationToken cancellationToken = default)
+    {
+        var key = (code ?? "").Trim();
+        if (key.Length == 0)
+            return new WriteResult { Success = false, Message = "Stock group code is required for delete." };
+
+        try
+        {
+            return await _sessions.RunAsync(db, app =>
+            {
+                var native = SqlAccBizObjectWriter.NativeApp(app);
+                return SqlAccBizObjectWriter.DeleteStockGroup(native, key);
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "SDK DeleteStockGroup failed for {Code}", key);
+            return new WriteResult { Success = false, Message = "SDK DeleteStockGroup failed: " + ex.Message };
+        }
+    }
+
     private static int ResolveDestParent(MasterRecord record)
     {
         if (record.Fields.TryGetValue(GlAccountMapper.FieldDestParent, out var dp)

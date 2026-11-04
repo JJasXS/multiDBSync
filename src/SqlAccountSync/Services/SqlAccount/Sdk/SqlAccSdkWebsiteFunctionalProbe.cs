@@ -20,7 +20,9 @@ public sealed record SqlAccWebsiteFunctionalRequest(
     bool AuthorizeLanRead,
     string AuthorizedExactTarget,
     string? VerifyOtherDatabaseFileName = null,
-    string? SupervisorManagedBackupConfirm = null);
+    string? SupervisorManagedBackupConfirm = null,
+    /// <summary>When true, skip document create steps (master CUD only — no Document Transfer / POC docs).</summary>
+    bool SkipDocuments = false);
 
 public sealed record SqlAccWebsiteFunctionalStep(
     string Feature,
@@ -142,7 +144,16 @@ public sealed class SqlAccSdkWebsiteFunctionalProbe
             if (!failed) RunSupplier(write, sessions, db, token, supplierControl, steps, ref failed, ref message);
             if (!failed) RunStockGroupAndItem(write, sessions, db, token, steps, ref failed, ref message);
             if (!failed) RunGlAccount(write, sessions, db, token, steps, ref failed, ref message);
-            if (!failed) RunDocumentRoutingAndSafeGr(write, sessions, db, token, steps, ref failed, ref message);
+            if (!failed && request.SkipDocuments)
+            {
+                steps.Add(new SqlAccWebsiteFunctionalStep(
+                    "Document", "skipped", true,
+                    "Document creates skipped (SkipDocuments=true). Master CUD only; no Document Transfer against business docs."));
+            }
+            else if (!failed)
+            {
+                RunDocumentRoutingAndSafeGr(write, sessions, db, token, steps, ref failed, ref message);
+            }
 
             steps.Add(new SqlAccWebsiteFunctionalStep(
                 "Sync/Push/AutoPush", "routing", true,
@@ -318,8 +329,25 @@ public sealed class SqlAccSdkWebsiteFunctionalProbe
         steps.Add(Step("StockItem", "delete", iDel.Success, iDel.Message, itemCode, orphan: !iDel.Success));
         if (!iDel.Success) { failed = true; message = iDel.Message; return; }
 
-        steps.Add(Step("StockGroup", "cleanup-note", true,
-            "POC stock group left in place (unused SDKPOC code). Manual delete optional.", groupCode));
+        var groupUpd = write.UpdateStockGroupAsync(db, new StockGroupRecord
+        {
+            Code = groupCode,
+            Description = "SDK POC group UPD " + groupCode,
+            IsActive = true,
+            CostingMethod = 0
+        }).GetAwaiter().GetResult();
+        steps.Add(Step("StockGroup", "update", groupUpd.Success, groupUpd.Message, groupCode, orphan: true));
+        if (!groupUpd.Success) { failed = true; message = groupUpd.Message; return; }
+
+        var gDel = write.DeleteStockGroupAsync(db, groupCode).GetAwaiter().GetResult();
+        steps.Add(Step("StockGroup", "delete", gDel.Success, gDel.Message, groupCode, orphan: !gDel.Success));
+        if (!gDel.Success) { failed = true; message = gDel.Message; return; }
+
+        var gGone = !CodeExistsOnBiz(sessions, db, SqlAccBizObjectWriter.StockGroupBiz, groupCode);
+        steps.Add(Step("StockGroup", "verify-deleted", gGone,
+            gGone ? "Absent after delete." : "Still present.", groupCode, orphan: !gGone));
+        if (!gGone) { failed = true; message = "Stock group still present after delete."; return; }
+
         steps.Add(Step("UOM", "standalone", true,
             "No standalone UOM BizObject used; new UOM written via ST_ITEM.cdsUOM only.", uom, blocked: true));
     }

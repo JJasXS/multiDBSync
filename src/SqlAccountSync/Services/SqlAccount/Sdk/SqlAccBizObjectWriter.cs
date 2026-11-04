@@ -566,7 +566,7 @@ public static class SqlAccBizObjectWriter
         };
     }
 
-    /// <summary>Maintain Stock Group via <c>ST_GROUP</c> (not <c>ST_CATEGORY</c>).</summary>
+    /// <summary>Maintain Stock Group via <c>ST_GROUP</c> (not <c>ST_CATEGORY</c>). Create-only; existing codes are not overwritten.</summary>
     public static WriteResult UpsertStockGroup(dynamic app, StockGroupRecord group)
     {
         var code = (group.Code ?? "").Trim();
@@ -602,6 +602,50 @@ public static class SqlAccBizObjectWriter
 
         return SaveClose(biz, "Created.", code, main);
     }
+
+    /// <summary>
+    /// Update safe non-key fields on an existing <c>ST_GROUP</c> (Description / IsActive).
+    /// Does not change CODE or GL posting links unless those fields are explicitly provided and non-empty.
+    /// </summary>
+    public static WriteResult UpdateStockGroup(dynamic app, StockGroupRecord group)
+    {
+        var code = (group.Code ?? "").Trim();
+        if (code.Length == 0)
+            return Fail("Stock group code is required for update.");
+
+        dynamic biz = app.BizObjects.Find(StockGroupBiz);
+        dynamic main = biz.DataSets.Find("MainDataSet");
+        var key = FindKey(biz, "CODE", code);
+        if (key is null)
+            return Fail("Stock group '" + code + "' not found.");
+
+        try { biz.Params.Find("CODE").Value = key; }
+        catch
+        {
+            try { biz.Params.Find("Code").Value = key; }
+            catch { return Fail("ST_GROUP Params CODE unavailable for update."); }
+        }
+
+        biz.Open();
+        biz.Edit();
+        Set(main, "DESCRIPTION", NullIfEmpty(group.Description) ?? code);
+        SetBool(main, "ISACTIVE", group.IsActive);
+        // Leave posting GL fields unchanged unless caller supplied non-empty values.
+        if (!string.IsNullOrWhiteSpace(group.Sales)) Set(main, "SALES", group.Sales);
+        if (!string.IsNullOrWhiteSpace(group.SalesReturned)) Set(main, "SALESRETURNED", group.SalesReturned);
+        if (!string.IsNullOrWhiteSpace(group.CashSales)) Set(main, "CASHSALES", group.CashSales);
+        if (!string.IsNullOrWhiteSpace(group.Purchase)) Set(main, "PURCHASE", group.Purchase);
+        if (!string.IsNullOrWhiteSpace(group.CashPurchase)) Set(main, "CASHPURCHASE", group.CashPurchase);
+        if (!string.IsNullOrWhiteSpace(group.PurchaseReturned)) Set(main, "PURCHASERETURNED", group.PurchaseReturned);
+        if (!string.IsNullOrWhiteSpace(group.BalanceStock)) Set(main, "BALANCESTOCK", group.BalanceStock);
+        if (group.CostingMethod > 0) SetInt(main, "COSTINGMETHOD", group.CostingMethod);
+
+        return SaveClose(biz, "Updated.", code, main);
+    }
+
+    /// <summary>Delete <c>ST_GROUP</c> by CODE via BizObject Delete (no Firebird DML).</summary>
+    public static WriteResult DeleteStockGroup(dynamic app, string code) =>
+        DeleteByCode(app, StockGroupBiz, code);
 
     public static WriteResult CreateDocument(dynamic app, string bizObjectName, DocumentHeader document, string txnStamp)
     {
