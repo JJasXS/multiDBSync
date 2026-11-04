@@ -73,16 +73,14 @@ public sealed class SqlAccSessionDiagnostics : ISqlAccSessionDiagnostics
             message = "Write provider is Rest. SDK adapter is registered but not selected.";
         else if (!_sdkOptions.AllowLiveCom)
             message = "Provider=Sdk but AllowLiveCom=false; COM Login is blocked.";
-        else if (string.IsNullOrWhiteSpace(_sdkOptions.DefaultDcfPath))
-            message = "Provider=Sdk but SqlAccSdk:DefaultDcfPath is empty.";
-        else if (string.IsNullOrWhiteSpace(_sdkOptions.UserName))
-            message = "Provider=Sdk but SqlAccSdk:UserName is empty.";
-        else if (!pwdConfigured)
-            message = "Provider=Sdk ready except password: " + pwdDetail;
         else if (_writeOptions.BlockRestHttp)
-            message = "Provider=Sdk + BlockRestHttp; SQL Acc REST HTTP blocked. COM session probe available (SELECT-only). " + pwdDetail;
+            message =
+                "Provider=Sdk + BlockRestHttp; company logins from sdkConnections (fallback DefaultDcfPath/UserName). " +
+                pwdDetail;
         else
-            message = "Provider=Sdk selected; COM session probe available (SELECT-only). " + pwdDetail;
+            message =
+                "Provider=Sdk selected; company logins from sdkConnections (fallback DefaultDcfPath/UserName). " +
+                pwdDetail;
 
         return new SqlAccProviderStatus(
             WriteProvider: provider,

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Options;
 using SqlAccountSync.Models;
 using SqlAccountSync.Options;
+using SqlAccountSync.Services.Sdk;
 using SqlAccountSync.Services.Secrets;
 
 namespace SqlAccountSync.Services.SqlAccount.Sdk;
@@ -15,7 +16,7 @@ public interface ISqlAccSessionManager
 
     /// <summary>
     /// Runs <paramref name="action"/> on the STA thread while logged into <paramref name="db"/>.
-    /// Company target comes from <see cref="RegisteredDatabase.FbPath"/> file name + configured DCF — never last-used defaults.
+    /// Company target comes from AWS sdkConnections (preferred) or DefaultDcfPath + FbPath file name.
     /// </summary>
     Task<T> RunAsync<T>(RegisteredDatabase db, Func<ISqlAccComApp, T> action, CancellationToken cancellationToken = default);
 }
@@ -30,6 +31,7 @@ public sealed class SqlAccSessionManager : ISqlAccSessionManager, IAsyncDisposab
 {
     private readonly ISqlAccComAppFactory _factory;
     private readonly ISecretResolver _secrets;
+    private readonly ISdkConnectionBundle _bundle;
     private readonly SqlAccSdkOptions _options;
     private readonly ILogger<SqlAccSessionManager> _logger;
     private readonly StaWorkQueue _sta = new();
@@ -41,11 +43,13 @@ public sealed class SqlAccSessionManager : ISqlAccSessionManager, IAsyncDisposab
     public SqlAccSessionManager(
         ISqlAccComAppFactory factory,
         ISecretResolver secrets,
+        ISdkConnectionBundle bundle,
         IOptions<SqlAccSdkOptions> options,
         ILogger<SqlAccSessionManager> logger)
     {
         _factory = factory;
         _secrets = secrets;
+        _bundle = bundle;
         _options = options.Value;
         _logger = logger;
     }
@@ -56,11 +60,11 @@ public sealed class SqlAccSessionManager : ISqlAccSessionManager, IAsyncDisposab
         if (!_options.AllowLiveCom)
             throw new InvalidOperationException("SqlAccSdk:AllowLiveCom is false; SDK session is disabled.");
 
-        var company = ResolveCompanyTarget(db);
+        var login = await ResolveLoginAsync(db, cancellationToken).ConfigureAwait(false);
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await EnsureLoggedInAsync(company, cancellationToken).ConfigureAwait(false);
+            await EnsureLoggedInAsync(login, cancellationToken).ConfigureAwait(false);
             return new SessionLease(_gate);
         }
         catch
@@ -74,9 +78,10 @@ public sealed class SqlAccSessionManager : ISqlAccSessionManager, IAsyncDisposab
         RegisteredDatabase db, Func<ISqlAccComApp, T> action, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(action);
-        var expectedKey = ResolveCompanyTarget(db).Key;
+        var login = await ResolveLoginAsync(db, cancellationToken).ConfigureAwait(false);
+        var expectedKey = login.Target.Key;
         await using var lease = new AsyncSessionLease(
-            await UseCompanyAsync(db, cancellationToken).ConfigureAwait(false));
+            await UseCompanyWithLoginAsync(login, cancellationToken).ConfigureAwait(false));
         return await _sta.RunAsync(() =>
         {
             if (_app is null)
@@ -94,19 +99,30 @@ public sealed class SqlAccSessionManager : ISqlAccSessionManager, IAsyncDisposab
         }, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task EnsureLoggedInAsync(CompanyTarget company, CancellationToken cancellationToken)
+    private async Task<IDisposable> UseCompanyWithLoginAsync(CompanyLogin login, CancellationToken cancellationToken)
     {
-        var user = (_options.UserName ?? "").Trim();
-        if (user.Length == 0)
-            throw new InvalidOperationException("SqlAccSdk:UserName is not configured.");
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (!_options.AllowLiveCom)
+            throw new InvalidOperationException("SqlAccSdk:AllowLiveCom is false; SDK session is disabled.");
 
-        var password = await _secrets.ResolveAsync(_options.PasswordSecretRef, cancellationToken).ConfigureAwait(false);
-        if (string.IsNullOrWhiteSpace(password))
-            throw new InvalidOperationException("SqlAccSdk:PasswordSecretRef did not resolve a password.");
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await EnsureLoggedInAsync(login, cancellationToken).ConfigureAwait(false);
+            return new SessionLease(_gate);
+        }
+        catch
+        {
+            _gate.Release();
+            throw;
+        }
+    }
 
+    private async Task EnsureLoggedInAsync(CompanyLogin login, CancellationToken cancellationToken)
+    {
         await _sta.RunAsync(() =>
         {
-            var key = company.Key;
+            var key = login.Target.Key;
             if (IsUsableSessionFor(key))
                 return;
 
@@ -115,10 +131,10 @@ public sealed class SqlAccSessionManager : ISqlAccSessionManager, IAsyncDisposab
 
             _app = _factory.Create();
             _logger.LogInformation(
-                "SDK Login company file {DatabaseFile} (fresh COM instance)", company.DatabaseFileName);
+                "SDK Login company file {DatabaseFile} (fresh COM instance)", login.Target.DatabaseFileName);
             try
             {
-                _app.Login(user, password.Trim(), company.DcfPath, company.DatabaseFileName);
+                _app.Login(login.Username, login.Password, login.Target.DcfPath, login.Target.DatabaseFileName);
                 if (!_app.IsLogin)
                 {
                     var diag = _app is SqlAccComApp com ? com.LastComDiagnostics : _app.LastComDiagnostics;
@@ -135,6 +151,59 @@ public sealed class SqlAccSessionManager : ISqlAccSessionManager, IAsyncDisposab
                 throw;
             }
         }, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<CompanyLogin> ResolveLoginAsync(RegisteredDatabase db, CancellationToken cancellationToken)
+    {
+        var code = (db.DbCode ?? "").Trim();
+        if (code.Length > 0)
+        {
+            var fromBundle = await _bundle.ResolveAsync(code, cancellationToken).ConfigureAwait(false);
+            if (fromBundle is not null)
+                return FromBundle(db, fromBundle);
+        }
+
+        return await FromOptionsAsync(db, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static CompanyLogin FromBundle(RegisteredDatabase db, SdkCompanyCredentials creds)
+    {
+        var dcf = (creds.DcfPath ?? "").Trim();
+        if (dcf.Length == 0)
+            throw new InvalidOperationException(
+                $"SDK connection for '{db.DbCode}' has empty dcfPath in Secrets Manager.");
+
+        var file = FileName(creds.Database);
+        if (file.Length == 0)
+            file = FileName(db.FbPath);
+        if (file.Length == 0)
+            throw new InvalidOperationException(
+                $"SDK connection for '{db.DbCode}' has no database file name (companies[].database or FbPath).");
+
+        var user = string.IsNullOrWhiteSpace(creds.Username) ? "ADMIN" : creds.Username.Trim();
+        var password = creds.Password ?? "";
+        if (string.IsNullOrWhiteSpace(password))
+            throw new InvalidOperationException(
+                $"SDK connection for '{db.DbCode}' has empty password in Secrets Manager.");
+
+        return new CompanyLogin(new CompanyTarget(dcf, file), user, password.Trim());
+    }
+
+    private async Task<CompanyLogin> FromOptionsAsync(RegisteredDatabase db, CancellationToken cancellationToken)
+    {
+        var target = ResolveCompanyTarget(db, _options.DefaultDcfPath);
+        var user = (_options.UserName ?? "").Trim();
+        if (user.Length == 0)
+            throw new InvalidOperationException(
+                "No SDK connection for '" + (db.DbCode ?? "") + "' in Secrets Manager, and SqlAccSdk:UserName is empty.");
+
+        var password = await _secrets.ResolveAsync(_options.PasswordSecretRef, cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(password))
+            throw new InvalidOperationException(
+                "No SDK connection for '" + (db.DbCode ?? "") +
+                "' in Secrets Manager, and SqlAccSdk:PasswordSecretRef did not resolve a password.");
+
+        return new CompanyLogin(target, user, password.Trim());
     }
 
     private bool IsUsableSessionFor(string companyKey)
@@ -182,21 +251,25 @@ public sealed class SqlAccSessionManager : ISqlAccSessionManager, IAsyncDisposab
     {
         ArgumentNullException.ThrowIfNull(db);
         var dcf = (defaultDcfPath ?? "").Trim();
-        // Prefer explicit future fields via Notes convention? Keep deterministic: options DefaultDcfPath only for now.
         if (dcf.Length == 0)
             throw new InvalidOperationException(
-                "SqlAccSdk:DefaultDcfPath is required for SDK Login (CHM requires DCF path for automation hosts).");
+                "SqlAccSdk:DefaultDcfPath is required for SDK Login when company credentials are not in Secrets Manager.");
 
-        var file = Path.GetFileName((db.FbPath ?? "").Trim().Replace('\\', '/'));
-        if (string.IsNullOrWhiteSpace(file))
+        var file = FileName(db.FbPath);
+        if (file.Length == 0)
             throw new InvalidOperationException(
                 $"Registered database '{db.DbCode}' has no FbPath file name for SDK Login (4th parameter).");
 
         return new CompanyTarget(dcf, file);
     }
 
-    private CompanyTarget ResolveCompanyTarget(RegisteredDatabase db) =>
-        ResolveCompanyTarget(db, _options.DefaultDcfPath);
+    private static string FileName(string? path)
+    {
+        var raw = (path ?? "").Trim().Replace('\\', '/');
+        if (raw.Length == 0)
+            return "";
+        return Path.GetFileName(raw) ?? "";
+    }
 
     public async ValueTask DisposeAsync()
     {
@@ -226,6 +299,8 @@ public sealed class SqlAccSessionManager : ISqlAccSessionManager, IAsyncDisposab
     {
         public string Key => DcfPath + "|" + DatabaseFileName;
     }
+
+    private readonly record struct CompanyLogin(CompanyTarget Target, string Username, string Password);
 
     private sealed class SessionLease(SemaphoreSlim gate) : IDisposable
     {

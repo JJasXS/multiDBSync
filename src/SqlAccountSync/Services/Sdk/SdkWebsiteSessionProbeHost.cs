@@ -120,7 +120,10 @@ public static class SdkWebsiteSessionProbeHost
                 opts.Provider = SqlAccountingWriteProviders.Sdk;
         });
         builder.Services.AddLogging(b => b.AddConsole().SetMinimumLevel(LogLevel.Information));
+        builder.Services.AddMemoryCache();
+        builder.Services.Configure<SyncOptions>(builder.Configuration.GetSection("Sync"));
         builder.Services.AddSingleton<ISecretResolver, EnvOnlySecretResolver>();
+        builder.Services.AddSingleton<ISdkConnectionBundle, SdkConnectionBundle>();
         builder.Services.AddSingleton<ISqlAccComAppFactory, SqlAccComAppFactory>();
         builder.Services.AddSingleton<ISqlAccSessionManager, SqlAccSessionManager>();
         return builder.Build();
