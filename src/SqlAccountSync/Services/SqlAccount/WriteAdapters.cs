@@ -262,15 +262,17 @@ public sealed class SqlAccountApiWriteAdapter : ISqlAccountWriteAdapter
         RegisteredDatabase db, HttpMethod method, string path, string? json,
         string successMessage, bool treatNotFoundAsSuccess, CancellationToken cancellationToken)
     {
+        // Runtime mode is owned by SelectingWriteAdapter / nav toggle (SYNC_SETTING).
+        // Only refuse when BlockRestHttp is an explicit lab lock.
         if (_writeOptions.ShouldRefuseRestHttp())
         {
             _logger.LogError(
-                "Refusing SQL Accounting REST write {Method} {Path}: Provider={Provider} BlockRestHttp={Block} (no silent REST fallback).",
-                method.Method, path, _writeOptions.Provider, _writeOptions.BlockRestHttp);
+                "Refusing SQL Accounting REST write {Method} {Path}: BlockRestHttp=true.",
+                method.Method, path);
             return new WriteResult
             {
                 Success = false,
-                Message = "SQL Accounting REST write refused: Provider=Sdk / BlockRestHttp. Use SqlAccountSdkWriteAdapter."
+                Message = "SQL Accounting REST write refused: BlockRestHttp is enabled."
             };
         }
 
@@ -556,7 +558,7 @@ public sealed class DryRunWriteAdapter : ISqlAccountWriteAdapter
     {
         var flip = sourceEntityCode is not null
             && !string.Equals(sourceEntityCode, targetEntityCode, StringComparison.OrdinalIgnoreCase);
-        var label = flip ? $"{sourceEntityCode}→{targetEntityCode}" : targetEntityCode;
+        var label = flip ? $"{sourceEntityCode}->{targetEntityCode}" : targetEntityCode;
         Actions.Add($"WOULD create {label} {record.Code} on {db.DisplayName}");
         return Task.FromResult(new WriteResult { Success = true, Message = "Dry run: no data was modified.", DocNo = record.Code });
     }
@@ -579,7 +581,7 @@ public sealed class DryRunWriteAdapter : ISqlAccountWriteAdapter
 
     public Task<WriteResult> CreateDocumentAsync(RegisteredDatabase db, string apiPath, DocumentHeader document, string txnStamp, CancellationToken cancellationToken = default)
     {
-        Actions.Add($"WOULD POST {apiPath} as {document.DocType} on {db.DisplayName} ({document.Lines.Count} lines, {document.Amount:N2})");
+        Actions.Add($"WOULD CREATE {apiPath} as {document.DocType} on {db.DisplayName} ({document.Lines.Count} lines, {document.Amount:N2})");
         return Task.FromResult(new WriteResult { Success = true, Message = "Dry run: no data was modified." });
     }
 

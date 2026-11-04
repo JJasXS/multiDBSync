@@ -98,6 +98,6 @@ public static class PartnerAutoPushTargets
 
     public static string SkippedTargetsHint(string? writeProvider) =>
         SqlAccountingWriteProviders.IsSdk(writeProvider)
-            ? "Skipped (no Firebird path for SDK):"
-            : "Skipped (no API credentials):";
+            ? "Skipped: missing Firebird path / SDK login (DCF + user in sdkConnections)."
+            : "Skipped: missing SQL Account API access key / secret key.";
 }

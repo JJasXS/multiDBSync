@@ -190,8 +190,8 @@
                                 <label class="role-choice"><input type="radio" name="Db.DbRole" value="SUB" data-role-sub /> Sub</label>
                             </div>
                         </div>
-                        <h4 class="db-create-subhead">SDK login</h4>
-                        <p class="field-hint">SDK credentials stay in AWS Secrets Manager (<code>sdkConnections</code>). Match this Code to a companies[].name row.</p>
+                        @{ ViewData["WriteCredIdPrefix"] = "editList"; }
+                        <partial name="_WriteCredFields" />
                     </div>
                 </div>
             </div>

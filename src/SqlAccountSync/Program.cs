@@ -142,6 +142,11 @@ var appModeFromEnv = (Environment.GetEnvironmentVariable("APP_MODE")
 if (!string.IsNullOrEmpty(appModeFromEnv))
     envOverrides["Sync:AppMode"] = appModeFromEnv;
 
+var writeProviderFromEnv = (Environment.GetEnvironmentVariable("SQL_ACCOUNTING_WRITE_PROVIDER")
+    ?? builder.Configuration["SqlAccountingWrite:Provider"])?.Trim();
+if (!string.IsNullOrEmpty(writeProviderFromEnv))
+    envOverrides["SqlAccountingWrite:Provider"] = writeProviderFromEnv;
+
 if (envOverrides.Count > 0)
     builder.Configuration.AddInMemoryCollection(envOverrides);
 
@@ -155,7 +160,7 @@ builder.Services.Configure<AwsOptions>(builder.Configuration.GetSection(AwsOptio
 builder.Services.Configure<FeatureOptions>(builder.Configuration.GetSection(FeatureOptions.SectionName));
 builder.Services.Configure<SqlAccountingWriteOptions>(builder.Configuration.GetSection(SqlAccountingWriteOptions.SectionName));
 builder.Services.Configure<SqlAccSdkOptions>(builder.Configuration.GetSection(SqlAccSdkOptions.SectionName));
-// SDK-only labs: BlockRestHttp forces Provider=Sdk so DI never selects the REST write adapter.
+// Explicit lab lock only — do not force Sdk from Provider (nav API|SDK toggle is runtime).
 builder.Services.PostConfigure<SqlAccountingWriteOptions>(opts =>
 {
     if (opts.BlockRestHttp)
@@ -183,9 +188,9 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     ForwardedHeadersSetup.Configure(options, builder.Configuration));
 var writeHttpTimeoutSeconds = Math.Clamp(
     builder.Configuration.GetValue("Sync:WriteHttpTimeoutSeconds", 30), 5, 300);
-var sqlAccWriteSection = builder.Configuration.GetSection(SqlAccountingWriteOptions.SectionName);
-var blockSqlAccRestHttp = sqlAccWriteSection.GetValue("BlockRestHttp", false)
-    || SqlAccountingWriteProviders.IsSdk(sqlAccWriteSection["Provider"]);
+// Only hard-block REST HTTP when BlockRestHttp is explicitly true (not merely Provider=Sdk).
+var blockSqlAccRestHttp = builder.Configuration.GetSection(SqlAccountingWriteOptions.SectionName)
+    .GetValue("BlockRestHttp", false);
 HttpMessageHandler CreateSqlAccRestHandler() =>
     blockSqlAccRestHttp
         ? new BlockSqlAccountingRestHandler(new HttpClientHandler { UseCookies = false })
@@ -213,9 +218,11 @@ builder.Services.AddSingleton<ISecretResolver, SecretResolver>();
 builder.Services.AddSingleton<OtpHashPepper>();
 builder.Services.AddSingleton<ISqlApiCredentialBundle, SqlApiCredentialBundle>();
 builder.Services.AddSingleton<ISqlApiSecretProvisioner, SqlApiSecretProvisioner>();
-// Master SDK connection/session helpers (CLI smoke /health/detail). Website writes use SqlAccountingWrite:Provider.
+builder.Services.AddSingleton<IWriteProviderSettings, WriteProviderSettings>();
+// Master SDK connection/session helpers (CLI smoke /health/detail). Website writes use SelectingWriteAdapter.
 builder.Services.AddSingleton<ISdkConnectionBundle, SdkConnectionBundle>();
-builder.Services.AddSingleton<ISdkSessionManager, SdkSessionManager>();builder.Services.AddSingleton<CentralDb>();
+builder.Services.AddSingleton<ISdkSessionManager, SdkSessionManager>();
+builder.Services.AddSingleton<CentralDb>();
 builder.Services.AddSingleton<IRegistryReadGateway, RegistryReadGateway>();
 builder.Services.AddSingleton<CompanyConnectionFactory>();
 builder.Services.AddSingleton<SchemaBootstrap>();
@@ -238,14 +245,8 @@ builder.Services.AddSingleton<ISqlAccComAppFactory, SqlAccComAppFactory>();
 builder.Services.AddSingleton<ISqlAccSessionManager, SqlAccSessionManager>();
 builder.Services.AddScoped<ISqlAccSessionDiagnostics, SqlAccSessionDiagnostics>();
 builder.Services.AddScoped<SqlAccountSdkWriteAdapter>();
-builder.Services.AddScoped<ISqlAccountWriteAdapter>(sp =>
-{
-    var provider = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<SqlAccountingWriteOptions>>()
-        .Value.Provider?.Trim();
-    if (string.Equals(provider, SqlAccountingWriteProviders.Sdk, StringComparison.OrdinalIgnoreCase))
-        return sp.GetRequiredService<SqlAccountSdkWriteAdapter>();
-    return sp.GetRequiredService<SqlAccountApiWriteAdapter>();
-});
+builder.Services.AddScoped<SdkWriteAdapter>();
+builder.Services.AddScoped<ISqlAccountWriteAdapter, SelectingWriteAdapter>();
 builder.Services.AddScoped<IMappingService, MappingService>();
 builder.Services.AddScoped<IValidationService, ValidationService>();
 builder.Services.AddScoped<IJobQueue, JobQueue>();

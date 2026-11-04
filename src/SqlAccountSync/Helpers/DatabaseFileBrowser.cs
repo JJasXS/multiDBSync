@@ -7,6 +7,7 @@ public static class DatabaseFileBrowser
     private static readonly TimeSpan SearchLimit = TimeSpan.FromSeconds(8);
     private static readonly string[] Preferred =
     [
+        @"C:\eStream\SQLAccounting\Share",
         @"C:\eStream\SQLAccounting\DB",
         @"C:\SQLData"
     ];
@@ -102,7 +103,8 @@ public static class DatabaseFileBrowser
     {
         var ext = Path.GetExtension(path);
         return ext.Equals(".fdb", StringComparison.OrdinalIgnoreCase)
-            || ext.Equals(".gdb", StringComparison.OrdinalIgnoreCase);
+            || ext.Equals(".gdb", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".dcf", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string Display(string path) => path.Replace('\\', '/');

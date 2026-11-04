@@ -144,8 +144,8 @@
                                 <label class="role-choice"><input type="radio" name="Db.DbRole" value="SUB" @(roleIsSub ? "checked" : null) /> Sub</label>
                             </div>
                         </div>
-                        <h4 class="db-create-subhead">SDK login</h4>
-                        <p class="field-hint">SDK username/password/DCF/database for this company code are managed in AWS Secrets Manager (<code>sdkConnections</code>), not on this form.</p>
+                        @{ ViewData["WriteCredIdPrefix"] = "editDb"; }
+                        <partial name="_WriteCredFields" />
                     </div>
                 </div>
             </div>

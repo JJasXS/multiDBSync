@@ -7,6 +7,9 @@ using SqlAccountSync.Services.Audit;
 using SqlAccountSync.Services.Auth;
 using SqlAccountSync.Services.Connections;
 using SqlAccountSync.Services.Databases;
+using SqlAccountSync.Services.Sdk;
+using SqlAccountSync.Services.Secrets;
+using SqlAccountSync.Services.Sync;
 using SqlAccountSync.Services.Tenants;
 
 namespace SqlAccountSync.Pages.Databases;
@@ -290,31 +293,53 @@ public class EditModel : SyncPageModel
     private readonly IAuditService _audit;
     private readonly ITenantDatabaseBootstrap _tenants;
     private readonly SyncOptions _sync;
+    private readonly IWriteProviderSettings _writeProvider;
+    private readonly ISdkConnectionBundle _sdkBundle;
+    private readonly ISqlApiSecretProvisioner _apiSecrets;
 
     public EditModel(
         IDatabaseRegistry registry,
         IAuditService audit,
         ITenantDatabaseBootstrap tenants,
-        IOptions<SyncOptions> sync)
+        IOptions<SyncOptions> sync,
+        IWriteProviderSettings writeProvider,
+        ISdkConnectionBundle sdkBundle,
+        ISqlApiSecretProvisioner apiSecrets)
     {
         _registry = registry;
         _audit = audit;
         _tenants = tenants;
         _sync = sync.Value;
+        _writeProvider = writeProvider;
+        _sdkBundle = sdkBundle;
+        _apiSecrets = apiSecrets;
     }
 
     [BindProperty] public RegisteredDatabase Db { get; set; } = new();
     [BindProperty] public string ReturnTo { get; set; } = "";
+    [BindProperty] public string SdkUsername { get; set; } = "ADMIN";
+    [BindProperty] public string SdkPassword { get; set; } = "";
+    [BindProperty] public string SdkDcfPath { get; set; } = @"C:\eStream\SQLAccounting\Share\SQLACC.DCF";
+    [BindProperty] public string SdkDatabase { get; set; } = "";
+    [BindProperty] public string ApiAccessKey { get; set; } = "";
+    [BindProperty] public string ApiSecretKey { get; set; } = "";
+    [BindProperty] public string WriteMode { get; set; } = SqlAccountingWriteProviders.Sdk;
     public string Message { get; set; } = "";
+    public bool IsSdkMode { get; private set; } = true;
     public string TenantCode => (_sync.TenantCode ?? "").Trim();
     public string SdkSecretHint =>
         TenantCode.Length > 0
-            ? $"SDK logins live in Secrets Manager secret proacc/tenant/{TenantCode}/sdkConnections (companies[] array)."
+            ? $"Saved into Secrets Manager: proacc/tenant/{TenantCode}/sdkConnections"
             : "Set TENANT_CODE so SDK connections resolve from Secrets Manager.";
+    public string ApiSecretHint =>
+        TenantCode.Length > 0
+            ? $"Saved into Secrets Manager: proacc/tenant/{TenantCode}/sqlApiCredentials"
+            : "Set TENANT_CODE so SQL API keys resolve from Secrets Manager.";
 
     public async Task<IActionResult> OnGetAsync(int? id)
     {
         if (!IsAdmin) return Forbid();
+        await LoadWriteModeAsync().ConfigureAwait(false);
         if (IsCreatePage)
         {
             ApplyNewDefaults();
@@ -328,6 +353,7 @@ public class EditModel : SyncPageModel
         if (existing is null) return RedirectToPage("Index");
         Db = existing;
         Db.DbRole = MasterOrSub(Db.DbRole);
+        await PrefillSdkFieldsAsync().ConfigureAwait(false);
         return Page();
     }
 
@@ -367,18 +393,28 @@ public class EditModel : SyncPageModel
         }
         catch (Exception ex)
         {
-            return DbFailed(DatabaseSaveError(ex));
+            return await DbFailed(DatabaseSaveError(ex));
         }
     }
 
     private async Task<IActionResult> SavePostedDatabaseAsync()
     {
+        await ApplyPostedWriteModeAsync().ConfigureAwait(false);
         var capMessage = await OverCapMessageAsync();
         if (capMessage is not null)
-            return DbFailed(capMessage);
+            return await DbFailed(capMessage);
 
         Db.DbRole = MasterOrSub(Db.DbRole);
         Db.CompanyName = (Db.DisplayName ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(Db.ApiBaseUrl))
+            Db.ApiBaseUrl = "https://api.sql.my";
+        if (IsSdkMode && string.IsNullOrWhiteSpace(SdkDatabase) && !string.IsNullOrWhiteSpace(Db.FbPath))
+            SdkDatabase = Path.GetFileName(Db.FbPath.Replace('/', '\\'));
+
+        var secretError = await SaveModeCredentialsAsync().ConfigureAwait(false);
+        if (secretError is not null)
+            return await DbFailed(secretError);
+
         var wasNew = Db.DbId == 0;
         var id = await _registry.SaveAsync(Db, CurrentEmail);
         await WriteDatabaseAuditAsync(wasNew, id);
@@ -387,6 +423,93 @@ public class EditModel : SyncPageModel
         if (FromList)
             return RedirectToPage("/Databases/Index");
         return RedirectToPage("Details", new { id });
+    }
+
+    private async Task LoadWriteModeAsync()
+    {
+        var mode = await _writeProvider.GetAsync().ConfigureAwait(false);
+        WriteMode = SqlAccountingWriteProviders.IsSdk(mode)
+            ? SqlAccountingWriteProviders.Sdk
+            : SqlAccountingWriteProviders.Rest;
+        IsSdkMode = SqlAccountingWriteProviders.IsSdk(WriteMode);
+    }
+
+    private async Task ApplyPostedWriteModeAsync()
+    {
+        WriteMode = SqlAccountingWriteProviders.IsSdk(WriteMode)
+            ? SqlAccountingWriteProviders.Sdk
+            : SqlAccountingWriteProviders.Rest;
+        IsSdkMode = SqlAccountingWriteProviders.IsSdk(WriteMode);
+        await _writeProvider.SetAsync(WriteMode).ConfigureAwait(false);
+    }
+
+    private async Task PrefillSdkFieldsAsync()
+    {
+        var cred = await _sdkBundle.ResolveAsync(Db.DbCode).ConfigureAwait(false);
+        if (cred is null)
+            return;
+        SdkUsername = string.IsNullOrWhiteSpace(cred.Username) ? "ADMIN" : cred.Username;
+        SdkDcfPath = cred.DcfPath;
+        SdkDatabase = cred.Database;
+        SdkPassword = "";
+    }
+
+    private async Task<string?> SaveModeCredentialsAsync()
+    {
+        if (IsSdkMode)
+            return await SaveSdkCredentialsAsync().ConfigureAwait(false);
+        return await SaveApiCredentialsAsync().ConfigureAwait(false);
+    }
+
+    private async Task<string?> SaveSdkCredentialsAsync()
+    {
+        var code = (Db.DbCode ?? "").Trim();
+        if (code.Length == 0)
+            return "Company Code is required for SDK login.";
+
+        var existing = await _sdkBundle.ResolveAsync(code).ConfigureAwait(false);
+        var password = SdkPassword ?? "";
+        if (string.IsNullOrWhiteSpace(password) && existing is not null)
+            password = existing.Password;
+
+        var dcf = string.IsNullOrWhiteSpace(SdkDcfPath) ? existing?.DcfPath ?? "" : SdkDcfPath.Trim();
+        var database = string.IsNullOrWhiteSpace(SdkDatabase) ? existing?.Database ?? "" : SdkDatabase.Trim();
+        if (string.IsNullOrWhiteSpace(dcf) || string.IsNullOrWhiteSpace(database))
+            return "SDK DCF path and database file name are required.";
+        if (string.IsNullOrWhiteSpace(password))
+            return "SDK password is required (leave blank only when updating an existing company to keep the current password).";
+
+        var (ok, message) = await _sdkBundle.SaveCompanyAsync(new SdkCompanyCredentials
+        {
+            Name = code,
+            DcfPath = dcf,
+            Database = database,
+            Username = string.IsNullOrWhiteSpace(SdkUsername) ? "ADMIN" : SdkUsername.Trim(),
+            Password = password
+        }).ConfigureAwait(false);
+        return ok ? null : message;
+    }
+
+    private async Task<string?> SaveApiCredentialsAsync()
+    {
+        var access = (ApiAccessKey ?? "").Trim();
+        var secret = (ApiSecretKey ?? "").Trim();
+        if (access.Length == 0 && secret.Length == 0)
+        {
+            if (!string.IsNullOrWhiteSpace(Db.ApiCredRef))
+                return null;
+            return "Access key and secret key are required for API mode.";
+        }
+        if (access.Length == 0 || secret.Length == 0)
+            return "Access key and secret key are both required for API mode.";
+
+        var (ok, message) = await _apiSecrets.SaveCredentialsAsync(TenantCode, Db.DbCode, access, secret)
+            .ConfigureAwait(false);
+        if (!ok)
+            return message;
+
+        Db.ApiCredRef = SqlApiCredRefConvention.BuildBundleCredRef(TenantCode);
+        return null;
     }
 
     private static string DatabaseSaveError(Exception ex)
@@ -408,7 +531,7 @@ public class EditModel : SyncPageModel
     private bool FromList =>
         string.Equals(ReturnTo, "list", StringComparison.OrdinalIgnoreCase);
 
-    private IActionResult DbFailed(string message)
+    private async Task<IActionResult> DbFailed(string message)
     {
         if (FromDashboard)
         {
@@ -427,6 +550,7 @@ public class EditModel : SyncPageModel
             return RedirectToPage("Details", new { id = Db.DbId });
         }
         Message = message;
+        await LoadWriteModeAsync().ConfigureAwait(false);
         PrepareForm();
         return Page();
     }

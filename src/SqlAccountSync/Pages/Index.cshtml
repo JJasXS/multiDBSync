@@ -140,8 +140,8 @@
                                         <label class="role-choice"><input type="radio" name="Db.DbRole" value="SUB" /> Sub</label>
                                     </div>
                                 </div>
-                            <h4 class="db-create-subhead">SDK login</h4>
-                                <p class="field-hint">Company SDK username/password/DCF/database are stored in AWS Secrets Manager (<code>proacc/tenant/{TENANT}/sdkConnections</code>), not in this form.</p>
+                            @{ ViewData["WriteCredIdPrefix"] = "dash"; }
+                            <partial name="Databases/_WriteCredFields" />
                             </div>
                         </div>
                     </div>

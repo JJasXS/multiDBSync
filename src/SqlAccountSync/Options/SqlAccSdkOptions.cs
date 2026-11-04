@@ -16,19 +16,17 @@ public sealed class SqlAccountingWriteOptions
 {
     public const string SectionName = "SqlAccountingWrite";
 
-    /// <summary><see cref="SqlAccountingWriteProviders.Rest"/> (default) or <see cref="SqlAccountingWriteProviders.Sdk"/>.</summary>
-    public string Provider { get; set; } = SqlAccountingWriteProviders.Rest;
+    /// <summary><see cref="SqlAccountingWriteProviders.Sdk"/> (this branch default) or <see cref="SqlAccountingWriteProviders.Rest"/>.</summary>
+    public string Provider { get; set; } = SqlAccountingWriteProviders.Sdk;
 
     /// <summary>
-    /// When true, SQL Accounting REST HTTP is refused even before SigV4 (Development SDK-only labs).
-    /// Combined with <see cref="Provider"/>=<c>Sdk</c> this prevents silent REST fallback.
-    /// Keep false in Production so Rest rollback remains usable when Provider=Rest.
+    /// When true, SQL Accounting REST HTTP is refused even before SigV4 (SDK-only labs).
+    /// Keep false in Production so the nav API|SDK toggle can still use REST when selected.
     /// </summary>
     public bool BlockRestHttp { get; set; }
 
-    /// <summary>True when Provider is Sdk or <see cref="BlockRestHttp"/> is set.</summary>
-    public bool ShouldRefuseRestHttp() =>
-        BlockRestHttp || SqlAccountingWriteProviders.IsSdk(Provider);
+    /// <summary>True when <see cref="BlockRestHttp"/> is set (explicit lab lock).</summary>
+    public bool ShouldRefuseRestHttp() => BlockRestHttp;
 }
 
 /// <summary>

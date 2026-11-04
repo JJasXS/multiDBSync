@@ -3,97 +3,132 @@
 {
     <div class="flash flash-err">@Model.Message</div>
 }
-<form method="post">
+<form method="post" data-db-write-form>
     <input type="hidden" asp-for="Db.DbId" />
-    <div class="panel-grid db-edit-grid">
+    <input type="hidden" asp-for="Db.FbCharset" />
+    <input type="hidden" asp-for="Db.FbDialect" />
+    <input type="hidden" asp-for="WriteMode" data-write-mode />
+
+    <div class="write-tabs" role="tablist" aria-label="Write connection type">
+        <button type="button" class="write-tab@(Model.IsSdkMode ? "" : " is-active")" data-write-tab="Rest" role="tab" aria-selected="@(!Model.IsSdkMode)">SQL API</button>
+        <button type="button" class="write-tab@(Model.IsSdkMode ? " is-active" : "")" data-write-tab="Sdk" role="tab" aria-selected="@Model.IsSdkMode">SDK Live</button>
+    </div>
+
+    <div class="panel-grid db-edit-grid db-edit-grid-2">
         <div class="card">
-            <div class="card-head">
-                <h3>Identity</h3>
-            </div>
-            <p class="muted lede">How this company appears in the console, and whether it is Master or Sub.</p>
+            <div class="card-head"><h3>Company</h3></div>
+            <p class="muted lede">Name this company and pick its Firebird file.</p>
             <div class="form-stack">
-                <div>
-                    <label>Code</label>
-                    <input asp-for="Db.DbCode" required placeholder="HQ01"
-                           data-db-code
-                           data-tenant-code="@Model.TenantCode" />
+                <div class="field-pair equal">
+                    <div>
+                        <label>Code</label>
+                        <input asp-for="Db.DbCode" required placeholder="HQ01" data-db-code data-tenant-code="@Model.TenantCode" />
+                    </div>
+                    <div>
+                        <label>Role</label>
+                        <select asp-for="Db.DbRole">
+                            <option>MASTER</option>
+                            <option>SUB</option>
+                        </select>
+                    </div>
                 </div>
                 <div>
                     <label>Name</label>
                     <input asp-for="Db.DisplayName" required placeholder="Headquarters" />
                 </div>
-                <div>
-                    <label>Role</label>
-                    <select asp-for="Db.DbRole">
-                        <option>MASTER</option>
-                        <option>SUB</option>
-                    </select>
-                </div>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-head">
-                <h3>Firebird connection</h3>
-            </div>
-            <p class="muted lede">Read-only access to the company file. Store a secret reference, never a password.</p>
-            <div class="form-stack">
-                <div class="field-pair equal">
-                    <div>
-                        <label>Host</label>
-                        <input asp-for="Db.FbHost" required placeholder="localhost" />
-                    </div>
-                    <div>
-                        <label>Port</label>
-                        <input asp-for="Db.FbPort" />
-                    </div>
-                </div>
-                <div>
-                    <label>Database path</label>
+                <div data-db-path-group>
+                    <label>Firebird database (.FDB)</label>
                     <div class="path-input">
-                        <input asp-for="Db.FbPath" required placeholder="C:/SQLAccount/Company.FDB" data-db-path />
-                        <button type="button" class="path-pin" data-db-path-pin aria-label="Choose database file" title="Choose database file">
+                        <input asp-for="Db.FbPath" required placeholder="C:/SQLAccount/Company.FDB" data-db-path data-path-kind="fdb" data-sdk-db-source />
+                        <button type="button" class="path-pin" data-db-path-pin aria-label="Choose .FDB file" title="Choose .FDB file">
                             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z"/></svg>
                         </button>
                         <input type="file" data-db-path-file accept=".fdb,.gdb" hidden />
                     </div>
-                    <p class="field-hint" data-db-path-hint>Use the pin to open the file picker and choose the company .FDB. The path is filled in for you.</p>
+                    <p class="field-hint" data-db-path-hint>Use the pin to choose the company .FDB.</p>
                 </div>
-                <input type="hidden" asp-for="Db.FbCharset" />
-                <input type="hidden" asp-for="Db.FbDialect" />
-                <div class="field-pair equal">
-                    <div>
-                        <label>User</label>
-                        <input asp-for="Db.FbUser" placeholder="SYSDBA" />
-                    </div>
-                    <div>
-                        <label>Master key reference</label>
-                        <div class="secret-input">
-                            <input asp-for="Db.FbCredRef" type="password" autocomplete="off" placeholder="masterkey" required />
-                            <button type="button" class="secret-toggle" data-secret-toggle aria-label="Show secret reference" title="Show / hide">
-                                <svg class="icon-eye" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 5c-7 0-10 7-10 7s3 7 10 7 10-7 10-7-3-7-10-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>
-                                <svg class="icon-eye-off" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" hidden><path fill="currentColor" d="M2 4.3 3.3 3l18 18-1.3 1.3-3.1-3.1A12.5 12.5 0 0 1 12 19C5 19 2 12 2 12a21.4 21.4 0 0 1 5.2-5.9L2 4.3zM12 7a5 5 0 0 1 5 5c0 .7-.1 1.3-.4 1.9l-1.6-1.6A3 3 0 0 0 12 9c-.3 0-.5 0-.8.1L9.4 7.3C10.2 7.1 11.1 7 12 7zm-5 5c0-.5.1-1 .2-1.4l6.2 6.2c-.4.1-.9.2-1.4.2a5 5 0 0 1-5-5zm13.8 2.5-2.5-2.5.9-.9A21 21 0 0 0 22 12s-3-7-10-7c-1.2 0-2.3.2-3.3.5L7.2 4A13.6 13.6 0 0 1 12 3c7 0 10 7 10 7a23 23 0 0 1-1.2 4.5z"/></svg>
-                            </button>
+                <details class="db-adv">
+                    <summary>Firebird connection (optional)</summary>
+                    <div class="form-stack db-adv-body">
+                        <div class="field-pair equal">
+                            <div>
+                                <label>Host</label>
+                                <input asp-for="Db.FbHost" required placeholder="localhost" />
+                            </div>
+                            <div>
+                                <label>Port</label>
+                                <input asp-for="Db.FbPort" />
+                            </div>
+                        </div>
+                        <div class="field-pair equal">
+                            <div>
+                                <label>User</label>
+                                <input asp-for="Db.FbUser" placeholder="SYSDBA" />
+                            </div>
+                            <div>
+                                <label>Master key</label>
+                                <input asp-for="Db.FbCredRef" type="password" autocomplete="off" placeholder="masterkey" required />
+                            </div>
                         </div>
                     </div>
-                </div>
+                </details>
             </div>
         </div>
 
-        <div class="card">
-            <div class="card-head">
-                <h3>SQL Account SDK</h3>
+        <div class="card write-cred-card">
+            <div class="write-panel@(Model.IsSdkMode ? " is-hidden" : "")" data-panel-rest>
+                <div class="card-head"><h3>SQL API keys</h3></div>
+                <p class="muted lede">Access key and secret key for this company. Saved to AWS on Save.</p>
+                <div class="form-stack">
+                    <div>
+                        <label asp-for="ApiAccessKey">Access key</label>
+                        <input asp-for="ApiAccessKey" autocomplete="off" placeholder="AKIA…" data-rest-field />
+                    </div>
+                    <div>
+                        <label asp-for="ApiSecretKey">Secret key</label>
+                        <input asp-for="ApiSecretKey" type="password" autocomplete="new-password" data-rest-field />
+                    </div>
+                </div>
             </div>
-            <p class="muted lede">Writes use SQL Account SDK Live (COM) on this Windows PC. Login details are not stored in SYNC_DATABASE.</p>
-            <div class="form-stack">
-                <p class="field-hint">@Model.SdkSecretHint</p>
-                <p class="field-hint">Match the company <strong>Code</strong> above to the <code>name</code> field inside that secret's <code>companies[]</code> array.</p>
+
+            <div class="write-panel@(Model.IsSdkMode ? "" : " is-hidden")" data-panel-sdk>
+                <div class="card-head"><h3>SDK Live login</h3></div>
+                <p class="muted lede">SQL Account user and password for COM login. Saved to AWS on Save.</p>
+                <div class="form-stack">
+                    <div class="field-pair equal">
+                        <div>
+                            <label asp-for="SdkUsername">User</label>
+                            <input asp-for="SdkUsername" autocomplete="off" placeholder="ADMIN" data-sdk-field />
+                        </div>
+                        <div>
+                            <label asp-for="SdkPassword">Password</label>
+                            <input asp-for="SdkPassword" type="password" autocomplete="new-password" placeholder="Leave blank to keep existing" data-sdk-field />
+                        </div>
+                    </div>
+                    <div data-db-path-group>
+                        <label asp-for="SdkDcfPath">DCF path (.DCF)</label>
+                        <div class="path-input">
+                            <input asp-for="SdkDcfPath" data-db-path data-path-kind="dcf" data-sdk-field placeholder="C:/eStream/SQLAccounting/Share/SQLACC.DCF" />
+                            <button type="button" class="path-pin" data-db-path-pin aria-label="Choose .DCF file" title="Choose .DCF file">
+                                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z"/></svg>
+                            </button>
+                            <input type="file" data-db-path-file accept=".dcf" hidden />
+                        </div>
+                        <p class="field-hint" data-db-path-hint>Use the pin to choose the SQL Account .DCF (not the .FDB).</p>
+                    </div>
+                    <div>
+                        <label asp-for="SdkDatabase">Company database name</label>
+                        <input asp-for="SdkDatabase" data-sdk-db-target data-sdk-field placeholder="ACC-COMPANY.FDB" />
+                        <p class="field-hint">FDB file name inside that DCF (filled from Firebird path when empty).</p>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
+
     <div class="card db-edit-notes">
         <label>Notes</label>
-        <textarea asp-for="Db.Notes" rows="3" placeholder="Internal remarks"></textarea>
+        <textarea asp-for="Db.Notes" rows="2" placeholder="Internal remarks (optional)"></textarea>
     </div>
     <div class="form-bar">
         <button class="btn" type="submit">Save</button>
@@ -113,3 +148,4 @@
     </div>
 </dialog>
 <script src="~/js/db-path-browse.js" asp-append-version="true"></script>
+<script src="~/js/db-write-tabs.js" asp-append-version="true"></script>
