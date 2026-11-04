@@ -164,7 +164,8 @@ public sealed class SyncOptions
 public sealed class BootstrapOptions
 {
     public const string SectionName = "Bootstrap";
-    public string AdminEmail { get; set; } = "admin@localhost";
+    /// <summary>Optional seed / login hint email. Empty = do not seed or suggest a default admin.</summary>
+    public string AdminEmail { get; set; } = "";
     public string AdminName { get; set; } = "Administrator";
 }
 

@@ -214,8 +214,10 @@ VALUES (@ACLID, @USERID, @DBID, @CANVIEW, @CANSYNC)",
     {
         if (!_env.IsDevelopment())
             return null;
-        var expected = (_bootstrap.AdminEmail ?? "admin@localhost").Trim();
-        if (string.IsNullOrWhiteSpace(email) || !string.Equals(email.Trim(), expected, StringComparison.OrdinalIgnoreCase))
+        var expected = (_bootstrap.AdminEmail ?? "").Trim();
+        if (expected.Length == 0
+            || string.IsNullOrWhiteSpace(email)
+            || !string.Equals(email.Trim(), expected, StringComparison.OrdinalIgnoreCase))
             return null;
         return new AppUser
         {

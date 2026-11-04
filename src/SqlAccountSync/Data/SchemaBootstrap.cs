@@ -415,7 +415,10 @@ MATCHING (TXNTYPECODE)",
 UPDATE SYNC_TXNTYPE SET ISACTIVE = 0, DISPLAYNAME = 'Sales return → Purchase return (retired)'
 WHERE TXNTYPECODE = 'SR_TO_PR'", new Dictionary<string, object?>(), ct);
 
-        var email = (_bootstrap.AdminEmail ?? "admin@localhost").Trim().ToLowerInvariant();
+        var email = (_bootstrap.AdminEmail ?? "").Trim().ToLowerInvariant();
+        if (email.Length == 0)
+            return;
+
         var exists = await ScalarInt(conn, "SELECT COUNT(*) FROM SYNC_USER WHERE UPPER(EMAIL) = UPPER(@E)",
             ct, new Dictionary<string, object?> { ["E"] = email });
         if (exists == 0)
