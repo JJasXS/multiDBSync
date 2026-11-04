@@ -343,6 +343,7 @@ public class ItemDestCodeLinkTests
         public Task<List<AuditEntry>> ListAsync(int take = 200, CancellationToken cancellationToken = default) => Task.FromResult(new List<AuditEntry>());
         public Task<List<AuditListItem>> ListDetailedAsync(int take = 200, CancellationToken cancellationToken = default) => Task.FromResult(new List<AuditListItem>());
         public Task<List<AuditListItem>> ListDetailedPageAsync(DateTime? before, string? beforeKind, int beforeId, int take, CancellationToken cancellationToken = default) => Task.FromResult(new List<AuditListItem>());
+        public Task<int> CountAsync(CancellationToken cancellationToken = default) => Task.FromResult(0);
     }
 
     private sealed class NoopErrorLogService : IErrorLogService
@@ -350,6 +351,7 @@ public class ItemDestCodeLinkTests
         public Task<int> WriteAsync(ErrorEntry entry, CancellationToken cancellationToken = default) => Task.FromResult(0);
         public Task<List<ErrorEntry>> ListAsync(bool unresolvedOnly = false, int take = 200, CancellationToken cancellationToken = default) => Task.FromResult(new List<ErrorEntry>());
         public Task<List<ErrorEntry>> ListPageAsync(DateTime? before, string? beforeKind, int beforeId, int take, CancellationToken cancellationToken = default) => Task.FromResult(new List<ErrorEntry>());
+        public Task<int> CountAsync(CancellationToken cancellationToken = default) => Task.FromResult(0);
         public Task ResolveAsync(int errorId, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
