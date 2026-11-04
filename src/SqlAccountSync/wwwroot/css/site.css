@@ -1852,12 +1852,21 @@ code {
   font-weight: 550;
   line-height: 1.35;
 }
+.logs-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  flex: 0 0 auto;
+  margin-bottom: 12px;
+}
 .logs-filters {
   display: flex;
   flex-wrap: wrap;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   gap: 8px;
-  margin-bottom: 12px;
+  min-width: 0;
 }
 .logs-filter {
   appearance: none;
@@ -1885,6 +1894,57 @@ code {
   padding: 2px 8px;
   border-radius: 999px;
   background: var(--ice-surface);
+}
+/* Date range sits on the right of the tab bar, above the Search input. */
+.logs-date-range {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: 0 1 auto;
+  margin-left: auto;
+  /* Match panel border + head padding so From/To/Apply sit above Search. */
+  margin-right: 13px;
+  max-width: 100%;
+}
+.logs-date-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--ice-text-muted);
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.logs-date-field span {
+  line-height: 1;
+}
+.logs-date-field input[type="date"] {
+  width: 9.75rem;
+  min-width: 0;
+  margin: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--ice-border-soft);
+  border-radius: 8px;
+  background: var(--ice-surface);
+  color: var(--ice-heading);
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 1.2;
+  color-scheme: light;
+}
+.logs-date-range .btn {
+  min-height: 30px;
+  padding: 5px 12px;
+}
+.logs-page .push-panel-search {
+  /* Keep search width aligned under the date controls on wide screens. */
+  flex: 0 1 280px;
+  max-width: 280px;
+  width: 100%;
+  margin-left: auto;
 }
 .logs-page .logs-panel {
   display: flex;
@@ -1937,11 +1997,6 @@ code {
   line-height: 1.2;
   color: var(--ice-text-muted);
   white-space: nowrap;
-}
-.logs-page .push-panel-search {
-  flex: 1 1 160px;
-  max-width: 280px;
-  margin-left: auto;
 }
 .logs-page .push-panel-search input[type="search"] {
   width: 100%;
