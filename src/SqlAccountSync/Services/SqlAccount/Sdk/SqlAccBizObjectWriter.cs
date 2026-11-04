@@ -394,8 +394,9 @@ public static class SqlAccBizObjectWriter
     }
 
     /// <summary>
-    /// Chooses ControlAccount: explicit partner mapping wins; otherwise first valid control from dest company parties.
+    /// Chooses ControlAccount: explicit partner mapping wins when present; otherwise destination candidate.
     /// Returns null when nothing valid can be resolved (caller must fail — never guess 300-000/400-000).
+    /// Destination GL existence is checked by <see cref="ResolveControlAccount"/>.
     /// </summary>
     public static string? ChooseControlAccount(string? providedControlAccount, string? resolvedFromDestination)
     {
@@ -1236,12 +1237,11 @@ public static class SqlAccBizObjectWriter
 
     private static string? ResolveControlAccount(dynamic app, string bizObjectName, string? provided)
     {
+        // Prefer master's ControlAccount only when that GL code exists on the destination.
+        // Cross-company charts differ (e.g. MAIN 25-000-000 vs ANOZ 300-000) — fall back to dest parties.
         var chosen = ChooseControlAccount(provided, resolvedFromDestination: null);
-        if (chosen is not null)
-        {
-            // Explicit mapping that does not exist on dest GL is an error — do not fall back to 300/400.
-            return GlAccountCodeExists(app, chosen) ? chosen : null;
-        }
+        if (chosen is not null && GlAccountCodeExists(app, chosen))
+            return chosen;
 
         foreach (var candidate in QueryControlAccountCandidates(app, bizObjectName))
         {

@@ -1,6 +1,9 @@
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using SqlAccountSync.Models;
 using SqlAccountSync.Options;
+using SqlAccountSync.Services.Databases;
+using SqlAccountSync.Services.Sdk;
 using SqlAccountSync.Services.Secrets;
 
 namespace SqlAccountSync.Services.SqlAccount.Sdk;
@@ -15,37 +18,45 @@ public interface ISqlAccSessionManager
 
     /// <summary>
     /// Runs <paramref name="action"/> on the STA thread while logged into <paramref name="db"/>.
-    /// Company target comes from <see cref="RegisteredDatabase.FbPath"/> file name + configured DCF — never last-used defaults.
+    /// Company target comes from AWS sdkConnections (preferred) or DefaultDcfPath + FbPath file name.
     /// </summary>
     Task<T> RunAsync<T>(RegisteredDatabase db, Func<ISqlAccComApp, T> action, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
-/// Multi-company SDK session: reuses one COM app for the active company; on company change
-/// disposes the LocalServer and creates a fresh <c>SQLAcc.BizApp</c> before Login.
-/// Logout+Login on the same instance is unreliable (IsLogin=false / AccountUI AV) — see SdkSessionManager.
-/// Does not open Firebird directly and does not perform BizObject writes.
+/// Multi-company SDK session for auto-push: owns <b>one</b> SQLACC.exe and switches companies with
+/// Logout → Login → write on that same COM instance (no second tab per company).
+/// When SQL Account was already open, finishes by logging back into MAIN/home
+/// (<see cref="SyncOptions.SdkHomeDbCode"/>) and keeps the window. Otherwise Logout (+ optional kill).
 /// </summary>
 public sealed class SqlAccSessionManager : ISqlAccSessionManager, IAsyncDisposable, IDisposable
 {
     private readonly ISqlAccComAppFactory _factory;
     private readonly ISecretResolver _secrets;
+    private readonly ISdkConnectionBundle _bundle;
+    private readonly IServiceScopeFactory _scopes;
     private readonly SqlAccSdkOptions _options;
     private readonly ILogger<SqlAccSessionManager> _logger;
     private readonly StaWorkQueue _sta = new();
     private readonly SemaphoreSlim _gate = new(1, 1);
     private ISqlAccComApp? _app;
     private string? _activeCompanyKey;
+    /// <summary>True when SQLACC was already running (or COM-attached) before this session; leave the window open after use.</summary>
+    private bool _keepSqlAccOpenAfterUse;
     private bool _disposed;
 
     public SqlAccSessionManager(
         ISqlAccComAppFactory factory,
         ISecretResolver secrets,
+        ISdkConnectionBundle bundle,
+        IServiceScopeFactory scopes,
         IOptions<SqlAccSdkOptions> options,
         ILogger<SqlAccSessionManager> logger)
     {
         _factory = factory;
         _secrets = secrets;
+        _bundle = bundle;
+        _scopes = scopes;
         _options = options.Value;
         _logger = logger;
     }
@@ -56,12 +67,12 @@ public sealed class SqlAccSessionManager : ISqlAccSessionManager, IAsyncDisposab
         if (!_options.AllowLiveCom)
             throw new InvalidOperationException("SqlAccSdk:AllowLiveCom is false; SDK session is disabled.");
 
-        var company = ResolveCompanyTarget(db);
+        var login = await ResolveLoginAsync(db, cancellationToken).ConfigureAwait(false);
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await EnsureLoggedInAsync(company, cancellationToken).ConfigureAwait(false);
-            return new SessionLease(_gate);
+            await EnsureLoggedInAsync(login, cancellationToken).ConfigureAwait(false);
+            return new SessionLease(_gate, ReleaseSeatAfterUseSync);
         }
         catch
         {
@@ -74,9 +85,10 @@ public sealed class SqlAccSessionManager : ISqlAccSessionManager, IAsyncDisposab
         RegisteredDatabase db, Func<ISqlAccComApp, T> action, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(action);
-        var expectedKey = ResolveCompanyTarget(db).Key;
+        var login = await ResolveLoginAsync(db, cancellationToken).ConfigureAwait(false);
+        var expectedKey = login.Target.Key;
         await using var lease = new AsyncSessionLease(
-            await UseCompanyAsync(db, cancellationToken).ConfigureAwait(false));
+            await UseCompanyWithLoginAsync(login, cancellationToken).ConfigureAwait(false));
         return await _sta.RunAsync(() =>
         {
             if (_app is null)
@@ -94,47 +106,360 @@ public sealed class SqlAccSessionManager : ISqlAccSessionManager, IAsyncDisposab
         }, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task EnsureLoggedInAsync(CompanyTarget company, CancellationToken cancellationToken)
+    private async Task<IDisposable> UseCompanyWithLoginAsync(CompanyLogin login, CancellationToken cancellationToken)
     {
-        var user = (_options.UserName ?? "").Trim();
-        if (user.Length == 0)
-            throw new InvalidOperationException("SqlAccSdk:UserName is not configured.");
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (!_options.AllowLiveCom)
+            throw new InvalidOperationException("SqlAccSdk:AllowLiveCom is false; SDK session is disabled.");
 
-        var password = await _secrets.ResolveAsync(_options.PasswordSecretRef, cancellationToken).ConfigureAwait(false);
-        if (string.IsNullOrWhiteSpace(password))
-            throw new InvalidOperationException("SqlAccSdk:PasswordSecretRef did not resolve a password.");
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await EnsureLoggedInAsync(login, cancellationToken).ConfigureAwait(false);
+            return new SessionLease(_gate, ReleaseSeatAfterUseSync);
+        }
+        catch
+        {
+            _gate.Release();
+            throw;
+        }
+    }
 
+    private async Task EnsureLoggedInAsync(CompanyLogin login, CancellationToken cancellationToken)
+    {
         await _sta.RunAsync(() =>
         {
-            var key = company.Key;
+            var key = login.Target.Key;
             if (IsUsableSessionFor(key))
                 return;
 
-            // Different company (or dead session): never Logout+Login on the same BizApp instance.
-            ReleaseComApp_NoThrow(reason: "company-switch-or-relogin", fromKey: _activeCompanyKey, toKey: key);
+            // Always one window: Logout → Login on the same BizApp (company A → B → C).
+            EnsureSingleInstanceLogin(login, key);
+        }, cancellationToken).ConfigureAwait(false);
+    }
 
-            _app = _factory.Create();
+    /// <summary>
+    /// One SQL Account tab: create/attach once, then Logout + Login when the destination company changes.
+    /// </summary>
+    private void EnsureSingleInstanceLogin(CompanyLogin login, string key)
+    {
+        // User already had SQL Account open → after sync Logout, leave the window (do not Kill).
+        if (!_keepSqlAccOpenAfterUse && ComRunningObject.CountSqlAccProcesses() > 0)
+        {
+            _keepSqlAccOpenAfterUse = true;
             _logger.LogInformation(
-                "SDK Login company file {DatabaseFile} (fresh COM instance)", company.DatabaseFileName);
-            try
+                "SQLACC was already open; will keep the window after sync (Logout only)");
+        }
+
+        EnforceAtMostOneSqlAccProcess();
+
+        if (_app is null || !IsComAlive(_app))
+        {
+            ReleaseComApp_NoThrow(reason: "dead-or-missing", fromKey: _activeCompanyKey, toKey: key);
+            _app = _factory.Create();
+        }
+
+        if (_app.AttachedToRunningInstance)
+            _keepSqlAccOpenAfterUse = true;
+
+        try
+        {
+            if (IsUsableSessionFor(key))
+                return;
+
+            if (_app.IsLogin)
             {
-                _app.Login(user, password.Trim(), company.DcfPath, company.DatabaseFileName);
-                if (!_app.IsLogin)
+                _logger.LogInformation(
+                    "SDK Logout before switch {From} → {To}",
+                    _activeCompanyKey ?? "(none)", key);
+                try { _app.Logout(); }
+                catch (Exception ex)
                 {
-                    var diag = _app is SqlAccComApp com ? com.LastComDiagnostics : _app.LastComDiagnostics;
-                    throw new InvalidOperationException(
-                        "SQLAcc.BizApp Login did not establish a session (IsLogin=false). diag={" + diag + "}");
+                    _logger.LogDebug(ex, "SDK Logout before company switch failed; continuing with Login");
                 }
 
-                _activeCompanyKey = key;
+                _activeCompanyKey = null;
             }
-            catch
-            {
-                // Fail closed: never leave a half-logged session that could serve the wrong company.
+
+            PerformLogin(login, key, "single SQL Account window");
+        }
+        catch
+        {
+            // Drop dead owned handle so the next attempt can Create a clean single instance.
+            if (_app is null || !_app.AttachedToRunningInstance)
                 ReleaseComApp_NoThrow(reason: "login-failed", fromKey: key, toKey: null);
-                throw;
+            else
+                _activeCompanyKey = null;
+            throw;
+        }
+    }
+
+    /// <summary>If more than one SQLACC.exe is alive, kill all and drop our COM handle so Login uses one seat.</summary>
+    private void EnforceAtMostOneSqlAccProcess()
+    {
+        var count = ComRunningObject.CountSqlAccProcesses();
+        if (count <= 1)
+            return;
+
+        _logger.LogWarning(
+            "Found {Count} SQLACC.exe processes; closing all so only one concurrent user seat is used",
+            count);
+        ReleaseComApp_NoThrow(reason: "multi-sqlacc", fromKey: _activeCompanyKey, toKey: null);
+        ComRunningObject.KillAllSqlAccProcesses();
+    }
+
+    /// <summary>
+    /// Called when a session lease ends (end of RunAsync / UseCompany).
+    /// If SQL was already open → Login back to MAIN/home and keep the window.
+    /// Otherwise Logout (+ optional kill) so the concurrent seat is freed.
+    /// </summary>
+    private void ReleaseSeatAfterUseSync()
+    {
+        try
+        {
+            ReleaseSeatAfterUseAsync().GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "SDK failed to release/restore session after use");
+        }
+    }
+
+    private async Task ReleaseSeatAfterUseAsync()
+    {
+        var keepWindow = _keepSqlAccOpenAfterUse
+            || (_app is not null && _app.AttachedToRunningInstance);
+
+        if (keepWindow)
+        {
+            await RestoreHomeCompanyKeepWindowAsync().ConfigureAwait(false);
+            return;
+        }
+
+        if (!_options.LogoutAfterUse && !_options.ReleaseSqlAccAfterUse)
+            return;
+
+        await _sta.RunAsync(ReleaseSeatOnSta).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Leave SQL Account open and logged into MAIN (SdkHomeDbCode / MAINTEST) after sync.
+    /// </summary>
+    private async Task RestoreHomeCompanyKeepWindowAsync()
+    {
+        try
+        {
+            using var scope = _scopes.CreateScope();
+            var registry = scope.ServiceProvider.GetRequiredService<IDatabaseRegistry>();
+            var sync = scope.ServiceProvider.GetRequiredService<IOptions<SyncOptions>>().Value;
+            var homeCode = await SdkHomeResolver
+                .ResolveAsync(registry, _bundle, sync)
+                .ConfigureAwait(false);
+
+            if (homeCode.Length == 0)
+            {
+                _logger.LogWarning("No SDK home company resolved; keeping window logged out");
+                await _sta.RunAsync(LogoutKeepWindowOnSta).ConfigureAwait(false);
+                return;
             }
-        }, cancellationToken).ConfigureAwait(false);
+
+            var db = (await registry.ListAsync().ConfigureAwait(false))
+                .FirstOrDefault(d =>
+                    string.Equals((d.DbCode ?? "").Trim(), homeCode, StringComparison.OrdinalIgnoreCase));
+            if (db is null)
+            {
+                _logger.LogWarning(
+                    "SDK home company {Home} not in registry; keeping window logged out", homeCode);
+                await _sta.RunAsync(LogoutKeepWindowOnSta).ConfigureAwait(false);
+                return;
+            }
+
+            var login = await ResolveLoginAsync(db, CancellationToken.None).ConfigureAwait(false);
+            await _sta.RunAsync(() => LoginHomeKeepWindowOnSta(login, homeCode)).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "SDK failed to restore MAIN/home; keeping window with Logout only");
+            await _sta.RunAsync(LogoutKeepWindowOnSta).ConfigureAwait(false);
+        }
+    }
+
+    private void LoginHomeKeepWindowOnSta(CompanyLogin login, string homeCode)
+    {
+        if (_app is null || !IsComAlive(_app))
+        {
+            ReleaseComApp_NoThrow(reason: "home-restore-dead", fromKey: _activeCompanyKey, toKey: login.Target.Key);
+            _app = _factory.Create();
+        }
+
+        if (IsUsableSessionFor(login.Target.Key))
+        {
+            _logger.LogInformation(
+                "SDK already on home company {Home}; leaving SQL Account logged in", homeCode);
+            return;
+        }
+
+        if (_app.IsLogin)
+        {
+            try { _app.Logout(); }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "SDK Logout before home restore failed");
+            }
+
+            _activeCompanyKey = null;
+        }
+
+        PerformLogin(login, login.Target.Key, "restore MAIN/home after sync");
+        _logger.LogInformation(
+            "SDK restored login to home company {Home} — SQL Account window kept open", homeCode);
+    }
+
+    private void LogoutKeepWindowOnSta()
+    {
+        if (_app is null)
+        {
+            _activeCompanyKey = null;
+            return;
+        }
+
+        try
+        {
+            if (_app.IsLogin)
+                _app.Logout();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "SDK Logout (keep window) failed");
+        }
+
+        _activeCompanyKey = null;
+    }
+
+    private void ReleaseSeatOnSta()
+    {
+        if (_app is null)
+        {
+            _activeCompanyKey = null;
+            if (_options.ReleaseSqlAccAfterUse)
+                ComRunningObject.KillAllSqlAccProcesses();
+            return;
+        }
+
+        if (_options.LogoutAfterUse)
+        {
+            try
+            {
+                if (_app.IsLogin)
+                {
+                    _app.Logout();
+                    _logger.LogInformation(
+                        "SDK Logout after use — freed SQL Account concurrent user seat");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "SDK Logout after use failed");
+            }
+
+            _activeCompanyKey = null;
+        }
+
+        if (!_options.ReleaseSqlAccAfterUse)
+            return;
+
+        ReleaseComApp_NoThrow(reason: "after-use-release", fromKey: null, toKey: null);
+        var killed = ComRunningObject.KillAllSqlAccProcesses();
+        if (killed > 0)
+        {
+            _logger.LogInformation(
+                "SDK closed {Count} SQLACC.exe after use (SQL was not open beforehand)",
+                killed);
+        }
+    }
+
+    private void PerformLogin(CompanyLogin login, string key, string modeLabel)
+    {
+        if (_app is null)
+            throw new InvalidOperationException("SDK COM app is not initialized before Login.");
+
+        _logger.LogInformation(
+            "SDK Login company file {DatabaseFile} ({Mode})", login.Target.DatabaseFileName, modeLabel);
+        _app.Login(login.Username, login.Password, login.Target.DcfPath, login.Target.DatabaseFileName);
+        if (!_app.IsLogin)
+        {
+            var diag = _app.LastComDiagnostics;
+            throw new InvalidOperationException(
+                "SQLAcc.BizApp Login did not establish a session (IsLogin=false). diag={" + diag + "}");
+        }
+
+        _activeCompanyKey = key;
+    }
+
+    private static bool IsComAlive(ISqlAccComApp app)
+    {
+        try
+        {
+            _ = app.IsLogin;
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private async Task<CompanyLogin> ResolveLoginAsync(RegisteredDatabase db, CancellationToken cancellationToken)
+    {
+        var code = (db.DbCode ?? "").Trim();
+        if (code.Length > 0)
+        {
+            var fromBundle = await _bundle.ResolveAsync(code, cancellationToken).ConfigureAwait(false);
+            if (fromBundle is not null)
+                return FromBundle(db, fromBundle);
+        }
+
+        return await FromOptionsAsync(db, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static CompanyLogin FromBundle(RegisteredDatabase db, SdkCompanyCredentials creds)
+    {
+        var dcf = (creds.DcfPath ?? "").Trim();
+        if (dcf.Length == 0)
+            throw new InvalidOperationException(
+                $"SDK connection for '{db.DbCode}' has empty dcfPath in Secrets Manager.");
+
+        var file = FileName(creds.Database);
+        if (file.Length == 0)
+            file = FileName(db.FbPath);
+        if (file.Length == 0)
+            throw new InvalidOperationException(
+                $"SDK connection for '{db.DbCode}' has no database file name (companies[].database or FbPath).");
+
+        var user = string.IsNullOrWhiteSpace(creds.Username) ? "ADMIN" : creds.Username.Trim();
+        var password = creds.Password ?? "";
+        if (string.IsNullOrWhiteSpace(password))
+            throw new InvalidOperationException(
+                $"SDK connection for '{db.DbCode}' has empty password in Secrets Manager.");
+
+        return new CompanyLogin(new CompanyTarget(dcf, file), user, password.Trim());
+    }
+
+    private async Task<CompanyLogin> FromOptionsAsync(RegisteredDatabase db, CancellationToken cancellationToken)
+    {
+        var target = ResolveCompanyTarget(db, _options.DefaultDcfPath);
+        var user = (_options.UserName ?? "").Trim();
+        if (user.Length == 0)
+            throw new InvalidOperationException(
+                "No SDK connection for '" + (db.DbCode ?? "") + "' in Secrets Manager, and SqlAccSdk:UserName is empty.");
+
+        var password = await _secrets.ResolveAsync(_options.PasswordSecretRef, cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(password))
+            throw new InvalidOperationException(
+                "No SDK connection for '" + (db.DbCode ?? "") +
+                "' in Secrets Manager, and SqlAccSdk:PasswordSecretRef did not resolve a password.");
+
+        return new CompanyLogin(target, user, password.Trim());
     }
 
     private bool IsUsableSessionFor(string companyKey)
@@ -182,21 +507,25 @@ public sealed class SqlAccSessionManager : ISqlAccSessionManager, IAsyncDisposab
     {
         ArgumentNullException.ThrowIfNull(db);
         var dcf = (defaultDcfPath ?? "").Trim();
-        // Prefer explicit future fields via Notes convention? Keep deterministic: options DefaultDcfPath only for now.
         if (dcf.Length == 0)
             throw new InvalidOperationException(
-                "SqlAccSdk:DefaultDcfPath is required for SDK Login (CHM requires DCF path for automation hosts).");
+                "SqlAccSdk:DefaultDcfPath is required for SDK Login when company credentials are not in Secrets Manager.");
 
-        var file = Path.GetFileName((db.FbPath ?? "").Trim().Replace('\\', '/'));
-        if (string.IsNullOrWhiteSpace(file))
+        var file = FileName(db.FbPath);
+        if (file.Length == 0)
             throw new InvalidOperationException(
                 $"Registered database '{db.DbCode}' has no FbPath file name for SDK Login (4th parameter).");
 
         return new CompanyTarget(dcf, file);
     }
 
-    private CompanyTarget ResolveCompanyTarget(RegisteredDatabase db) =>
-        ResolveCompanyTarget(db, _options.DefaultDcfPath);
+    private static string FileName(string? path)
+    {
+        var raw = (path ?? "").Trim().Replace('\\', '/');
+        if (raw.Length == 0)
+            return "";
+        return Path.GetFileName(raw) ?? "";
+    }
 
     public async ValueTask DisposeAsync()
     {
@@ -227,13 +556,17 @@ public sealed class SqlAccSessionManager : ISqlAccSessionManager, IAsyncDisposab
         public string Key => DcfPath + "|" + DatabaseFileName;
     }
 
-    private sealed class SessionLease(SemaphoreSlim gate) : IDisposable
+    private readonly record struct CompanyLogin(CompanyTarget Target, string Username, string Password);
+
+    private sealed class SessionLease(SemaphoreSlim gate, Action? onRelease = null) : IDisposable
     {
         private int _released;
         public void Dispose()
         {
-            if (Interlocked.Exchange(ref _released, 1) == 0)
-                gate.Release();
+            if (Interlocked.Exchange(ref _released, 1) != 0)
+                return;
+            try { onRelease?.Invoke(); }
+            finally { gate.Release(); }
         }
     }
 

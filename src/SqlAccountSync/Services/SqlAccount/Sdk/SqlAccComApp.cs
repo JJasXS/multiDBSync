@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SqlAccountSync.Options;
 
@@ -14,12 +15,27 @@ public sealed partial class SqlAccComApp : ISqlAccComApp
     /// <summary>Sanitized COM diagnostics from the last Login/IsLogin (never includes secrets).</summary>
     public string LastComDiagnostics { get; private set; } = "";
 
+    /// <inheritdoc />
+    public bool AttachedToRunningInstance { get; }
+
     public SqlAccComApp(string progId)
+        : this(CreateNewInstance(progId), attached: false)
+    {
+    }
+
+    public SqlAccComApp(object existingInstance, bool attached)
+    {
+        _app = existingInstance
+               ?? throw new ArgumentNullException(nameof(existingInstance));
+        AttachedToRunningInstance = attached;
+    }
+
+    private static object CreateNewInstance(string progId)
     {
         var type = Type.GetTypeFromProgID(progId, throwOnError: false)
                    ?? throw new InvalidOperationException(
                        $"COM ProgID '{progId}' is not registered. Install SQL Accounting / register SQLAcc.BizApp.");
-        _app = Activator.CreateInstance(type)
+        return Activator.CreateInstance(type)
                ?? throw new InvalidOperationException($"Failed to create COM instance for '{progId}'.");
     }
 
@@ -327,23 +343,26 @@ public sealed partial class SqlAccComApp : ISqlAccComApp
         _disposed = true;
         if (_app is not null)
         {
-            try
+            if (AttachedToRunningInstance)
             {
-                if ((bool)_app.IsLogin)
-                    _app.Logout();
+                // Leave the user's SQL Account window logged in; only drop our RCW reference.
+                try { Marshal.ReleaseComObject(_app); }
+                catch { /* ignore */ }
             }
-            catch
+            else
             {
-                // Best-effort cleanup only.
-            }
+                try
+                {
+                    if ((bool)_app.IsLogin)
+                        _app.Logout();
+                }
+                catch
+                {
+                    // Best-effort cleanup only.
+                }
 
-            try
-            {
-                Marshal.FinalReleaseComObject(_app);
-            }
-            catch
-            {
-                // ignore
+                try { Marshal.FinalReleaseComObject(_app); }
+                catch { /* ignore */ }
             }
 
             _app = null;
@@ -423,8 +442,13 @@ public sealed partial class SqlAccComApp : ISqlAccComApp
 public sealed class SqlAccComAppFactory : ISqlAccComAppFactory
 {
     private readonly SqlAccSdkOptions _options;
+    private readonly ILogger<SqlAccComAppFactory>? _logger;
 
-    public SqlAccComAppFactory(IOptions<SqlAccSdkOptions> options) => _options = options.Value;
+    public SqlAccComAppFactory(IOptions<SqlAccSdkOptions> options, ILogger<SqlAccComAppFactory>? logger = null)
+    {
+        _options = options.Value;
+        _logger = logger;
+    }
 
     public ISqlAccComApp Create()
     {
@@ -433,6 +457,30 @@ public sealed class SqlAccComAppFactory : ISqlAccComAppFactory
                 "SqlAccSdk:AllowLiveCom is false. Refusing to create SQLAcc.BizApp (no live COM in this mode).");
 
         var progId = string.IsNullOrWhiteSpace(_options.ProgId) ? "SQLAcc.BizApp" : _options.ProgId.Trim();
+        var runningCount = ComRunningObject.CountSqlAccProcesses();
+
+        // Prefer COM attach when the running SQL Account registered itself.
+        if (ComRunningObject.TryAttach(progId, out var attached) && attached is not null)
+        {
+            _logger?.LogInformation(
+                "SDK attached to running {ProgId} (SQLACC processes={Count}).", progId, runningCount);
+            return new SqlAccComApp(attached, attached: true);
+        }
+
+        // Interactive SQLACC is usually not in the ROT. Closing leftovers then CreateInstance
+        // gives auto-push one window to Logout/Login across companies (no second tab).
+        if (_options.PreferRunningInstance && runningCount > 0)
+        {
+            var killed = ComRunningObject.KillAllSqlAccProcesses();
+            _logger?.LogWarning(
+                "SQLACC.exe was running ({Count}) but COM attach failed. Closed {Killed} process(es) " +
+                "so SDK owns a single SQL Account window for Login/Logout auto-push.",
+                runningCount, killed);
+        }
+
+        _logger?.LogInformation(
+            "SDK creating single {ProgId} instance (SQLACC processes before create={Count}).",
+            progId, ComRunningObject.CountSqlAccProcesses());
         return new SqlAccComApp(progId);
     }
 }

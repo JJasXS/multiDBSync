@@ -363,10 +363,19 @@ public class EditModel : SyncPageModel
     private void ApplyNewDefaults()
     {
         Db.DbRole = DatabaseRoles.Master;
-        if (string.IsNullOrWhiteSpace(Db.FbHost))
-            Db.FbHost = "localhost";
-        if (string.IsNullOrWhiteSpace(Db.FbCredRef))
-            Db.FbCredRef = "masterkey";
+        ApplyFirebirdDefaults(Db);
+    }
+
+    private static void ApplyFirebirdDefaults(RegisteredDatabase db)
+    {
+        if (string.IsNullOrWhiteSpace(db.FbHost))
+            db.FbHost = "localhost";
+        if (db.FbPort <= 0)
+            db.FbPort = 3050;
+        if (string.IsNullOrWhiteSpace(db.FbUser))
+            db.FbUser = "SYSDBA";
+        if (string.IsNullOrWhiteSpace(db.FbCredRef))
+            db.FbCredRef = "masterkey";
     }
 
     private void PrepareDisplay()
@@ -406,6 +415,7 @@ public class EditModel : SyncPageModel
 
         Db.DbRole = MasterOrSub(Db.DbRole);
         Db.CompanyName = (Db.DisplayName ?? "").Trim();
+        ApplyFirebirdDefaults(Db);
         if (string.IsNullOrWhiteSpace(Db.ApiBaseUrl))
             Db.ApiBaseUrl = "https://api.sql.my";
         if (IsSdkMode && string.IsNullOrWhiteSpace(SdkDatabase) && !string.IsNullOrWhiteSpace(Db.FbPath))

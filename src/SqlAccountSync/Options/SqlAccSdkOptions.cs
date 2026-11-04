@@ -45,6 +45,26 @@ public sealed class SqlAccSdkOptions
     /// </summary>
     public bool AllowLiveCom { get; set; }
 
+    /// <summary>
+    /// Drive auto-push on a single SQLACC.exe: Logout → Login → write → next company on the same
+    /// COM instance. When true (default), if an existing SQL Account cannot be attached via COM,
+    /// leftover SQLACC.exe processes are closed before CreateInstance so a second tab is not opened.
+    /// </summary>
+    public bool PreferRunningInstance { get; set; } = true;
+
+    /// <summary>
+    /// After each SDK write/use finishes, call Logout so the concurrent user seat is freed
+    /// (1-user licenses cannot open SQL Account while sync stays logged in).
+    /// </summary>
+    public bool LogoutAfterUse { get; set; } = true;
+
+    /// <summary>
+    /// After Logout, dispose the owned COM LocalServer and close leftover SQLACC.exe.
+    /// Skipped when SQL Account was already open before sync took over (window is kept).
+    /// Also ignored when attached to an interactive window.
+    /// </summary>
+    public bool ReleaseSqlAccAfterUse { get; set; } = true;
+
     /// <summary>Default DCF full path used when a registered database does not override it.</summary>
     public string DefaultDcfPath { get; set; } = "";
 
