@@ -24,6 +24,8 @@ public interface ISqlAccSessionManager
 /// <summary>
 /// Multi-company SDK session for auto-push: owns <b>one</b> SQLACC.exe and switches companies with
 /// Logout → Login → write on that same COM instance (no second tab per company).
+/// When <see cref="SqlAccSdkOptions.LogoutAfterUse"/> is on, each use ends with Logout (+ optional
+/// SQLACC kill) so a 1-user license seat is free for interactive login.
 /// </summary>
 public sealed class SqlAccSessionManager : ISqlAccSessionManager, IAsyncDisposable, IDisposable
 {
@@ -63,7 +65,7 @@ public sealed class SqlAccSessionManager : ISqlAccSessionManager, IAsyncDisposab
         try
         {
             await EnsureLoggedInAsync(login, cancellationToken).ConfigureAwait(false);
-            return new SessionLease(_gate);
+            return new SessionLease(_gate, ReleaseSeatAfterUseSync);
         }
         catch
         {
@@ -107,7 +109,7 @@ public sealed class SqlAccSessionManager : ISqlAccSessionManager, IAsyncDisposab
         try
         {
             await EnsureLoggedInAsync(login, cancellationToken).ConfigureAwait(false);
-            return new SessionLease(_gate);
+            return new SessionLease(_gate, ReleaseSeatAfterUseSync);
         }
         catch
         {
@@ -134,6 +136,8 @@ public sealed class SqlAccSessionManager : ISqlAccSessionManager, IAsyncDisposab
     /// </summary>
     private void EnsureSingleInstanceLogin(CompanyLogin login, string key)
     {
+        EnforceAtMostOneSqlAccProcess();
+
         if (_app is null || !IsComAlive(_app))
         {
             ReleaseComApp_NoThrow(reason: "dead-or-missing", fromKey: _activeCompanyKey, toKey: key);
@@ -169,6 +173,81 @@ public sealed class SqlAccSessionManager : ISqlAccSessionManager, IAsyncDisposab
             else
                 _activeCompanyKey = null;
             throw;
+        }
+    }
+
+    /// <summary>If more than one SQLACC.exe is alive, kill all and drop our COM handle so Login uses one seat.</summary>
+    private void EnforceAtMostOneSqlAccProcess()
+    {
+        var count = ComRunningObject.CountSqlAccProcesses();
+        if (count <= 1)
+            return;
+
+        _logger.LogWarning(
+            "Found {Count} SQLACC.exe processes; closing all so only one concurrent user seat is used",
+            count);
+        ReleaseComApp_NoThrow(reason: "multi-sqlacc", fromKey: _activeCompanyKey, toKey: null);
+        ComRunningObject.KillAllSqlAccProcesses();
+    }
+
+    /// <summary>
+    /// Called when a session lease ends (end of RunAsync / UseCompany). Frees the concurrent
+    /// user seat so interactive SQL Account can log in on 1-user licenses.
+    /// </summary>
+    private void ReleaseSeatAfterUseSync()
+    {
+        if (!_options.LogoutAfterUse && !_options.ReleaseSqlAccAfterUse)
+            return;
+
+        try
+        {
+            _sta.RunAsync(ReleaseSeatOnSta).GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "SDK failed to release concurrent user seat after use");
+        }
+    }
+
+    private void ReleaseSeatOnSta()
+    {
+        if (_app is null)
+        {
+            _activeCompanyKey = null;
+            if (_options.ReleaseSqlAccAfterUse)
+                ComRunningObject.KillAllSqlAccProcesses();
+            return;
+        }
+
+        if (_options.LogoutAfterUse)
+        {
+            try
+            {
+                if (_app.IsLogin)
+                {
+                    _app.Logout();
+                    _logger.LogInformation(
+                        "SDK Logout after use — freed SQL Account concurrent user seat");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "SDK Logout after use failed");
+            }
+
+            _activeCompanyKey = null;
+        }
+
+        if (!_options.ReleaseSqlAccAfterUse || _app.AttachedToRunningInstance)
+            return;
+
+        ReleaseComApp_NoThrow(reason: "after-use-release", fromKey: null, toKey: null);
+        var killed = ComRunningObject.KillAllSqlAccProcesses();
+        if (killed > 0)
+        {
+            _logger.LogInformation(
+                "SDK closed {Count} SQLACC.exe after use so interactive login can take the only seat",
+                killed);
         }
     }
 
@@ -352,13 +431,15 @@ public sealed class SqlAccSessionManager : ISqlAccSessionManager, IAsyncDisposab
 
     private readonly record struct CompanyLogin(CompanyTarget Target, string Username, string Password);
 
-    private sealed class SessionLease(SemaphoreSlim gate) : IDisposable
+    private sealed class SessionLease(SemaphoreSlim gate, Action? onRelease = null) : IDisposable
     {
         private int _released;
         public void Dispose()
         {
-            if (Interlocked.Exchange(ref _released, 1) == 0)
-                gate.Release();
+            if (Interlocked.Exchange(ref _released, 1) != 0)
+                return;
+            try { onRelease?.Invoke(); }
+            finally { gate.Release(); }
         }
     }
 

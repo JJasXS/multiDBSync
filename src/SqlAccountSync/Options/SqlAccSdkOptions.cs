@@ -52,6 +52,18 @@ public sealed class SqlAccSdkOptions
     /// </summary>
     public bool PreferRunningInstance { get; set; } = true;
 
+    /// <summary>
+    /// After each SDK write/use finishes, call Logout so the concurrent user seat is freed
+    /// (1-user licenses cannot open SQL Account while sync stays logged in).
+    /// </summary>
+    public bool LogoutAfterUse { get; set; } = true;
+
+    /// <summary>
+    /// After Logout, dispose the owned COM LocalServer and close leftover SQLACC.exe so no
+    /// ghost process holds a seat. Ignored when attached to an interactive window.
+    /// </summary>
+    public bool ReleaseSqlAccAfterUse { get; set; } = true;
+
     /// <summary>Default DCF full path used when a registered database does not override it.</summary>
     public string DefaultDcfPath { get; set; } = "";
 
