@@ -24,6 +24,51 @@ internal static class ComRunningObject
         }
     }
 
+    /// <summary>
+    /// Ends every SQLACC.exe so the next CreateInstance owns exactly one window
+    /// (same pattern as eStream SDK samples that taskkill SQLACC before Login).
+    /// </summary>
+    public static int KillAllSqlAccProcesses()
+    {
+        var killed = 0;
+        Process[] procs;
+        try
+        {
+            procs = Process.GetProcessesByName(SqlAccProcessName);
+        }
+        catch
+        {
+            return 0;
+        }
+
+        foreach (var proc in procs)
+        {
+            try
+            {
+                if (!proc.HasExited)
+                {
+                    proc.Kill(entireProcessTree: true);
+                    killed++;
+                }
+            }
+            catch
+            {
+                try { proc.Kill(); killed++; }
+                catch { /* ignore */ }
+            }
+            finally
+            {
+                try { proc.Dispose(); } catch { /* ignore */ }
+            }
+        }
+
+        var deadline = DateTime.UtcNow.AddSeconds(8);
+        while (DateTime.UtcNow < deadline && CountSqlAccProcesses() > 0)
+            Thread.Sleep(200);
+
+        return killed;
+    }
+
     public static bool TryAttach(string progId, out object? instance, int attempts = 6, int delayMs = 200)
     {
         instance = null;

@@ -459,7 +459,7 @@ public sealed class SqlAccComAppFactory : ISqlAccComAppFactory
         var progId = string.IsNullOrWhiteSpace(_options.ProgId) ? "SQLAcc.BizApp" : _options.ProgId.Trim();
         var runningCount = ComRunningObject.CountSqlAccProcesses();
 
-        // Always prefer an already-registered automation object when the UI exposes one.
+        // Prefer COM attach when the running SQL Account registered itself.
         if (ComRunningObject.TryAttach(progId, out var attached) && attached is not null)
         {
             _logger?.LogInformation(
@@ -467,20 +467,20 @@ public sealed class SqlAccComAppFactory : ISqlAccComAppFactory
             return new SqlAccComApp(attached, attached: true);
         }
 
+        // Interactive SQLACC is usually not in the ROT. Closing leftovers then CreateInstance
+        // gives auto-push one window to Logout/Login across companies (no second tab).
         if (_options.PreferRunningInstance && runningCount > 0)
         {
-            // Interactive SQL Account usually does NOT RegisterActiveObject, so attach fails.
-            // CreateInstance is required for writes; it may open a second SQLACC tab (SQL Acc limitation).
+            var killed = ComRunningObject.KillAllSqlAccProcesses();
             _logger?.LogWarning(
-                "SQLACC.exe is running ({Count}) but COM attach failed (not in ROT). " +
-                "Creating automation instance so auto-push can continue — a second SQL Account window may appear.",
-                runningCount);
-        }
-        else
-        {
-            _logger?.LogInformation("SDK creating new {ProgId} instance (SQLACC processes={Count}).", progId, runningCount);
+                "SQLACC.exe was running ({Count}) but COM attach failed. Closed {Killed} process(es) " +
+                "so SDK owns a single SQL Account window for Login/Logout auto-push.",
+                runningCount, killed);
         }
 
+        _logger?.LogInformation(
+            "SDK creating single {ProgId} instance (SQLACC processes before create={Count}).",
+            progId, ComRunningObject.CountSqlAccProcesses());
         return new SqlAccComApp(progId);
     }
 }

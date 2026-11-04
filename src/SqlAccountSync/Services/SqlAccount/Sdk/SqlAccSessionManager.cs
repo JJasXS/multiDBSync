@@ -22,10 +22,8 @@ public interface ISqlAccSessionManager
 }
 
 /// <summary>
-/// Multi-company SDK session: reuses one COM app for the active company; on company change
-/// disposes the LocalServer and creates a fresh <c>SQLAcc.BizApp</c> before Login.
-/// Logout+Login on the same instance is unreliable (IsLogin=false / AccountUI AV) — see SdkSessionManager.
-/// Does not open Firebird directly and does not perform BizObject writes.
+/// Multi-company SDK session for auto-push: owns <b>one</b> SQLACC.exe and switches companies with
+/// Logout → Login → write on that same COM instance (no second tab per company).
 /// </summary>
 public sealed class SqlAccSessionManager : ISqlAccSessionManager, IAsyncDisposable, IDisposable
 {
@@ -126,53 +124,46 @@ public sealed class SqlAccSessionManager : ISqlAccSessionManager, IAsyncDisposab
             if (IsUsableSessionFor(key))
                 return;
 
-            if (_options.PreferRunningInstance)
-            {
-                EnsureSingleInstanceLogin(login, key);
-                return;
-            }
-
-            // Legacy: company switch tears down LocalServer and starts a fresh BizApp.
-            ReleaseComApp_NoThrow(reason: "company-switch-or-relogin", fromKey: _activeCompanyKey, toKey: key);
-            _app = _factory.Create();
-            PerformLogin(login, key, "fresh COM instance");
+            // Always one window: Logout → Login on the same BizApp (company A → B → C).
+            EnsureSingleInstanceLogin(login, key);
         }, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
-    /// Keep a single SQL Account window: attach/reuse one BizApp. Prefer Login on the same instance;
-    /// never CreateInstance while SQLACC.exe is already running.
+    /// One SQL Account tab: create/attach once, then Logout + Login when the destination company changes.
     /// </summary>
     private void EnsureSingleInstanceLogin(CompanyLogin login, string key)
     {
         if (_app is null || !IsComAlive(_app))
         {
-            // Soft-drop our handle only — do not kill the user's SQL Account.
             ReleaseComApp_NoThrow(reason: "dead-or-missing", fromKey: _activeCompanyKey, toKey: key);
             _app = _factory.Create();
         }
 
         try
         {
-            // Same company already logged in — do nothing (avoids Logout/Login churn / extra windows).
             if (IsUsableSessionFor(key))
                 return;
 
             if (_app.IsLogin)
             {
+                _logger.LogInformation(
+                    "SDK Logout before switch {From} → {To}",
+                    _activeCompanyKey ?? "(none)", key);
                 try { _app.Logout(); }
                 catch (Exception ex)
                 {
                     _logger.LogDebug(ex, "SDK Logout before company switch failed; continuing with Login");
                 }
+
+                _activeCompanyKey = null;
             }
 
-            PerformLogin(login, key,
-                _app.AttachedToRunningInstance ? "running SQL Account window" : "owned COM instance");
+            PerformLogin(login, key, "single SQL Account window");
         }
         catch
         {
-            // Keep attached RCW if possible so the next job can retry without CreateInstance.
+            // Drop dead owned handle so the next attempt can Create a clean single instance.
             if (_app is null || !_app.AttachedToRunningInstance)
                 ReleaseComApp_NoThrow(reason: "login-failed", fromKey: key, toKey: null);
             else

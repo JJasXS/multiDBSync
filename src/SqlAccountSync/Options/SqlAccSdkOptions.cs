@@ -46,9 +46,9 @@ public sealed class SqlAccSdkOptions
     public bool AllowLiveCom { get; set; }
 
     /// <summary>
-    /// Prefer attaching to a running SQLAcc.BizApp (ROT / GetActiveObject). Interactive SQL Account
-    /// often does not register in the ROT, so attach fails and CreateInstance is used (may open a
-    /// second window). Kept true so we still attach whenever automation exposes the object.
+    /// Drive auto-push on a single SQLACC.exe: Logout → Login → write → next company on the same
+    /// COM instance. When true (default), if an existing SQL Account cannot be attached via COM,
+    /// leftover SQLACC.exe processes are closed before CreateInstance so a second tab is not opened.
     /// </summary>
     public bool PreferRunningInstance { get; set; } = true;
 
