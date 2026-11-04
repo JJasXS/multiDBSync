@@ -45,6 +45,13 @@ public sealed class SqlAccSdkOptions
     /// </summary>
     public bool AllowLiveCom { get; set; }
 
+    /// <summary>
+    /// When true (default), attach to the already-open SQL Account window via the Running Object Table
+    /// instead of <c>CreateInstance</c> starting a second SQLACC.exe tab. Company switches Login on
+    /// that same instance.
+    /// </summary>
+    public bool PreferRunningInstance { get; set; } = true;
+
     /// <summary>Default DCF full path used when a registered database does not override it.</summary>
     public string DefaultDcfPath { get; set; } = "";
 

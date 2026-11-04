@@ -4,6 +4,12 @@ namespace SqlAccountSync.Services.SqlAccount.Sdk;
 public interface ISqlAccComApp : IDisposable
 {
     bool IsLogin { get; }
+
+    /// <summary>
+    /// True when this wrapper attached to an already-running SQLACC.exe (do not Logout/kill on dispose).
+    /// </summary>
+    bool AttachedToRunningInstance => false;
+
     void Login(string userName, string password, string dcfPath, string databaseFileName);
     void Logout();
 

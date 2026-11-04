@@ -126,31 +126,81 @@ public sealed class SqlAccSessionManager : ISqlAccSessionManager, IAsyncDisposab
             if (IsUsableSessionFor(key))
                 return;
 
-            // Different company (or dead session): never Logout+Login on the same BizApp instance.
+            if (_options.PreferRunningInstance)
+            {
+                EnsureSingleInstanceLogin(login, key);
+                return;
+            }
+
+            // Legacy: company switch tears down LocalServer and starts a fresh BizApp.
             ReleaseComApp_NoThrow(reason: "company-switch-or-relogin", fromKey: _activeCompanyKey, toKey: key);
-
             _app = _factory.Create();
-            _logger.LogInformation(
-                "SDK Login company file {DatabaseFile} (fresh COM instance)", login.Target.DatabaseFileName);
-            try
-            {
-                _app.Login(login.Username, login.Password, login.Target.DcfPath, login.Target.DatabaseFileName);
-                if (!_app.IsLogin)
-                {
-                    var diag = _app is SqlAccComApp com ? com.LastComDiagnostics : _app.LastComDiagnostics;
-                    throw new InvalidOperationException(
-                        "SQLAcc.BizApp Login did not establish a session (IsLogin=false). diag={" + diag + "}");
-                }
-
-                _activeCompanyKey = key;
-            }
-            catch
-            {
-                // Fail closed: never leave a half-logged session that could serve the wrong company.
-                ReleaseComApp_NoThrow(reason: "login-failed", fromKey: key, toKey: null);
-                throw;
-            }
+            PerformLogin(login, key, "fresh COM instance");
         }, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Keep a single SQL Account window: attach/reuse one BizApp and Login (after Logout) for company switches.
+    /// </summary>
+    private void EnsureSingleInstanceLogin(CompanyLogin login, string key)
+    {
+        if (_app is null || !IsComAlive(_app))
+        {
+            ReleaseComApp_NoThrow(reason: "dead-or-missing", fromKey: _activeCompanyKey, toKey: key);
+            _app = _factory.Create();
+        }
+
+        try
+        {
+            if (_app.IsLogin)
+            {
+                try { _app.Logout(); }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "SDK Logout before company switch failed; continuing with Login");
+                }
+            }
+
+            PerformLogin(login, key,
+                _app.AttachedToRunningInstance ? "running SQL Account window" : "owned COM instance");
+        }
+        catch
+        {
+            // Fail closed on login errors; soft-release keeps the user's window alive when attached.
+            ReleaseComApp_NoThrow(reason: "login-failed", fromKey: key, toKey: null);
+            throw;
+        }
+    }
+
+    private void PerformLogin(CompanyLogin login, string key, string modeLabel)
+    {
+        if (_app is null)
+            throw new InvalidOperationException("SDK COM app is not initialized before Login.");
+
+        _logger.LogInformation(
+            "SDK Login company file {DatabaseFile} ({Mode})", login.Target.DatabaseFileName, modeLabel);
+        _app.Login(login.Username, login.Password, login.Target.DcfPath, login.Target.DatabaseFileName);
+        if (!_app.IsLogin)
+        {
+            var diag = _app.LastComDiagnostics;
+            throw new InvalidOperationException(
+                "SQLAcc.BizApp Login did not establish a session (IsLogin=false). diag={" + diag + "}");
+        }
+
+        _activeCompanyKey = key;
+    }
+
+    private static bool IsComAlive(ISqlAccComApp app)
+    {
+        try
+        {
+            _ = app.IsLogin;
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private async Task<CompanyLogin> ResolveLoginAsync(RegisteredDatabase db, CancellationToken cancellationToken)
