@@ -1304,6 +1304,7 @@ code {
   font-size: 14px;
   line-height: 1.5;
   color: var(--ice-text);
+  white-space: pre-line;
 }
 .txn-qty-modal {
   max-width: 720px;
@@ -3236,7 +3237,35 @@ input:focus, select:focus, textarea:focus {
   max-width: none;
 }
 .users-card-head {
-  justify-content: flex-end;
+  justify-content: space-between;
+}
+.users-card-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.users-card-title h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ice-heading);
+}
+.users-card-icon {
+  flex: 0 0 auto;
+  color: var(--ice-heading);
+}
+.users-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  white-space: nowrap;
+}
+.users-add-plus {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
 }
 .users-form-lede {
   margin: -4px 0 14px;
@@ -3261,9 +3290,132 @@ input:focus, select:focus, textarea:focus {
 .users-form-actions {
   padding-top: 4px;
 }
+.users-table thead th.users-col-status,
+.users-table tbody td.users-col-status {
+  text-align: center;
+  vertical-align: middle;
+  white-space: nowrap;
+  width: 7.5rem;
+}
+.users-table thead th.users-col-actions,
+.users-table tbody td.users-col-actions {
+  text-align: left;
+  vertical-align: middle;
+  white-space: nowrap;
+  width: 1%;
+  padding-left: 10px;
+  padding-right: 12px;
+}
+.users-table .user-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: .01em;
+}
+.users-table .user-status-pill.is-active {
+  background: var(--ice-success-soft);
+  color: var(--ice-success);
+}
+.users-table .user-status-pill.is-inactive {
+  background: var(--ice-danger-soft);
+  color: var(--ice-danger);
+}
+.user-actions {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+  min-height: 30px;
+}
+.user-switch-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
 .user-switch-form {
   display: inline-flex;
   margin: 0;
+  flex: 0 0 auto;
+}
+.user-switch-state {
+  color: var(--ice-text);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+.user-switch-state.is-off {
+  color: var(--ice-text-muted);
+}
+.user-actions-sep {
+  display: inline-block;
+  width: 1px;
+  height: 18px;
+  background: var(--ice-border-soft);
+  flex: 0 0 auto;
+}
+.user-actions-empty {
+  color: var(--ice-text-muted);
+  font-size: 13px;
+  line-height: 1;
+}
+.user-self-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 3px 10px;
+  border-radius: 8px;
+  background: var(--ice-accent-soft);
+  color: var(--ice-accent-hover);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1;
+  white-space: nowrap;
+}
+.user-self-chip svg {
+  flex: 0 0 auto;
+}
+.user-delete-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 28px;
+  margin: 0;
+  padding: 3px 8px;
+  border: 1px solid #e3a4b0;
+  border-radius: 8px;
+  background: var(--ice-surface);
+  color: var(--ice-danger);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.user-delete-btn:hover {
+  background: var(--ice-danger-soft);
+  border-color: #d98997;
+}
+.user-delete-btn:focus-visible {
+  outline: 2px solid var(--ice-danger);
+  outline-offset: 2px;
+}
+.user-delete-btn:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+.user-delete-btn svg {
+  flex: 0 0 auto;
 }
 .user-switch {
   display: inline-flex;
@@ -3284,7 +3436,7 @@ input:focus, select:focus, textarea:focus {
   width: 36px;
   height: 20px;
   border-radius: 999px;
-  background: #b7c6d4;
+  background: #c5d0db;
   flex: 0 0 auto;
 }
 .user-switch-knob {
@@ -3307,12 +3459,7 @@ input:focus, select:focus, textarea:focus {
 }
 .user-switch.is-locked {
   cursor: not-allowed;
-  opacity: 0.55;
-}
-.user-switch-note {
-  display: block;
-  margin-top: 4px;
-  font-size: 11px;
+  opacity: 0.7;
 }
 .status-switch {
   display: inline-flex;
