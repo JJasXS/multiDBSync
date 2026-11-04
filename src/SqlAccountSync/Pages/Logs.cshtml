@@ -3,23 +3,34 @@
 @{
     ViewData["Title"] = "Logs";
     var showActions = Model.ShowActions;
-    var columns = showActions ? 5 : 4;
-    var txnCount = Model.Rows.Count(r => r.Kind == "transaction");
-    var auditCount = Model.Rows.Count(r => r.Kind == "audit");
-    var errorCount = Model.Rows.Count(r => r.Kind == "error");
+    var anyRowAction = showActions && Model.Rows.Any(r =>
+        !string.IsNullOrWhiteSpace(r.LinkUrl) || r.RetryTxnPk is not null || r.ResolveErrorId is not null);
+    var columns = anyRowAction ? 5 : 4;
+    var totals = Model.Totals;
 }
-<div class="card logs-page">
+<div class="card logs-page"
+     data-log-total-all="@totals.All"
+     data-log-total-transaction="@totals.Transaction"
+     data-log-total-audit="@totals.Audit"
+     data-log-total-error="@totals.Error"
+     data-log-source="@(Model.IsRemoteSource ? "remote-readonly" : "local")">
+    @if (Model.IsRemoteSource)
+    {
+        <p class="logs-remote-banner" role="status">
+            Logs from remote TEST SYNC.FDB — @Model.SourceDescription. Retry queues a TXN job here; Resolve updates SYNC_ERROR on this database.
+        </p>
+    }
     <div class="logs-filters" role="tablist" aria-label="Log type">
-        <button type="button" class="logs-filter is-active" data-log-filter="all">All <span class="count-pill">@Model.Rows.Count</span></button>
-        <button type="button" class="logs-filter" data-log-filter="transaction">Transactions <span class="count-pill">@txnCount</span></button>
-        <button type="button" class="logs-filter" data-log-filter="audit">Audit <span class="count-pill">@auditCount</span></button>
-        <button type="button" class="logs-filter" data-log-filter="error">Errors <span class="count-pill">@errorCount</span></button>
+        <button type="button" class="logs-filter is-active" data-log-filter="all">All <span class="count-pill">@totals.All</span></button>
+        <button type="button" class="logs-filter" data-log-filter="transaction">Transactions <span class="count-pill">@totals.Transaction</span></button>
+        <button type="button" class="logs-filter" data-log-filter="audit">Audit <span class="count-pill">@totals.Audit</span></button>
+        <button type="button" class="logs-filter" data-log-filter="error">Errors <span class="count-pill">@totals.Error</span></button>
     </div>
     <section class="push-panel logs-panel">
         <div class="push-panel-head">
             <div class="logs-panel-title">
                 <h3>Logs</h3>
-                <span class="push-panel-count" data-log-count>@Model.Rows.Count record@(Model.Rows.Count == 1 ? "" : "s")</span>
+                <span class="push-panel-count" data-log-count>@totals.All record@(totals.All == 1 ? "" : "s")</span>
             </div>
             <div class="push-panel-search">
                 <label class="sr-only" for="logSearch">Search logs</label>
@@ -27,7 +38,7 @@
             </div>
         </div>
         <div class="push-panel-table-wrap" data-log-more="@(Model.HasMore ? "1" : "0")" data-log-actions="@(showActions ? "1" : "0")">
-            <table class="push-panel-table" id="logsTable">
+            <table class="push-panel-table@(showActions && !anyRowAction ? " is-actions-hidden" : "")" id="logsTable">
                 <thead>
                     <tr>
                         <th>When</th>
@@ -36,7 +47,7 @@
                         <th>Status</th>
                         @if (showActions)
                         {
-                            <th class="col-actions"></th>
+                            <th class="col-actions" scope="col">Actions</th>
                         }
                     </tr>
                 </thead>
@@ -44,7 +55,7 @@
                 @if (Model.Rows.Count == 0)
                 {
                     <tr data-log-empty>
-                        <td colspan="@columns" class="empty">No logs yet.</td>
+                        <td colspan="@columns" class="empty" data-log-span>No logs yet.</td>
                     </tr>
                 }
                 else
@@ -52,10 +63,10 @@
                     <partial name="_LogRows" model="new SqlAccountSync.Pages.LogTableBody { Rows = Model.Rows, ShowActions = showActions }" />
                 }
                     <tr id="logSearchEmpty" hidden>
-                        <td colspan="@columns" class="empty" data-log-empty-msg>No logs match that filter.</td>
+                        <td colspan="@columns" class="empty" data-log-span data-log-empty-msg>No logs match that filter.</td>
                     </tr>
                     <tr id="logLoading" hidden>
-                        <td colspan="@columns" class="empty">Loading more...</td>
+                        <td colspan="@columns" class="empty" data-log-span>Loading more...</td>
                     </tr>
                 </tbody>
             </table>
@@ -64,76 +75,107 @@
 </div>
 <script>
 (() => {
+  const root = document.querySelector('.logs-page');
   const search = document.getElementById('logSearch');
   const emptyRow = document.getElementById('logSearchEmpty');
   const loadingRow = document.getElementById('logLoading');
-  const body = document.getElementById('logRows');
   const scroller = document.querySelector('.logs-page .push-panel-table-wrap');
   const count = document.querySelector('[data-log-count]');
   const filters = Array.from(document.querySelectorAll('[data-log-filter]'));
   const pills = Object.fromEntries(filters.map((btn) => [btn.getAttribute('data-log-filter'), btn.querySelector('.count-pill')]));
-  // Preserve per-tab totals when a kind-specific fetch replaces the DOM (e.g. Errors-only).
-  const readPill = (key) => {
-    const n = Number.parseInt((pills[key]?.textContent || '0').trim(), 10);
-    return Number.isFinite(n) ? n : 0;
+  const readAttr = (name) => {
+    const n = Number.parseInt((root?.getAttribute(name) || '0').trim(), 10);
+    return Number.isFinite(n) && n >= 0 ? n : 0;
   };
-  let tabCounts = {
-    all: readPill('all'),
-    transaction: readPill('transaction'),
-    audit: readPill('audit'),
-    error: readPill('error')
+  // Authoritative category totals from the database — never derived from paginated rows.
+  let totals = {
+    all: readAttr('data-log-total-all'),
+    transaction: readAttr('data-log-total-transaction'),
+    audit: readAttr('data-log-total-audit'),
+    error: readAttr('data-log-total-error')
   };
   let kind = 'all';
   let hasMore = scroller?.getAttribute('data-log-more') === '1';
   let loading = false;
   let generation = 0;
   const showActions = scroller?.getAttribute('data-log-actions') === '1' ? '1' : '0';
+  const table = document.getElementById('logsTable');
   const rows = () => Array.from(document.querySelectorAll('#logRows tr[data-log-row]'));
-  const setPills = (counts) => {
+  const selectedTotal = () => {
+    if (kind === 'transaction') return totals.transaction;
+    if (kind === 'audit') return totals.audit;
+    if (kind === 'error') return totals.error;
+    return totals.all;
+  };
+  const setPills = () => {
     Object.entries(pills).forEach(([key, pill]) => {
       if (!pill) return;
-      const value = counts[key] ?? 0;
-      pill.textContent = String(value);
+      pill.textContent = String(totals[key] ?? 0);
       pill.hidden = false;
     });
   };
+  const applyTotalsFromHeaders = (res) => {
+    const parse = (h) => {
+      const n = Number.parseInt((res.headers.get(h) || '').trim(), 10);
+      return Number.isFinite(n) && n >= 0 ? n : null;
+    };
+    const txn = parse('X-Log-Count-Transaction');
+    const audit = parse('X-Log-Count-Audit');
+    const error = parse('X-Log-Count-Error');
+    const all = parse('X-Log-Count-All');
+    if (txn === null || audit === null || error === null) return;
+    totals = {
+      transaction: txn,
+      audit: audit,
+      error: error,
+      all: all ?? (txn + audit + error)
+    };
+    root?.setAttribute('data-log-total-all', String(totals.all));
+    root?.setAttribute('data-log-total-transaction', String(totals.transaction));
+    root?.setAttribute('data-log-total-audit', String(totals.audit));
+    root?.setAttribute('data-log-total-error', String(totals.error));
+  };
+  // Show ACTIONS only when at least one visible row has a real button (Open / Retry / Resolve).
+  const syncActionsColumn = () => {
+    if (!table || showActions !== '1') return;
+    const visible = rows().filter((tr) => !tr.hidden);
+    const has = visible.some((tr) => tr.getAttribute('data-log-has-action') === '1');
+    table.classList.toggle('is-actions-hidden', !has);
+    const cols = has ? 5 : 4;
+    table.querySelectorAll('[data-log-span]').forEach((td) => { td.colSpan = cols; });
+  };
   const apply = () => {
     const q = (search?.value || '').trim().toLowerCase();
-    const loaded = { all: 0, transaction: 0, audit: 0, error: 0 };
     let visible = 0;
+    let wrongKind = 0;
     rows().forEach((tr) => {
       const rowKind = tr.getAttribute('data-log-kind') || '';
       const text = (tr.getAttribute('data-log-text') || '').toLowerCase();
       const kindOk = kind === 'all' || rowKind === kind;
+      if (!kindOk) wrongKind++;
       const show = kindOk && (!q || text.includes(q));
       tr.hidden = !show;
-      if (loaded[rowKind] !== undefined) loaded[rowKind]++;
-      loaded.all++;
       if (show) visible++;
     });
-    if (kind === 'all') {
-      // Mixed feed: badges match currently loaded rows of each kind.
-      tabCounts = { ...loaded };
-    } else {
-      // Kind-specific fetch: update only that tab's badge; keep other tabs' last known totals.
-      tabCounts[kind] = loaded[kind] || 0;
-      tabCounts.all = tabCounts.transaction + tabCounts.audit + tabCounts.error;
+    if (wrongKind > 0) {
+      console.warn('Logs: ignoring ' + wrongKind + ' row(s) that do not match selected kind ' + kind);
     }
-    // Empty-state row must show for zero visible rows (including Errors with 0 records).
     if (emptyRow) {
       emptyRow.hidden = visible > 0;
       const msg = emptyRow.querySelector('[data-log-empty-msg]') || emptyRow.querySelector('td');
       if (msg) {
-        const qActive = q.length > 0;
-        if (qActive) msg.textContent = 'No logs match that filter.';
+        if (q) msg.textContent = 'No logs match that filter.';
         else if (kind === 'error') msg.textContent = 'No error logs.';
         else if (kind === 'audit') msg.textContent = 'No audit logs.';
         else if (kind === 'transaction') msg.textContent = 'No transaction logs.';
         else msg.textContent = 'No logs yet.';
       }
     }
-    if (count) count.textContent = `${visible} record${visible === 1 ? '' : 's'}`;
-    setPills(tabCounts);
+    // Summary: category total from DB; when searching, show matches among currently loaded rows.
+    const summary = q ? visible : selectedTotal();
+    if (count) count.textContent = `${summary} record${summary === 1 ? '' : 's'}`;
+    setPills();
+    syncActionsColumn();
   };
   const cursorFrom = (tr) => ({
     before: tr?.getAttribute('data-log-at') || '',
@@ -164,14 +206,16 @@
     let added = 0;
     try {
       const res = await fetch(url, { headers: { 'X-Requested-With': 'fetch' } });
-      if (gen !== generation) return 0;
-      hasMore = res.headers.get('X-Has-More') === '1';
       const html = (await res.text()).trim();
+      // Ignore stale responses after a newer tab switch.
+      if (gen !== generation) return 0;
+      applyTotalsFromHeaders(res);
+      hasMore = res.headers.get('X-Has-More') === '1';
       if (html && loadingRow) loadingRow.insertAdjacentHTML('beforebegin', html);
       added = html ? 1 : 0;
       if (!html) hasMore = false;
     } catch {
-      hasMore = false;
+      if (gen === generation) hasMore = false;
     } finally {
       if (gen === generation) {
         loading = false;
@@ -199,6 +243,8 @@
       }
       kind = next;
       filters.forEach((item) => item.classList.toggle('is-active', item === btn));
+      // Show the authoritative total immediately while the filtered page loads.
+      apply();
       loadMore(true).then(fill);
     });
   });
@@ -213,6 +259,8 @@
     if (scroller.scrollTop + scroller.clientHeight < scroller.scrollHeight - 48) return;
     loadMore(false).then(fill);
   });
+  setPills();
+  apply();
   const hashKind = { 'error-logs': 'error', 'audit-logs': 'audit', 'history-transaction-logs': 'transaction' };
   const hashed = hashKind[(location.hash || '').replace(/^#/, '')];
   if (hashed) document.querySelector(`[data-log-filter="${hashed}"]`)?.click();

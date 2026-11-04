@@ -333,6 +333,8 @@ public class DevSingleJobProcessorTests
             throw new NotSupportedException();
         public Task<List<SyncTransaction>> ListPageAsync(DateTime? before, string? beforeKind, int beforeId, int take, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
+        public Task<int> CountAsync(CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
         public Task<List<TxnEvent>> TimelineAsync(int txnPk, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
         public Task<List<(string Code, string Name, string Src, string Dst, string DstPath)>> ListTypesAsync(CancellationToken cancellationToken = default) =>

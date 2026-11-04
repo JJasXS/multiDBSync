@@ -1821,13 +1821,41 @@ code {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.logs-page {
-  margin-bottom: 16px;
+/* Logs: fill remaining main column height; one scroll inside the table wrap only. */
+.main:has(.logs-page) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  padding-bottom: 16px;
+}
+.main:has(.logs-page) > .topbar {
+  flex: 0 0 auto;
+}
+.card.logs-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-bottom: 0;
   padding: 12px;
+}
+.logs-remote-banner {
+  flex: 0 0 auto;
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-radius: var(--ice-radius);
+  border: 1px solid #c9dff0;
+  background: var(--ice-accent-soft);
+  color: var(--ice-heading);
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 1.35;
 }
 .logs-filters {
   display: flex;
   flex-wrap: wrap;
+  flex: 0 0 auto;
   gap: 8px;
   margin-bottom: 12px;
 }
@@ -1861,17 +1889,27 @@ code {
 .logs-page .logs-panel {
   display: flex;
   flex-direction: column;
-  height: min(680px, max(240px, calc(100dvh - 220px)));
+  flex: 1 1 auto;
+  min-height: 0;
+  /* Grow with the viewport; no fixed 680px / 480px caps. */
+  height: auto;
   overflow: hidden;
   border: 1px solid var(--ice-border-soft);
   border-radius: var(--ice-radius);
   background: var(--ice-surface);
 }
+.logs-page .logs-panel > .push-panel-head {
+  flex: 0 0 auto;
+}
 .logs-page .logs-panel > .push-panel-table-wrap {
   display: block;
   flex: 1 1 auto;
   min-height: 0;
+  /* Override global .push-panel-table-wrap { max-height: 480px; min-height: 300px }. */
+  max-height: none;
+  min-height: 0;
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .logs-page .push-panel-head {
   padding: 8px 12px;
@@ -1915,9 +1953,47 @@ code {
   z-index: 1;
   background: var(--ice-surface-muted);
 }
-.logs-page .col-actions form {
-  display: inline;
+.logs-page .push-panel-table thead th.col-actions,
+.logs-page .push-panel-table td.col-actions {
+  text-align: right;
+  white-space: nowrap;
+  width: 1%;
+  min-width: max-content;
+  vertical-align: middle;
+  padding-left: 12px;
+  padding-right: 12px;
+}
+.logs-page .push-panel-table td:nth-child(3) {
+  min-width: 12rem;
+}
+.logs-page .push-panel-table .cell-truncate {
+  max-width: min(36rem, 52vw);
+}
+/* Hide ACTIONS header + cells when no visible row has buttons (DETAIL can expand). */
+.logs-page #logsTable.is-actions-hidden th.col-actions,
+.logs-page #logsTable.is-actions-hidden td.col-actions {
+  display: none;
+}
+.logs-page #logsTable.is-actions-hidden .cell-truncate {
+  max-width: min(56rem, 70vw);
+}
+/* Keep Open + Retry (or Resolve) on one line; column grows to fit. */
+.logs-page .logs-actions {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  width: max-content;
+  max-width: none;
+}
+.logs-page .logs-actions .btn,
+.logs-page .logs-actions form {
+  display: inline-flex;
+  flex: 0 0 auto;
   margin: 0;
+  vertical-align: middle;
 }
 .txn-layout {
   display: grid;
@@ -3162,6 +3238,21 @@ input:focus, select:focus, textarea:focus {
     min-height: 100vh;
     min-height: 100dvh;
     padding: 0 16px 32px;
+  }
+  /* Logs: shell is no longer viewport-locked; use dvh so the table still fills. */
+  .main:has(.logs-page) {
+    display: block;
+    overflow: visible;
+    padding-bottom: 16px;
+  }
+  .card.logs-page {
+    flex: none;
+    min-height: 0;
+  }
+  .logs-page .logs-panel {
+    flex: none;
+    height: max(280px, calc(100dvh - 220px));
+    min-height: 280px;
   }
   .nav-close {
     display: block;

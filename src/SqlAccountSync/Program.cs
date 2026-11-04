@@ -148,6 +148,7 @@ if (envOverrides.Count > 0)
 builder.Services.Configure<CentralDbOptions>(builder.Configuration.GetSection(CentralDbOptions.SectionName));
 builder.Services.Configure<LoginDbOptions>(builder.Configuration.GetSection(LoginDbOptions.SectionName));
 builder.Services.Configure<CentralRegistryOptions>(builder.Configuration.GetSection(CentralRegistryOptions.SectionName));
+builder.Services.Configure<LogsRemoteReadOptions>(builder.Configuration.GetSection(LogsRemoteReadOptions.SectionName));
 builder.Services.Configure<SmtpOptions>(builder.Configuration.GetSection(SmtpOptions.SectionName));
 builder.Services.Configure<SyncOptions>(builder.Configuration.GetSection(SyncOptions.SectionName));
 builder.Services.Configure<BootstrapOptions>(builder.Configuration.GetSection(BootstrapOptions.SectionName));
@@ -215,8 +216,10 @@ builder.Services.AddSingleton<ISqlApiCredentialBundle, SqlApiCredentialBundle>()
 builder.Services.AddSingleton<ISqlApiSecretProvisioner, SqlApiSecretProvisioner>();
 // Master SDK connection/session helpers (CLI smoke /health/detail). Website writes use SqlAccountingWrite:Provider.
 builder.Services.AddSingleton<ISdkConnectionBundle, SdkConnectionBundle>();
-builder.Services.AddSingleton<ISdkSessionManager, SdkSessionManager>();builder.Services.AddSingleton<CentralDb>();
+builder.Services.AddSingleton<ISdkSessionManager, SdkSessionManager>();
+builder.Services.AddSingleton<CentralDb>();
 builder.Services.AddSingleton<IRegistryReadGateway, RegistryReadGateway>();
+builder.Services.AddSingleton<ILogsReadGateway, LogsReadGateway>();
 builder.Services.AddSingleton<CompanyConnectionFactory>();
 builder.Services.AddSingleton<SchemaBootstrap>();
 builder.Services.AddScoped<IDatabaseRegistry, DatabaseRegistry>();
@@ -227,6 +230,7 @@ builder.Services.AddScoped<ILoginUserResolver, LoginUserResolver>();
 builder.Services.AddScoped<OtpAuthService>();
 builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddScoped<IErrorLogService, ErrorLogService>();
+builder.Services.AddScoped<ILogsQueryService, LogsQueryService>();
 builder.Services.AddScoped<IConnectionTestService, ConnectionTestService>();
 builder.Services.AddScoped<ISqlAccountReadAdapter, FirebirdReadAdapter>();
 builder.Services.AddScoped<IItemPrerequisiteService, ItemPrerequisiteService>();

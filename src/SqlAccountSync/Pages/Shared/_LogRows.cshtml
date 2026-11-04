@@ -2,7 +2,16 @@
 @foreach (var row in Model.Rows)
 {
     var at = row.At.ToString("o", System.Globalization.CultureInfo.InvariantCulture);
-    <tr data-log-row data-log-kind="@row.Kind" data-log-id="@row.SourceId" data-log-at="@at" data-log-text="@($"{row.KindLabel} {row.Detail} {row.Status}")">
+    var hasOpen = !string.IsNullOrWhiteSpace(row.LinkUrl);
+    var hasRetry = row.RetryTxnPk is int;
+    var hasResolve = row.ResolveErrorId is int;
+    var hasAction = hasOpen || hasRetry || hasResolve;
+    <tr data-log-row
+        data-log-kind="@row.Kind"
+        data-log-id="@row.SourceId"
+        data-log-at="@at"
+        data-log-has-action="@(hasAction ? "1" : "0")"
+        data-log-text="@($"{row.KindLabel} {row.Detail} {row.Status}")">
         <td>@row.At.ToString("yyyy-MM-dd HH:mm")</td>
         <td>@row.KindLabel</td>
         <td><span class="cell-truncate" title="@row.Detail">@row.Detail</span></td>
@@ -10,18 +19,20 @@
         @if (Model.ShowActions)
         {
             <td class="col-actions">
-                @if (!string.IsNullOrWhiteSpace(row.LinkUrl))
-                {
-                    <a class="btn small secondary" href="@row.LinkUrl">@(string.IsNullOrWhiteSpace(row.LinkLabel) ? "Open" : row.LinkLabel)</a>
-                }
-                @if (row.RetryTxnPk is int txnPk)
-                {
-                    <form method="post" asp-page="/Logs" asp-page-handler="Retry" asp-route-txnPk="@txnPk"><button class="btn small" type="submit">Retry</button></form>
-                }
-                @if (row.ResolveErrorId is int errorId)
-                {
-                    <form method="post" asp-page="/Logs" asp-page-handler="ResolveError" asp-route-id="@errorId"><button class="btn small secondary" type="submit">Resolve</button></form>
-                }
+                <div class="logs-actions">
+                    @if (hasOpen)
+                    {
+                        <a class="btn small secondary" href="@row.LinkUrl">@(string.IsNullOrWhiteSpace(row.LinkLabel) ? "Open" : row.LinkLabel)</a>
+                    }
+                    @if (hasRetry)
+                    {
+                        <form method="post" asp-page="/Logs" asp-page-handler="Retry" asp-route-txnPk="@row.RetryTxnPk"><button class="btn small" type="submit">Retry</button></form>
+                    }
+                    @if (hasResolve)
+                    {
+                        <form method="post" asp-page="/Logs" asp-page-handler="ResolveError" asp-route-id="@row.ResolveErrorId"><button class="btn small secondary" type="submit">Resolve</button></form>
+                    }
+                </div>
             </td>
         }
     </tr>
