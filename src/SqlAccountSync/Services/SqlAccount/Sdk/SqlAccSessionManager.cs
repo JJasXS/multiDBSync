@@ -1,6 +1,8 @@
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using SqlAccountSync.Models;
 using SqlAccountSync.Options;
+using SqlAccountSync.Services.Databases;
 using SqlAccountSync.Services.Sdk;
 using SqlAccountSync.Services.Secrets;
 
@@ -24,32 +26,37 @@ public interface ISqlAccSessionManager
 /// <summary>
 /// Multi-company SDK session for auto-push: owns <b>one</b> SQLACC.exe and switches companies with
 /// Logout → Login → write on that same COM instance (no second tab per company).
-/// When <see cref="SqlAccSdkOptions.LogoutAfterUse"/> is on, each use ends with Logout (+ optional
-/// SQLACC kill) so a 1-user license seat is free for interactive login.
+/// When SQL Account was already open, finishes by logging back into MAIN/home
+/// (<see cref="SyncOptions.SdkHomeDbCode"/>) and keeps the window. Otherwise Logout (+ optional kill).
 /// </summary>
 public sealed class SqlAccSessionManager : ISqlAccSessionManager, IAsyncDisposable, IDisposable
 {
     private readonly ISqlAccComAppFactory _factory;
     private readonly ISecretResolver _secrets;
     private readonly ISdkConnectionBundle _bundle;
+    private readonly IServiceScopeFactory _scopes;
     private readonly SqlAccSdkOptions _options;
     private readonly ILogger<SqlAccSessionManager> _logger;
     private readonly StaWorkQueue _sta = new();
     private readonly SemaphoreSlim _gate = new(1, 1);
     private ISqlAccComApp? _app;
     private string? _activeCompanyKey;
+    /// <summary>True when SQLACC was already running (or COM-attached) before this session; leave the window open after use.</summary>
+    private bool _keepSqlAccOpenAfterUse;
     private bool _disposed;
 
     public SqlAccSessionManager(
         ISqlAccComAppFactory factory,
         ISecretResolver secrets,
         ISdkConnectionBundle bundle,
+        IServiceScopeFactory scopes,
         IOptions<SqlAccSdkOptions> options,
         ILogger<SqlAccSessionManager> logger)
     {
         _factory = factory;
         _secrets = secrets;
         _bundle = bundle;
+        _scopes = scopes;
         _options = options.Value;
         _logger = logger;
     }
@@ -136,6 +143,14 @@ public sealed class SqlAccSessionManager : ISqlAccSessionManager, IAsyncDisposab
     /// </summary>
     private void EnsureSingleInstanceLogin(CompanyLogin login, string key)
     {
+        // User already had SQL Account open → after sync Logout, leave the window (do not Kill).
+        if (!_keepSqlAccOpenAfterUse && ComRunningObject.CountSqlAccProcesses() > 0)
+        {
+            _keepSqlAccOpenAfterUse = true;
+            _logger.LogInformation(
+                "SQLACC was already open; will keep the window after sync (Logout only)");
+        }
+
         EnforceAtMostOneSqlAccProcess();
 
         if (_app is null || !IsComAlive(_app))
@@ -143,6 +158,9 @@ public sealed class SqlAccSessionManager : ISqlAccSessionManager, IAsyncDisposab
             ReleaseComApp_NoThrow(reason: "dead-or-missing", fromKey: _activeCompanyKey, toKey: key);
             _app = _factory.Create();
         }
+
+        if (_app.AttachedToRunningInstance)
+            _keepSqlAccOpenAfterUse = true;
 
         try
         {
@@ -191,22 +209,131 @@ public sealed class SqlAccSessionManager : ISqlAccSessionManager, IAsyncDisposab
     }
 
     /// <summary>
-    /// Called when a session lease ends (end of RunAsync / UseCompany). Frees the concurrent
-    /// user seat so interactive SQL Account can log in on 1-user licenses.
+    /// Called when a session lease ends (end of RunAsync / UseCompany).
+    /// If SQL was already open → Login back to MAIN/home and keep the window.
+    /// Otherwise Logout (+ optional kill) so the concurrent seat is freed.
     /// </summary>
     private void ReleaseSeatAfterUseSync()
     {
-        if (!_options.LogoutAfterUse && !_options.ReleaseSqlAccAfterUse)
-            return;
-
         try
         {
-            _sta.RunAsync(ReleaseSeatOnSta).GetAwaiter().GetResult();
+            ReleaseSeatAfterUseAsync().GetAwaiter().GetResult();
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "SDK failed to release concurrent user seat after use");
+            _logger.LogWarning(ex, "SDK failed to release/restore session after use");
         }
+    }
+
+    private async Task ReleaseSeatAfterUseAsync()
+    {
+        var keepWindow = _keepSqlAccOpenAfterUse
+            || (_app is not null && _app.AttachedToRunningInstance);
+
+        if (keepWindow)
+        {
+            await RestoreHomeCompanyKeepWindowAsync().ConfigureAwait(false);
+            return;
+        }
+
+        if (!_options.LogoutAfterUse && !_options.ReleaseSqlAccAfterUse)
+            return;
+
+        await _sta.RunAsync(ReleaseSeatOnSta).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Leave SQL Account open and logged into MAIN (SdkHomeDbCode / MAINTEST) after sync.
+    /// </summary>
+    private async Task RestoreHomeCompanyKeepWindowAsync()
+    {
+        try
+        {
+            using var scope = _scopes.CreateScope();
+            var registry = scope.ServiceProvider.GetRequiredService<IDatabaseRegistry>();
+            var sync = scope.ServiceProvider.GetRequiredService<IOptions<SyncOptions>>().Value;
+            var homeCode = await SdkHomeResolver
+                .ResolveAsync(registry, _bundle, sync)
+                .ConfigureAwait(false);
+
+            if (homeCode.Length == 0)
+            {
+                _logger.LogWarning("No SDK home company resolved; keeping window logged out");
+                await _sta.RunAsync(LogoutKeepWindowOnSta).ConfigureAwait(false);
+                return;
+            }
+
+            var db = (await registry.ListAsync().ConfigureAwait(false))
+                .FirstOrDefault(d =>
+                    string.Equals((d.DbCode ?? "").Trim(), homeCode, StringComparison.OrdinalIgnoreCase));
+            if (db is null)
+            {
+                _logger.LogWarning(
+                    "SDK home company {Home} not in registry; keeping window logged out", homeCode);
+                await _sta.RunAsync(LogoutKeepWindowOnSta).ConfigureAwait(false);
+                return;
+            }
+
+            var login = await ResolveLoginAsync(db, CancellationToken.None).ConfigureAwait(false);
+            await _sta.RunAsync(() => LoginHomeKeepWindowOnSta(login, homeCode)).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "SDK failed to restore MAIN/home; keeping window with Logout only");
+            await _sta.RunAsync(LogoutKeepWindowOnSta).ConfigureAwait(false);
+        }
+    }
+
+    private void LoginHomeKeepWindowOnSta(CompanyLogin login, string homeCode)
+    {
+        if (_app is null || !IsComAlive(_app))
+        {
+            ReleaseComApp_NoThrow(reason: "home-restore-dead", fromKey: _activeCompanyKey, toKey: login.Target.Key);
+            _app = _factory.Create();
+        }
+
+        if (IsUsableSessionFor(login.Target.Key))
+        {
+            _logger.LogInformation(
+                "SDK already on home company {Home}; leaving SQL Account logged in", homeCode);
+            return;
+        }
+
+        if (_app.IsLogin)
+        {
+            try { _app.Logout(); }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "SDK Logout before home restore failed");
+            }
+
+            _activeCompanyKey = null;
+        }
+
+        PerformLogin(login, login.Target.Key, "restore MAIN/home after sync");
+        _logger.LogInformation(
+            "SDK restored login to home company {Home} — SQL Account window kept open", homeCode);
+    }
+
+    private void LogoutKeepWindowOnSta()
+    {
+        if (_app is null)
+        {
+            _activeCompanyKey = null;
+            return;
+        }
+
+        try
+        {
+            if (_app.IsLogin)
+                _app.Logout();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "SDK Logout (keep window) failed");
+        }
+
+        _activeCompanyKey = null;
     }
 
     private void ReleaseSeatOnSta()
@@ -238,7 +365,7 @@ public sealed class SqlAccSessionManager : ISqlAccSessionManager, IAsyncDisposab
             _activeCompanyKey = null;
         }
 
-        if (!_options.ReleaseSqlAccAfterUse || _app.AttachedToRunningInstance)
+        if (!_options.ReleaseSqlAccAfterUse)
             return;
 
         ReleaseComApp_NoThrow(reason: "after-use-release", fromKey: null, toKey: null);
@@ -246,7 +373,7 @@ public sealed class SqlAccSessionManager : ISqlAccSessionManager, IAsyncDisposab
         if (killed > 0)
         {
             _logger.LogInformation(
-                "SDK closed {Count} SQLACC.exe after use so interactive login can take the only seat",
+                "SDK closed {Count} SQLACC.exe after use (SQL was not open beforehand)",
                 killed);
         }
     }

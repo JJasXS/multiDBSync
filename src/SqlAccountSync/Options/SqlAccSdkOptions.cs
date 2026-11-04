@@ -59,8 +59,9 @@ public sealed class SqlAccSdkOptions
     public bool LogoutAfterUse { get; set; } = true;
 
     /// <summary>
-    /// After Logout, dispose the owned COM LocalServer and close leftover SQLACC.exe so no
-    /// ghost process holds a seat. Ignored when attached to an interactive window.
+    /// After Logout, dispose the owned COM LocalServer and close leftover SQLACC.exe.
+    /// Skipped when SQL Account was already open before sync took over (window is kept).
+    /// Also ignored when attached to an interactive window.
     /// </summary>
     public bool ReleaseSqlAccAfterUse { get; set; } = true;
 
