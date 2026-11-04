@@ -9,9 +9,13 @@
 <body>
 @using Microsoft.Extensions.Options
 @using SqlAccountSync.Options
+@using SqlAccountSync.Services.Sync
 @inject IOptions<FeatureOptions> FeatureOptions
 @inject SqlAccountSync.Services.Tenants.TenantMenuFlags MenuFlags
+@inject IWriteProviderSettings WriteProviderSettings
 @{
+    var writeMode = await WriteProviderSettings.GetAsync();
+    var writeIsSdk = SqlAccountingWriteProviders.IsSdk(writeMode);
     bool IsActive(string page, string? entity = null)
     {
         var current = ViewContext.RouteData.Values["page"]?.ToString() ?? "";
@@ -103,6 +107,17 @@
             }
             <a class="@LogsNavClass()" asp-page="/Logs">Logs</a>
             <div class="nav-footer">
+                @if (SqlAccountSync.Services.Auth.CurrentUser.IsAdmin(User))
+                {
+                    <div class="write-mode-toggle" role="group" aria-label="Write mode">
+                        <span class="write-mode-label">Writes</span>
+                        <form method="post" asp-page="/WriteProvider" class="write-mode-form">
+                            <input type="hidden" name="returnUrl" value="@(Context.Request.Path + Context.Request.QueryString)" />
+                            <button type="submit" name="provider" value="Rest" class="write-mode-btn@(writeIsSdk ? "" : " is-active")" @(writeIsSdk ? "" : "aria-current=true")>API</button>
+                            <button type="submit" name="provider" value="Sdk" class="write-mode-btn@(writeIsSdk ? " is-active" : "")" @(writeIsSdk ? "aria-current=true" : "")>SDK</button>
+                        </form>
+                    </div>
+                }
                 <a class="nav-logout" asp-page="/Logout">Log out</a>
             </div>
         </nav>

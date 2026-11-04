@@ -37,16 +37,17 @@ public interface IItemPrerequisiteService
 
 public sealed class ItemPrerequisiteService : IItemPrerequisiteService
 {
-    private readonly SdkWriteAdapter _write;
+    private readonly SelectingWriteAdapter _write;
     private readonly ISqlAccountReadAdapter _read;
     private readonly ILogger<ItemPrerequisiteService> _logger;
 
     public ItemPrerequisiteService(
-        SdkWriteAdapter write,
+        ISqlAccountWriteAdapter write,
         ISqlAccountReadAdapter read,
         ILogger<ItemPrerequisiteService> logger)
     {
-        _write = write;
+        _write = write as SelectingWriteAdapter
+            ?? throw new InvalidOperationException("Item prerequisites require SelectingWriteAdapter.");
         _read = read;
         _logger = logger;
     }

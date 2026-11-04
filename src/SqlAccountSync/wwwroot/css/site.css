@@ -147,9 +147,45 @@ code {
   margin-top: auto;
   padding: 16px 8px 20px;
   border-top: 1px solid rgba(255,255,255,.08);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 .nav-footer > a:not(.nav-logout) {
-  margin-bottom: 8px;
+  margin-bottom: 0;
+}
+.write-mode-toggle {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 8px;
+}
+.write-mode-label {
+  font-size: 11px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.55);
+}
+.write-mode-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+.write-mode-btn {
+  border: 1px solid rgba(255,255,255,.18);
+  background: rgba(255,255,255,.06);
+  color: rgba(255,255,255,.85);
+  border-radius: 8px;
+  padding: 8px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.write-mode-btn:hover { background: rgba(255,255,255,.12); }
+.write-mode-btn.is-active {
+  background: rgba(255,255,255,.92);
+  color: #0f2744;
+  border-color: transparent;
 }
 .nav-logout {
   text-align: center;

@@ -82,13 +82,48 @@
 
         <div class="card">
             <div class="card-head">
-                <h3>SQL Account SDK</h3>
+                <h3>@(Model.IsSdkMode ? "SQL Account SDK login" : "SQL Account API keys")</h3>
             </div>
-            <p class="muted lede">Writes use SQL Account SDK Live (COM) on this Windows PC. Login details are not stored in SYNC_DATABASE.</p>
-            <div class="form-stack">
-                <p class="field-hint">@Model.SdkSecretHint</p>
-                <p class="field-hint">Match the company <strong>Code</strong> above to the <code>name</code> field inside that secret's <code>companies[]</code> array.</p>
-            </div>
+            @if (Model.IsSdkMode)
+            {
+                <p class="muted lede">Pushed to AWS Secrets Manager for COM login. Use the nav API | SDK toggle to switch modes.</p>
+                <div class="form-stack">
+                    <p class="field-hint">@Model.SdkSecretHint</p>
+                    <div class="field-pair equal">
+                        <div>
+                            <label asp-for="SdkUsername">User</label>
+                            <input asp-for="SdkUsername" autocomplete="off" placeholder="ADMIN" />
+                        </div>
+                        <div>
+                            <label asp-for="SdkPassword">Password</label>
+                            <input asp-for="SdkPassword" type="password" autocomplete="new-password" placeholder="Leave blank to keep existing" />
+                        </div>
+                    </div>
+                    <div>
+                        <label asp-for="SdkDcfPath">DCF path</label>
+                        <input asp-for="SdkDcfPath" placeholder="C:\eStream\SQLAccounting\Share\SQLACC.DCF" />
+                    </div>
+                    <div>
+                        <label asp-for="SdkDatabase">Database file</label>
+                        <input asp-for="SdkDatabase" placeholder="ACC-COMPANY.FDB" />
+                    </div>
+                </div>
+            }
+            else
+            {
+                <p class="muted lede">Pushed to AWS Secrets Manager for paid SQL Account REST writes.</p>
+                <div class="form-stack">
+                    <p class="field-hint">@Model.ApiSecretHint</p>
+                    <div>
+                        <label asp-for="ApiAccessKey">Access key</label>
+                        <input asp-for="ApiAccessKey" autocomplete="off" />
+                    </div>
+                    <div>
+                        <label asp-for="ApiSecretKey">Secret key</label>
+                        <input asp-for="ApiSecretKey" type="password" autocomplete="new-password" />
+                    </div>
+                </div>
+            }
         </div>
     </div>
     <div class="card db-edit-notes">

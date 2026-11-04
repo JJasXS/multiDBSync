@@ -99,6 +99,11 @@ var appModeFromEnv = (Environment.GetEnvironmentVariable("APP_MODE")
 if (!string.IsNullOrEmpty(appModeFromEnv))
     envOverrides["Sync:AppMode"] = appModeFromEnv;
 
+var writeProviderFromEnv = (Environment.GetEnvironmentVariable("SQL_ACCOUNTING_WRITE_PROVIDER")
+    ?? builder.Configuration["SqlAccountingWrite:Provider"])?.Trim();
+if (!string.IsNullOrEmpty(writeProviderFromEnv))
+    envOverrides["SqlAccountingWrite:Provider"] = writeProviderFromEnv;
+
 if (envOverrides.Count > 0)
     builder.Configuration.AddInMemoryCollection(envOverrides);
 
@@ -109,6 +114,8 @@ builder.Services.Configure<SyncOptions>(builder.Configuration.GetSection(SyncOpt
 builder.Services.Configure<BootstrapOptions>(builder.Configuration.GetSection(BootstrapOptions.SectionName));
 builder.Services.Configure<AwsOptions>(builder.Configuration.GetSection(AwsOptions.SectionName));
 builder.Services.Configure<FeatureOptions>(builder.Configuration.GetSection(FeatureOptions.SectionName));
+builder.Services.Configure<SqlAccountingWriteOptions>(builder.Configuration.GetSection(SqlAccountingWriteOptions.SectionName));
+builder.Services.Configure<SqlAccSdkOptions>(builder.Configuration.GetSection(SqlAccSdkOptions.SectionName));
 
 var awsRegion = builder.Configuration["AWS:Region"]
     ?? Environment.GetEnvironmentVariable("AWS_REGION")
@@ -155,8 +162,16 @@ builder.Services.AddScoped<IErrorLogService, ErrorLogService>();
 builder.Services.AddScoped<IConnectionTestService, ConnectionTestService>();
 builder.Services.AddScoped<ISqlAccountReadAdapter, FirebirdReadAdapter>();
 builder.Services.AddScoped<IItemPrerequisiteService, ItemPrerequisiteService>();
-builder.Services.AddScoped<ISqlAccountWriteAdapter, SdkWriteAdapter>();
+builder.Services.AddSingleton<ISqlApiCredentialBundle, SqlApiCredentialBundle>();
+builder.Services.AddSingleton<ISqlApiSecretProvisioner, SqlApiSecretProvisioner>();
+builder.Services.AddSingleton<IWriteProviderSettings, WriteProviderSettings>();
+builder.Services.AddHttpClient<SqlAccountApiWriteAdapter>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(Math.Clamp(
+        builder.Configuration.GetValue("Sync:WriteHttpTimeoutSeconds", 30), 5, 300));
+});
 builder.Services.AddScoped<SdkWriteAdapter>();
+builder.Services.AddScoped<ISqlAccountWriteAdapter, SelectingWriteAdapter>();
 builder.Services.AddScoped<IMappingService, MappingService>();
 builder.Services.AddScoped<IValidationService, ValidationService>();
 builder.Services.AddScoped<IJobQueue, JobQueue>();
