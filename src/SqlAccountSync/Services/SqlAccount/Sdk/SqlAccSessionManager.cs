@@ -140,18 +140,24 @@ public sealed class SqlAccSessionManager : ISqlAccSessionManager, IAsyncDisposab
     }
 
     /// <summary>
-    /// Keep a single SQL Account window: attach/reuse one BizApp and Login (after Logout) for company switches.
+    /// Keep a single SQL Account window: attach/reuse one BizApp. Prefer Login on the same instance;
+    /// never CreateInstance while SQLACC.exe is already running.
     /// </summary>
     private void EnsureSingleInstanceLogin(CompanyLogin login, string key)
     {
         if (_app is null || !IsComAlive(_app))
         {
+            // Soft-drop our handle only — do not kill the user's SQL Account.
             ReleaseComApp_NoThrow(reason: "dead-or-missing", fromKey: _activeCompanyKey, toKey: key);
             _app = _factory.Create();
         }
 
         try
         {
+            // Same company already logged in — do nothing (avoids Logout/Login churn / extra windows).
+            if (IsUsableSessionFor(key))
+                return;
+
             if (_app.IsLogin)
             {
                 try { _app.Logout(); }
@@ -166,8 +172,11 @@ public sealed class SqlAccSessionManager : ISqlAccSessionManager, IAsyncDisposab
         }
         catch
         {
-            // Fail closed on login errors; soft-release keeps the user's window alive when attached.
-            ReleaseComApp_NoThrow(reason: "login-failed", fromKey: key, toKey: null);
+            // Keep attached RCW if possible so the next job can retry without CreateInstance.
+            if (_app is null || !_app.AttachedToRunningInstance)
+                ReleaseComApp_NoThrow(reason: "login-failed", fromKey: key, toKey: null);
+            else
+                _activeCompanyKey = null;
             throw;
         }
     }

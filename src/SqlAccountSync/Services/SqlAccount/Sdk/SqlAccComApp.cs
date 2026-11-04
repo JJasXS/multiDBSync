@@ -457,15 +457,34 @@ public sealed class SqlAccComAppFactory : ISqlAccComAppFactory
                 "SqlAccSdk:AllowLiveCom is false. Refusing to create SQLAcc.BizApp (no live COM in this mode).");
 
         var progId = string.IsNullOrWhiteSpace(_options.ProgId) ? "SQLAcc.BizApp" : _options.ProgId.Trim();
-        if (_options.PreferRunningInstance
-            && ComRunningObject.TryGetActiveObject(progId, out var running)
-            && running is not null)
+        var runningCount = ComRunningObject.CountSqlAccProcesses();
+
+        if (_options.PreferRunningInstance)
         {
-            _logger?.LogInformation("SDK attached to running {ProgId} (single SQL Account window).", progId);
-            return new SqlAccComApp(running, attached: true);
+            if (ComRunningObject.TryGetActiveObject(progId, out var running) && running is not null)
+            {
+                _logger?.LogInformation(
+                    "SDK attached to running {ProgId} (SQLACC processes={Count}).", progId, runningCount);
+                return new SqlAccComApp(running, attached: true);
+            }
+
+            // Never CreateInstance while SQL Account is already open — that starts a second blank tab.
+            if (runningCount > 0)
+            {
+                throw new InvalidOperationException(
+                    "SQL Account is already open (" + runningCount +
+                    " SQLACC.exe) but COM attach failed. Click the SQL Account window once " +
+                    "(so it registers), leave only one SQL Account open, then retry. " +
+                    "Refusing to launch a second SQLACC.exe.");
+            }
+        }
+        else if (ComRunningObject.TryGetActiveObject(progId, out var existing) && existing is not null)
+        {
+            _logger?.LogInformation("SDK attached to running {ProgId}.", progId);
+            return new SqlAccComApp(existing, attached: true);
         }
 
-        _logger?.LogInformation("SDK creating new {ProgId} instance.", progId);
+        _logger?.LogInformation("SDK creating new {ProgId} instance (no SQLACC.exe running).", progId);
         return new SqlAccComApp(progId);
     }
 }
