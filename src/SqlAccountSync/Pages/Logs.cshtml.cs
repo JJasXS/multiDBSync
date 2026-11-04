@@ -9,18 +9,15 @@ namespace SqlAccountSync.Pages;
 public class LogsModel : SyncPageModel
 {
     private const int PageSize = 40;
+    private readonly ILogsQueryService _logs;
     private readonly ITransactionEngine _engine;
-    private readonly IAuditService _audit;
-    private readonly IErrorLogService _errors;
 
     public LogsModel(
-        ITransactionEngine engine,
-        IAuditService audit,
-        IErrorLogService errors)
+        ILogsQueryService logs,
+        ITransactionEngine engine)
     {
+        _logs = logs;
         _engine = engine;
-        _audit = audit;
-        _errors = errors;
     }
 
     public List<SyncTransaction> Transactions { get; set; } = [];
@@ -29,6 +26,9 @@ public class LogsModel : SyncPageModel
     public List<LogRow> Rows { get; set; } = [];
     public bool HasMore { get; set; }
     public bool ShowActions { get; set; }
+    public LogTotals Totals { get; set; } = new();
+    public bool IsRemoteSource { get; set; }
+    public string SourceDescription { get; set; } = "";
 
     public async Task<IActionResult> OnGetAsync(string? tab)
     {
@@ -40,32 +40,62 @@ public class LogsModel : SyncPageModel
         if (t is "audit")
             return Redirect("/logs#audit-logs");
 
+        IsRemoteSource = _logs.IsRemote;
+        SourceDescription = _logs.DescribeSource();
+        Totals = await LoadTotalsAsync();
         var page = await LoadPageAsync("all", null, null, 0);
         Rows = page.Rows;
         HasMore = page.HasMore;
+        // Actions column: Open / Retry / Resolve. Retry stays local-only; Resolve works on the
+        // active Logs source (local CentralDb or the remote SYNC.FDB currently being viewed).
         ShowActions = CanOperate || CanManage || Rows.Any(r => !string.IsNullOrWhiteSpace(r.LinkUrl));
         return Page();
     }
 
     public async Task<IActionResult> OnGetMoreAsync(string? kind, string? before, string? beforeKind, int beforeId, int actions)
     {
+        var totals = await LoadTotalsAsync();
+        WriteTotalHeaders(totals);
+        Response.Headers["X-Log-Source"] = _logs.IsRemote ? "remote-readonly" : "local";
         var page = await LoadPageAsync(kind, ParseCursor(before), beforeKind, beforeId);
         Response.Headers["X-Has-More"] = page.HasMore ? "1" : "0";
-        return Partial("_LogRows", new LogTableBody { Rows = page.Rows, ShowActions = actions == 1 });
+        Response.Headers["X-Log-Kind"] = NormalizeKind(kind);
+        Response.Headers["X-Log-Page-Count"] = page.Rows.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var showActions = actions == 1;
+        return Partial("_LogRows", new LogTableBody { Rows = page.Rows, ShowActions = showActions });
     }
 
     public async Task<IActionResult> OnPostRetryAsync(int txnPk)
     {
         if (!CanOperate) return Forbid();
-        await _engine.RetryAsync(txnPk, CurrentEmail);
+        // Local: full engine retry (reconcile + queue). Remote Logs: queue retry on the same SYNC.FDB being viewed.
+        if (_logs.IsRemote)
+            await _logs.RetryTransactionAsync(txnPk, CurrentEmail);
+        else
+            await _engine.RetryAsync(txnPk, CurrentEmail);
         return RedirectToPage();
     }
 
     public async Task<IActionResult> OnPostResolveErrorAsync(int id)
     {
         if (!CanManage) return Forbid();
-        await _errors.ResolveAsync(id);
+        // Resolve against the same DB the Logs page is reading (remote or local).
+        await _logs.ResolveErrorAsync(id);
         return Redirect("/logs#error-logs");
+    }
+
+    private async Task<LogTotals> LoadTotalsAsync()
+    {
+        var (txn, audit, error) = await _logs.CountAllAsync();
+        return new LogTotals(txn, audit, error);
+    }
+
+    private void WriteTotalHeaders(LogTotals totals)
+    {
+        Response.Headers["X-Log-Count-Transaction"] = totals.Transaction.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        Response.Headers["X-Log-Count-Audit"] = totals.Audit.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        Response.Headers["X-Log-Count-Error"] = totals.Error.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        Response.Headers["X-Log-Count-All"] = totals.All.ToString(System.Globalization.CultureInfo.InvariantCulture);
     }
 
     private async Task<(List<LogRow> Rows, bool HasMore)> LoadPageAsync(
@@ -73,13 +103,13 @@ public class LogsModel : SyncPageModel
     {
         var filter = NormalizeKind(kind);
         var txns = filter is "all" or "transaction"
-            ? await _engine.ListPageAsync(before, beforeKind, beforeId, PageSize)
+            ? await _logs.ListTransactionsPageAsync(before, beforeKind, beforeId, PageSize)
             : [];
         var audits = filter is "all" or "audit"
-            ? await _audit.ListDetailedPageAsync(before, beforeKind, beforeId, PageSize)
+            ? await _logs.ListAuditsPageAsync(before, beforeKind, beforeId, PageSize)
             : [];
         var errors = filter is "all" or "error"
-            ? await _errors.ListPageAsync(before, beforeKind, beforeId, PageSize)
+            ? await _logs.ListErrorsPageAsync(before, beforeKind, beforeId, PageSize)
             : [];
 
         Transactions = txns;
@@ -135,9 +165,17 @@ public class LogsModel : SyncPageModel
             LinkUrl = $"/Transactions/Details/{txn.TxnPk}",
             LinkLabel = "Open",
             SourceId = txn.TxnPk,
-            RetryTxnPk = CanOperate && txn.Status is not "COMPLETED" ? txn.TxnPk : null
+            // Failed / retryable statuses get Retry next to Open (remote or local).
+            RetryTxnPk = CanOperate && IsRetryableTxnStatus(txn.Status) ? txn.TxnPk : null
         };
     }
+
+    private static bool IsRetryableTxnStatus(string status) =>
+        status is JobStatuses.Failed
+            or JobStatuses.Retrying
+            or JobStatuses.Conflict
+            or JobStatuses.WaitingForMapping
+            or JobStatuses.PartiallyCompleted;
 
     private LogRow ToAuditRow(AuditListItem row)
     {
@@ -173,6 +211,11 @@ public class LogsModel : SyncPageModel
         SourceId = error.ErrorId,
         ResolveErrorId = CanManage && !error.Resolved ? error.ErrorId : null
     };
+}
+
+public sealed record LogTotals(int Transaction = 0, int Audit = 0, int Error = 0)
+{
+    public int All => Transaction + Audit + Error;
 }
 
 public sealed class LogRow

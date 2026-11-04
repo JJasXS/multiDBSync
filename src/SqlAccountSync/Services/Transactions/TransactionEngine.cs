@@ -27,6 +27,7 @@ public interface ITransactionEngine
     Task<SyncTransaction?> GetByTxnIdAsync(string txnId, CancellationToken cancellationToken = default);
     Task<List<SyncTransaction>> ListAsync(int take = 200, CancellationToken cancellationToken = default);
     Task<List<SyncTransaction>> ListPageAsync(DateTime? before, string? beforeKind, int beforeId, int take, CancellationToken cancellationToken = default);
+    Task<int> CountAsync(CancellationToken cancellationToken = default);
     Task<List<TxnEvent>> TimelineAsync(int txnPk, CancellationToken cancellationToken = default);
     Task<List<(string Code, string Name, string Src, string Dst, string DstPath)>> ListTypesAsync(CancellationToken cancellationToken = default);
 }
@@ -564,6 +565,15 @@ ORDER BY LOGAT DESC, TXNPK DESC", MapTxn, new
             CURSORKIND = beforeKind ?? "",
             CURSORID = beforeId
         }, cancellationToken);
+    }
+
+    public async Task<int> CountAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_db.IsConfigured)
+            return 0;
+        var value = await _db.ScalarAsync("SELECT COUNT(*) FROM SYNC_TXN", cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        return value is null or DBNull ? 0 : Convert.ToInt32(value, CultureInfo.InvariantCulture);
     }
 
     public Task<List<TxnEvent>> TimelineAsync(int txnPk, CancellationToken cancellationToken = default) =>

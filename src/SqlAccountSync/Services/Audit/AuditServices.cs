@@ -11,6 +11,7 @@ public interface IAuditService
     Task<List<AuditEntry>> ListAsync(int take = 200, CancellationToken cancellationToken = default);
     Task<List<AuditListItem>> ListDetailedAsync(int take = 200, CancellationToken cancellationToken = default);
     Task<List<AuditListItem>> ListDetailedPageAsync(DateTime? before, string? beforeKind, int beforeId, int take, CancellationToken cancellationToken = default);
+    Task<int> CountAsync(CancellationToken cancellationToken = default);
 }
 
 public sealed class AuditService : IAuditService
@@ -65,6 +66,15 @@ VALUES (@AUDITID, CURRENT_TIMESTAMP, @USEREMAIL, @ACTION, @DBID, @ENTITY, @RECOR
 
     public Task<List<AuditListItem>> ListDetailedAsync(int take = 200, CancellationToken cancellationToken = default) =>
         ListDetailedPageAsync(null, null, 0, take, cancellationToken);
+
+    public async Task<int> CountAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_db.IsConfigured)
+            return 0;
+        var value = await _db.ScalarAsync("SELECT COUNT(*) FROM SYNC_AUDIT", cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        return value is null or DBNull ? 0 : Convert.ToInt32(value, CultureInfo.InvariantCulture);
+    }
 
     public async Task<List<AuditListItem>> ListDetailedPageAsync(
         DateTime? before, string? beforeKind, int beforeId, int take, CancellationToken cancellationToken = default)
@@ -359,6 +369,7 @@ public interface IErrorLogService
     Task<int> WriteAsync(ErrorEntry entry, CancellationToken cancellationToken = default);
     Task<List<ErrorEntry>> ListAsync(bool unresolvedOnly = false, int take = 200, CancellationToken cancellationToken = default);
     Task<List<ErrorEntry>> ListPageAsync(DateTime? before, string? beforeKind, int beforeId, int take, CancellationToken cancellationToken = default);
+    Task<int> CountAsync(CancellationToken cancellationToken = default);
     Task ResolveAsync(int errorId, CancellationToken cancellationToken = default);
 }
 
@@ -428,6 +439,15 @@ ORDER BY ATUTC DESC, ERRORID DESC", Map, new
             CURSORKIND = beforeKind ?? "",
             CURSORID = beforeId
         }, cancellationToken);
+    }
+
+    public async Task<int> CountAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_db.IsConfigured)
+            return 0;
+        var value = await _db.ScalarAsync("SELECT COUNT(*) FROM SYNC_ERROR", cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        return value is null or DBNull ? 0 : Convert.ToInt32(value, CultureInfo.InvariantCulture);
     }
 
     public Task ResolveAsync(int errorId, CancellationToken cancellationToken = default) =>
