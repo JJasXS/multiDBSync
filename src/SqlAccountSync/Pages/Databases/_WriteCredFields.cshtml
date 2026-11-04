@@ -6,21 +6,18 @@
     var mode = await WriteProvider.GetAsync();
     var isSdk = SqlAccountingWriteProviders.IsSdk(mode);
 }
+<input type="hidden" name="WriteMode" value="@(isSdk ? "Sdk" : "Rest")" />
+<input type="hidden" name="SdkDcfPath" value="C:\eStream\SQLAccounting\Share\SQLACC.DCF" />
 @if (isSdk)
 {
-    <h4 class="db-create-subhead">SDK login</h4>
-    <p class="field-hint">Saved to AWS <code>sdkConnections</code> for this company Code.</p>
+    <h4 class="db-create-subhead">SDK Live</h4>
     <div class="field">
         <label for="@(idPrefix)SdkUser">User</label>
         <input id="@(idPrefix)SdkUser" name="SdkUsername" value="ADMIN" autocomplete="off" />
     </div>
     <div class="field">
         <label for="@(idPrefix)SdkPass">Password</label>
-        <input id="@(idPrefix)SdkPass" name="SdkPassword" type="password" autocomplete="new-password" placeholder="Required for new; blank keeps existing" />
-    </div>
-    <div class="field">
-        <label for="@(idPrefix)SdkDcf">DCF path</label>
-        <input id="@(idPrefix)SdkDcf" name="SdkDcfPath" value="C:\eStream\SQLAccounting\Share\SQLACC.DCF" />
+        <input id="@(idPrefix)SdkPass" name="SdkPassword" type="password" autocomplete="new-password" placeholder="Required for new" />
     </div>
     <div class="field">
         <label for="@(idPrefix)SdkDb">Database file</label>
@@ -29,8 +26,7 @@
 }
 else
 {
-    <h4 class="db-create-subhead">API keys</h4>
-    <p class="field-hint">Saved to AWS <code>sqlApiCredentials</code> for this company Code.</p>
+    <h4 class="db-create-subhead">SQL API</h4>
     <div class="field">
         <label for="@(idPrefix)ApiAccess">Access key</label>
         <input id="@(idPrefix)ApiAccess" name="ApiAccessKey" autocomplete="off" />

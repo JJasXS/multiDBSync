@@ -323,6 +323,7 @@ public class EditModel : SyncPageModel
     [BindProperty] public string SdkDatabase { get; set; } = "";
     [BindProperty] public string ApiAccessKey { get; set; } = "";
     [BindProperty] public string ApiSecretKey { get; set; } = "";
+    [BindProperty] public string WriteMode { get; set; } = SqlAccountingWriteProviders.Sdk;
     public string Message { get; set; } = "";
     public bool IsSdkMode { get; private set; } = true;
     public string TenantCode => (_sync.TenantCode ?? "").Trim();
@@ -398,7 +399,7 @@ public class EditModel : SyncPageModel
 
     private async Task<IActionResult> SavePostedDatabaseAsync()
     {
-        await LoadWriteModeAsync().ConfigureAwait(false);
+        await ApplyPostedWriteModeAsync().ConfigureAwait(false);
         var capMessage = await OverCapMessageAsync();
         if (capMessage is not null)
             return await DbFailed(capMessage);
@@ -407,6 +408,8 @@ public class EditModel : SyncPageModel
         Db.CompanyName = (Db.DisplayName ?? "").Trim();
         if (string.IsNullOrWhiteSpace(Db.ApiBaseUrl))
             Db.ApiBaseUrl = "https://api.sql.my";
+        if (IsSdkMode && string.IsNullOrWhiteSpace(SdkDatabase) && !string.IsNullOrWhiteSpace(Db.FbPath))
+            SdkDatabase = Path.GetFileName(Db.FbPath.Replace('/', '\\'));
 
         var secretError = await SaveModeCredentialsAsync().ConfigureAwait(false);
         if (secretError is not null)
@@ -425,7 +428,19 @@ public class EditModel : SyncPageModel
     private async Task LoadWriteModeAsync()
     {
         var mode = await _writeProvider.GetAsync().ConfigureAwait(false);
-        IsSdkMode = SqlAccountingWriteProviders.IsSdk(mode);
+        WriteMode = SqlAccountingWriteProviders.IsSdk(mode)
+            ? SqlAccountingWriteProviders.Sdk
+            : SqlAccountingWriteProviders.Rest;
+        IsSdkMode = SqlAccountingWriteProviders.IsSdk(WriteMode);
+    }
+
+    private async Task ApplyPostedWriteModeAsync()
+    {
+        WriteMode = SqlAccountingWriteProviders.IsSdk(WriteMode)
+            ? SqlAccountingWriteProviders.Sdk
+            : SqlAccountingWriteProviders.Rest;
+        IsSdkMode = SqlAccountingWriteProviders.IsSdk(WriteMode);
+        await _writeProvider.SetAsync(WriteMode).ConfigureAwait(false);
     }
 
     private async Task PrefillSdkFieldsAsync()
