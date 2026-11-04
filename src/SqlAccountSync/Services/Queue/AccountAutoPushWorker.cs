@@ -39,7 +39,7 @@ public sealed class AccountAutoPushWorker : BackgroundService
             return;
         }
 
-        var seconds = Math.Clamp(_options.AccountAutoPushSeconds <= 0 ? 60 : _options.AccountAutoPushSeconds, 15, 3600);
+        var seconds = Math.Clamp(_options.AccountAutoPushSeconds <= 0 ? 30 : _options.AccountAutoPushSeconds, 15, 3600);
         var delay = TimeSpan.FromSeconds(seconds);
         _schedule.SetIntervalSeconds(seconds);
         _logger.LogInformation(

@@ -21,7 +21,7 @@ public interface IAutoPushSchedule
 public sealed class AutoPushSchedule : IAutoPushSchedule
 {
     private readonly object _gate = new();
-    private int _intervalSeconds = 60;
+    private int _intervalSeconds = 30;
     private DateTimeOffset? _nextDueUtc;
 
     public int IntervalSeconds
@@ -31,7 +31,7 @@ public sealed class AutoPushSchedule : IAutoPushSchedule
 
     public void SetIntervalSeconds(int seconds)
     {
-        var clamped = Math.Clamp(seconds <= 0 ? 60 : seconds, 15, 3600);
+        var clamped = Math.Clamp(seconds <= 0 ? 30 : seconds, 15, 3600);
         lock (_gate)
             _intervalSeconds = clamped;
     }

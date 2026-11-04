@@ -424,7 +424,7 @@ try
 {
     var syncOpts = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<SyncOptions>>().Value;
     var schedule = app.Services.GetRequiredService<IAutoPushSchedule>();
-    var seconds = Math.Clamp(syncOpts.AccountAutoPushSeconds <= 0 ? 60 : syncOpts.AccountAutoPushSeconds, 15, 3600);
+    var seconds = Math.Clamp(syncOpts.AccountAutoPushSeconds <= 0 ? 30 : syncOpts.AccountAutoPushSeconds, 15, 3600);
     schedule.SetIntervalSeconds(seconds);
     schedule.ArmNextFromNow();
 }

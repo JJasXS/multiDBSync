@@ -81,9 +81,9 @@ public sealed class SyncOptions
     public bool AllowDevSingleJobProcess { get; set; }
     /// <summary>
     /// How often to auto-push missing ACCOUNT codes from MASTER/BOTH to linked subs.
-    /// Set 0 to disable. Default 60 (one minute).
+    /// Set 0 to disable. Default 30 seconds.
     /// </summary>
-    public int AccountAutoPushSeconds { get; set; } = 60;
+    public int AccountAutoPushSeconds { get; set; } = 30;
     /// <summary>
     /// Cancel PENDING jobs that have never started after this many seconds.
     /// Set 0 to disable. Default 120 (2 minutes).
