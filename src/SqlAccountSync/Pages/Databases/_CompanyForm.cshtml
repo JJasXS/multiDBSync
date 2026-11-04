@@ -8,7 +8,6 @@
     <input type="hidden" asp-for="Db.FbCharset" />
     <input type="hidden" asp-for="Db.FbDialect" />
     <input type="hidden" asp-for="WriteMode" data-write-mode />
-    <input type="hidden" asp-for="SdkDcfPath" />
 
     <div class="write-tabs" role="tablist" aria-label="Write connection type">
         <button type="button" class="write-tab@(Model.IsSdkMode ? "" : " is-active")" data-write-tab="Rest" role="tab" aria-selected="@(!Model.IsSdkMode)">SQL API</button>
@@ -37,11 +36,11 @@
                     <label>Name</label>
                     <input asp-for="Db.DisplayName" required placeholder="Headquarters" />
                 </div>
-                <div>
-                    <label>Database path</label>
+                <div data-db-path-group>
+                    <label>Firebird database (.FDB)</label>
                     <div class="path-input">
-                        <input asp-for="Db.FbPath" required placeholder="C:/SQLAccount/Company.FDB" data-db-path data-sdk-db-source />
-                        <button type="button" class="path-pin" data-db-path-pin aria-label="Choose database file" title="Choose database file">
+                        <input asp-for="Db.FbPath" required placeholder="C:/SQLAccount/Company.FDB" data-db-path data-path-kind="fdb" data-sdk-db-source />
+                        <button type="button" class="path-pin" data-db-path-pin aria-label="Choose .FDB file" title="Choose .FDB file">
                             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z"/></svg>
                         </button>
                         <input type="file" data-db-path-file accept=".fdb,.gdb" hidden />
@@ -106,10 +105,21 @@
                             <input asp-for="SdkPassword" type="password" autocomplete="new-password" placeholder="Leave blank to keep existing" data-sdk-field />
                         </div>
                     </div>
+                    <div data-db-path-group>
+                        <label asp-for="SdkDcfPath">DCF path (.DCF)</label>
+                        <div class="path-input">
+                            <input asp-for="SdkDcfPath" data-db-path data-path-kind="dcf" data-sdk-field placeholder="C:/eStream/SQLAccounting/Share/SQLACC.DCF" />
+                            <button type="button" class="path-pin" data-db-path-pin aria-label="Choose .DCF file" title="Choose .DCF file">
+                                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z"/></svg>
+                            </button>
+                            <input type="file" data-db-path-file accept=".dcf" hidden />
+                        </div>
+                        <p class="field-hint" data-db-path-hint>Use the pin to choose the SQL Account .DCF (not the .FDB).</p>
+                    </div>
                     <div>
-                        <label asp-for="SdkDatabase">Database file name</label>
+                        <label asp-for="SdkDatabase">Company database name</label>
                         <input asp-for="SdkDatabase" data-sdk-db-target data-sdk-field placeholder="ACC-COMPANY.FDB" />
-                        <p class="field-hint">Filled from the path above when empty.</p>
+                        <p class="field-hint">FDB file name inside that DCF (filled from Firebird path when empty).</p>
                     </div>
                 </div>
             </div>
