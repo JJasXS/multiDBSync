@@ -14,6 +14,13 @@
     target.value = fileNameFromPath(source.value);
   }
 
+  function setFieldsEnabled(root, enabled) {
+    if (!root) return;
+    root.querySelectorAll("input, select, textarea").forEach(function (el) {
+      el.disabled = !enabled;
+    });
+  }
+
   function setTab(form, mode) {
     var isSdk = String(mode).toLowerCase() === "sdk";
     var hidden = form.querySelector("[data-write-mode]");
@@ -27,8 +34,16 @@
 
     var rest = form.querySelector("[data-panel-rest]");
     var sdk = form.querySelector("[data-panel-sdk]");
-    if (rest) rest.hidden = isSdk;
-    if (sdk) sdk.hidden = !isSdk;
+    if (rest) {
+      rest.classList.toggle("is-hidden", isSdk);
+      rest.hidden = isSdk;
+      setFieldsEnabled(rest, !isSdk);
+    }
+    if (sdk) {
+      sdk.classList.toggle("is-hidden", !isSdk);
+      sdk.hidden = !isSdk;
+      setFieldsEnabled(sdk, isSdk);
+    }
     if (isSdk) syncSdkDatabase(form);
   }
 
@@ -46,9 +61,14 @@
     }
 
     form.addEventListener("submit", function () {
-      var mode = (form.querySelector("[data-write-mode]") || {}).value || "Sdk";
+      var modeEl = form.querySelector("[data-write-mode]");
+      var mode = (modeEl && modeEl.value) || "Sdk";
+      setTab(form, mode);
       if (String(mode).toLowerCase() === "sdk") syncSdkDatabase(form);
     });
+
+    var modeEl = form.querySelector("[data-write-mode]");
+    setTab(form, (modeEl && modeEl.value) || "Sdk");
   }
 
   document.querySelectorAll("[data-db-write-form]").forEach(bindForm);

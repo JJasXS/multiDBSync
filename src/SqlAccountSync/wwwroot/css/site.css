@@ -696,6 +696,10 @@ code {
   background: #1f6feb;
   color: #fff;
 }
+.write-cred-card .write-panel.is-hidden,
+.write-cred-card .write-panel[hidden] {
+  display: none !important;
+}
 .db-adv {
   margin-top: 4px;
   border-top: 1px solid var(--ice-border-soft);

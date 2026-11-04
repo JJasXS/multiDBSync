@@ -76,39 +76,41 @@
             </div>
         </div>
 
-        <div class="card" data-panel-rest @(Model.IsSdkMode ? "hidden" : null)>
-            <div class="card-head"><h3>SQL API keys</h3></div>
-            <p class="muted lede">Access key and secret key for this company. Saved to AWS on Save.</p>
-            <div class="form-stack">
-                <div>
-                    <label asp-for="ApiAccessKey">Access key</label>
-                    <input asp-for="ApiAccessKey" autocomplete="off" placeholder="AKIA…" />
-                </div>
-                <div>
-                    <label asp-for="ApiSecretKey">Secret key</label>
-                    <input asp-for="ApiSecretKey" type="password" autocomplete="new-password" />
+        <div class="card write-cred-card">
+            <div class="write-panel@(Model.IsSdkMode ? " is-hidden" : "")" data-panel-rest>
+                <div class="card-head"><h3>SQL API keys</h3></div>
+                <p class="muted lede">Access key and secret key for this company. Saved to AWS on Save.</p>
+                <div class="form-stack">
+                    <div>
+                        <label asp-for="ApiAccessKey">Access key</label>
+                        <input asp-for="ApiAccessKey" autocomplete="off" placeholder="AKIA…" data-rest-field />
+                    </div>
+                    <div>
+                        <label asp-for="ApiSecretKey">Secret key</label>
+                        <input asp-for="ApiSecretKey" type="password" autocomplete="new-password" data-rest-field />
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <div class="card" data-panel-sdk @(Model.IsSdkMode ? null : "hidden")>
-            <div class="card-head"><h3>SDK Live login</h3></div>
-            <p class="muted lede">SQL Account user and password for COM login. Saved to AWS on Save.</p>
-            <div class="form-stack">
-                <div class="field-pair equal">
-                    <div>
-                        <label asp-for="SdkUsername">User</label>
-                        <input asp-for="SdkUsername" autocomplete="off" placeholder="ADMIN" />
+            <div class="write-panel@(Model.IsSdkMode ? "" : " is-hidden")" data-panel-sdk>
+                <div class="card-head"><h3>SDK Live login</h3></div>
+                <p class="muted lede">SQL Account user and password for COM login. Saved to AWS on Save.</p>
+                <div class="form-stack">
+                    <div class="field-pair equal">
+                        <div>
+                            <label asp-for="SdkUsername">User</label>
+                            <input asp-for="SdkUsername" autocomplete="off" placeholder="ADMIN" data-sdk-field />
+                        </div>
+                        <div>
+                            <label asp-for="SdkPassword">Password</label>
+                            <input asp-for="SdkPassword" type="password" autocomplete="new-password" placeholder="Leave blank to keep existing" data-sdk-field />
+                        </div>
                     </div>
                     <div>
-                        <label asp-for="SdkPassword">Password</label>
-                        <input asp-for="SdkPassword" type="password" autocomplete="new-password" placeholder="Leave blank to keep existing" />
+                        <label asp-for="SdkDatabase">Database file name</label>
+                        <input asp-for="SdkDatabase" data-sdk-db-target data-sdk-field placeholder="ACC-COMPANY.FDB" />
+                        <p class="field-hint">Filled from the path above when empty.</p>
                     </div>
-                </div>
-                <div>
-                    <label asp-for="SdkDatabase">Database file name</label>
-                    <input asp-for="SdkDatabase" data-sdk-db-target placeholder="ACC-COMPANY.FDB" />
-                    <p class="field-hint">Filled from the path above when empty.</p>
                 </div>
             </div>
         </div>
