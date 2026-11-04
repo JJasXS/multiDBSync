@@ -38,7 +38,7 @@ public partial class IndexModel
             return AccountsPage(FlashToasts.Fail("Select a Master (or BOTH) database as the source."));
 
         FlashToast = await AccountChartEdit.SaveAsync(
-            _read, _write, _sync, SelectedSource, TargetSubs, EditInput(), CurrentEmail);
+            _read, _write, _sync, SelectedSource, TargetSubs, EditInput(), CurrentEmail, WriteProvider);
         await LoadAccountsAsync();
         return Page();
     }
@@ -84,7 +84,7 @@ public partial class IndexModel
         var failed = 0;
         var messages = new List<string>();
 
-        foreach (var sub in TargetSubs.Where(PartnerAutoPushTargets.HasApiCredentials))
+        foreach (var sub in TargetSubs.Where(s => PartnerAutoPushTargets.IsWriteReady(s, WriteProvider)))
             await DeleteAccountOnSubAsync(code, sub, messages, () => queued++, () => failed++);
 
         FlashToast = FlashToasts.Queue(queued, failed, messages, "delete");

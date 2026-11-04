@@ -12,7 +12,6 @@ using SqlAccountSync.Services.Documents;
 using SqlAccountSync.Services.Items;
 using SqlAccountSync.Services.Partners;
 using SqlAccountSync.Services.Secrets;
-// StockGroupRecord lives in Services.Items (imported above).
 
 namespace SqlAccountSync.Services.SqlAccount;
 
@@ -235,6 +234,27 @@ public sealed class SqlAccountApiWriteAdapter : ISqlAccountWriteAdapter
         return PostAsync(db, "/stockgroup", payload, cancellationToken);
     }
 
+    public Task<WriteResult> UpdateStockGroupAsync(
+        RegisteredDatabase db, StockGroupRecord group, CancellationToken cancellationToken = default)
+    {
+        var code = (group.Code ?? "").Trim();
+        if (code.Length == 0)
+            return Task.FromResult(new WriteResult { Success = false, Message = "Stock group code is required for update." });
+        var payload = StockGroupMapper.SerializePayload(StockGroupMapper.ToApiPayload(group));
+        return SendAsync(db, HttpMethod.Put, "/stockgroup/" + Uri.EscapeDataString(code), payload,
+            "Updated.", treatNotFoundAsSuccess: false, cancellationToken);
+    }
+
+    public Task<WriteResult> DeleteStockGroupAsync(
+        RegisteredDatabase db, string code, CancellationToken cancellationToken = default)
+    {
+        var key = (code ?? "").Trim();
+        if (key.Length == 0)
+            return Task.FromResult(new WriteResult { Success = false, Message = "Stock group code is required for delete." });
+        return SendAsync(db, HttpMethod.Delete, "/stockgroup/" + Uri.EscapeDataString(key), null,
+            "Deleted.", treatNotFoundAsSuccess: true, cancellationToken);
+    }
+
     private Task<WriteResult> PostAsync(RegisteredDatabase db, string path, string json, CancellationToken cancellationToken) =>
         SendAsync(db, HttpMethod.Post, path, json, "Created.", treatNotFoundAsSuccess: false, cancellationToken);
 
@@ -242,8 +262,19 @@ public sealed class SqlAccountApiWriteAdapter : ISqlAccountWriteAdapter
         RegisteredDatabase db, HttpMethod method, string path, string? json,
         string successMessage, bool treatNotFoundAsSuccess, CancellationToken cancellationToken)
     {
-        // Provider selection is owned by SelectingWriteAdapter / nav toggle (SYNC_SETTING).
-        // This adapter is only resolved when REST mode is active.
+        // Runtime mode is owned by SelectingWriteAdapter / nav toggle (SYNC_SETTING).
+        // Only refuse when BlockRestHttp is an explicit lab lock.
+        if (_writeOptions.ShouldRefuseRestHttp())
+        {
+            _logger.LogError(
+                "Refusing SQL Accounting REST write {Method} {Path}: BlockRestHttp=true.",
+                method.Method, path);
+            return new WriteResult
+            {
+                Success = false,
+                Message = "SQL Accounting REST write refused: BlockRestHttp is enabled."
+            };
+        }
 
         if (string.IsNullOrWhiteSpace(db.ApiBaseUrl) || string.IsNullOrWhiteSpace(db.ApiCredRef))
             return new WriteResult { Success = false, Message = "SQL Accounting API is not configured for this database." };
@@ -559,5 +590,19 @@ public sealed class DryRunWriteAdapter : ISqlAccountWriteAdapter
     {
         Actions.Add($"WOULD create stock group {group.Code} on {db.DisplayName}");
         return Task.FromResult(new WriteResult { Success = true, Message = "Dry run: no data was modified.", DocNo = group.Code });
+    }
+
+    public Task<WriteResult> UpdateStockGroupAsync(
+        RegisteredDatabase db, StockGroupRecord group, CancellationToken cancellationToken = default)
+    {
+        Actions.Add($"WOULD update stock group {group.Code} on {db.DisplayName}");
+        return Task.FromResult(new WriteResult { Success = true, Message = "Dry run: no data was modified.", DocNo = group.Code });
+    }
+
+    public Task<WriteResult> DeleteStockGroupAsync(
+        RegisteredDatabase db, string code, CancellationToken cancellationToken = default)
+    {
+        Actions.Add($"WOULD delete stock group {code} on {db.DisplayName}");
+        return Task.FromResult(new WriteResult { Success = true, Message = "Dry run: no data was modified.", DocNo = code });
     }
 }

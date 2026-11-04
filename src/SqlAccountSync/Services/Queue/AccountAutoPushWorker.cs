@@ -30,6 +30,15 @@ public sealed class AccountAutoPushWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        if (!_options.EnableBackgroundWriteWorkers)
+        {
+            _logger.LogInformation(
+                "AccountAutoPushWorker idle: Sync:EnableBackgroundWriteWorkers=false (no auto-push enqueue).");
+            try { await Task.Delay(Timeout.Infinite, stoppingToken).ConfigureAwait(false); }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
+            return;
+        }
+
         var seconds = Math.Clamp(_options.AccountAutoPushSeconds <= 0 ? 60 : _options.AccountAutoPushSeconds, 15, 3600);
         var delay = TimeSpan.FromSeconds(seconds);
         _schedule.SetIntervalSeconds(seconds);

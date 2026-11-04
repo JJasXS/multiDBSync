@@ -169,7 +169,7 @@ public class DryRunAdapterTests
             new DocumentHeader { Amount = 1000, Lines = [new DocumentLine { Qty = 10 }] }, "TXN-1");
         Assert.True(result.Success);
         Assert.Contains("no data was modified", result.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("WOULD CREATE", adapter.Actions[0]);
+        Assert.Contains("WOULD POST", adapter.Actions[0]);
     }
 }
 

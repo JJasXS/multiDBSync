@@ -235,6 +235,85 @@ public sealed class SdkWriteAdapter : ISqlAccountWriteAdapter
         return CreateSimpleMasterAsync(db, SdkObjectMap.StockGroupBizObject, payload, group.Code, cancellationToken);
     }
 
+    public async Task<WriteResult> UpdateStockGroupAsync(
+        RegisteredDatabase db, StockGroupRecord group, CancellationToken cancellationToken = default)
+    {
+        var code = (group.Code ?? "").Trim();
+        if (code.Length == 0)
+            return Fail("Stock group code is required for update.");
+
+        var payload = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["code"] = code,
+            ["description"] = string.IsNullOrWhiteSpace(group.Description) ? code : group.Description,
+            ["isactive"] = group.IsActive
+        };
+        try
+        {
+            return await _session.UseCompanyAsync(db.DbCode, biz =>
+                    SaveMaster(biz, SdkObjectMap.StockGroupBizObject, payload, code, isNew: false),
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            return Fail(ComHelper.FormatException(ex));
+        }
+    }
+
+    public async Task<WriteResult> DeleteStockGroupAsync(
+        RegisteredDatabase db, string code, CancellationToken cancellationToken = default)
+    {
+        var key = (code ?? "").Trim();
+        if (key.Length == 0)
+            return Fail("Stock group code is required for delete.");
+
+        try
+        {
+            return await _session.UseCompanyAsync(db.DbCode, biz =>
+            {
+                dynamic? obj = null;
+                try
+                {
+                    obj = biz.BizObjects.Find(SdkObjectMap.StockGroupBizObject);
+                    if (obj is null)
+                        return Fail("BizObject ST_GROUP not found.");
+
+                    var foundKey = FindKeyByCode(obj, key);
+                    if (foundKey is null)
+                        return new WriteResult { Success = true, Message = "Already absent.", DocNo = key };
+
+                    try { obj.Params.Find("Code").Value = foundKey; }
+                    catch
+                    {
+                        try { obj.Params.Find("CODE").Value = foundKey; }
+                        catch { /* open by default */ }
+                    }
+
+                    obj.Open();
+                    try
+                    {
+                        obj.Delete();
+                        TrySave(obj);
+                    }
+                    finally
+                    {
+                        TryClose(obj);
+                    }
+
+                    return new WriteResult { Success = true, Message = "Deleted.", DocNo = key };
+                }
+                finally
+                {
+                    ComHelper.SafeRelease(obj);
+                }
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            return Fail(ComHelper.FormatException(ex));
+        }
+    }
+
     /// <summary>Create UOM via SDK when available.</summary>
     public Task<WriteResult> CreateUomAsync(
         RegisteredDatabase db, string uomCode, CancellationToken cancellationToken = default)

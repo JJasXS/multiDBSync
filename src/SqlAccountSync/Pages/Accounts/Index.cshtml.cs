@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using SqlAccountSync.Helpers;
 using SqlAccountSync.Models;
+using SqlAccountSync.Options;
 using SqlAccountSync.Services.Accounts;
 using SqlAccountSync.Services.Audit;
 using SqlAccountSync.Services.Databases;
@@ -18,6 +20,7 @@ public partial class IndexModel : SyncPageModel
     private readonly ISyncOrchestrator _sync;
     private readonly IMappingService _mapping;
     private readonly IAuditService _audit;
+    private readonly SqlAccountingWriteOptions _writeOptions;
 
     public IndexModel(
         IDatabaseRegistry registry,
@@ -25,7 +28,8 @@ public partial class IndexModel : SyncPageModel
         ISqlAccountWriteAdapter write,
         ISyncOrchestrator sync,
         IMappingService mapping,
-        IAuditService audit)
+        IAuditService audit,
+        IOptions<SqlAccountingWriteOptions> writeOptions)
     {
         _registry = registry;
         _read = read;
@@ -33,7 +37,11 @@ public partial class IndexModel : SyncPageModel
         _sync = sync;
         _mapping = mapping;
         _audit = audit;
+        _writeOptions = writeOptions.Value;
     }
+
+    /// <summary>Configured write provider (Rest or Sdk). Used for company write-readiness checks.</summary>
+    public string WriteProvider => _writeOptions.Provider ?? SqlAccountingWriteProviders.Rest;
 
     [BindProperty(SupportsGet = true)] public string Tab { get; set; } = "accounts";
     [BindProperty(SupportsGet = true)] public int SourceDbId { get; set; }

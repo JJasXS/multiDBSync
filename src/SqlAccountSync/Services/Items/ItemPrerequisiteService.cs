@@ -1,5 +1,6 @@
+using Microsoft.Extensions.Options;
 using SqlAccountSync.Models;
-using SqlAccountSync.Services.Sdk;
+using SqlAccountSync.Options;
 using SqlAccountSync.Services.SqlAccount;
 
 namespace SqlAccountSync.Services.Items;
@@ -37,19 +38,30 @@ public interface IItemPrerequisiteService
 
 public sealed class ItemPrerequisiteService : IItemPrerequisiteService
 {
-    private readonly SelectingWriteAdapter _write;
+    private static readonly string[] UomListPaths =
+    [
+        "/uom?offset=0&limit=200",
+        "/stockuom?offset=0&limit=200",
+        "/unitofmeasure?offset=0&limit=200"
+    ];
+
+    private readonly ISqlAccountApiClient _api;
     private readonly ISqlAccountReadAdapter _read;
-    private readonly ILogger<ItemPrerequisiteService> _logger;
+    private readonly ISqlAccountWriteAdapter _write;
+    private readonly SqlAccountingWriteOptions _writeOptions;
 
     public ItemPrerequisiteService(
-        ISqlAccountWriteAdapter write,
+        ISqlAccountApiClient api,
         ISqlAccountReadAdapter read,
+        ISqlAccountWriteAdapter write,
+        IOptions<SqlAccountingWriteOptions> writeOptions,
         ILogger<ItemPrerequisiteService> logger)
     {
-        _write = write as SelectingWriteAdapter
-            ?? throw new InvalidOperationException("Item prerequisites require SelectingWriteAdapter.");
+        _api = api;
         _read = read;
-        _logger = logger;
+        _write = write;
+        _writeOptions = writeOptions.Value;
+        _ = logger;
     }
 
     public Task<List<PrerequisiteCheck>> CheckAsync(
@@ -71,9 +83,10 @@ public sealed class ItemPrerequisiteService : IItemPrerequisiteService
 
         var item = StockItemMapper.FromMasterRecord(record);
         var stockGroup = string.IsNullOrWhiteSpace(item.StockGroup) ? "DEFAULT" : item.StockGroup.Trim();
+        var sdkMode = IsSdkProvider();
 
-        var groupOnDest = await _read.GetStockGroupAsync(dest, stockGroup, cancellationToken).ConfigureAwait(false);
-        if (groupOnDest is null)
+        var groupExists = await StockGroupExistsAsync(dest, stockGroup, sdkMode, cancellationToken).ConfigureAwait(false);
+        if (!groupExists)
         {
             var group = source is not null
                 ? await _read.GetStockGroupAsync(source, stockGroup, cancellationToken).ConfigureAwait(false)
@@ -82,9 +95,17 @@ public sealed class ItemPrerequisiteService : IItemPrerequisiteService
 
             var post = await _write.CreateStockGroupAsync(dest, group, cancellationToken).ConfigureAwait(false);
             if (post.Success)
-                result.Actions.Add($"Created stock group {stockGroup} on destination via SDK.");
-            else if (LooksLikeExists(post.Message))
+            {
+                result.Actions.Add(sdkMode
+                    ? $"Created stock group {stockGroup} on destination via SDK ST_GROUP."
+                    : $"Created stock group {stockGroup} on destination via API.");
+            }
+            else if (post.Message.Contains("unique", StringComparison.OrdinalIgnoreCase)
+                     || post.Message.Contains("PRIMARY", StringComparison.OrdinalIgnoreCase)
+                     || post.Message.Contains("already exists", StringComparison.OrdinalIgnoreCase))
+            {
                 result.Actions.Add($"Stock group {stockGroup} already exists on destination.");
+            }
             else
             {
                 result.Ok = false;
@@ -94,18 +115,36 @@ public sealed class ItemPrerequisiteService : IItemPrerequisiteService
         }
 
         var baseUom = ResolveBaseUom(item);
-        var uoms = await _read.GetUomsAsync(dest, cancellationToken).ConfigureAwait(false);
-        var uomExists = uoms.Any(u => string.Equals(u.Code, baseUom, StringComparison.OrdinalIgnoreCase));
-        if (!uomExists)
+        if (sdkMode)
         {
-            var uomPost = await _write.CreateUomAsync(dest, baseUom, cancellationToken).ConfigureAwait(false);
-            if (uomPost.Success)
-                result.Actions.Add($"Created UOM {baseUom} on destination via SDK.");
+            // Standalone Maintain UOM BizObject is not implemented. Item create writes UOM via ST_ITEM.cdsUOM.
+            result.Actions.Add(
+                $"SDK mode: standalone /uom is not used. UOM '{baseUom}' will be written on item via ST_ITEM.cdsUOM.");
+            result.LastApiDiagnosis =
+                "Standalone UOM master CUD is unsupported in SDK mode; item prerequisite relies on ST_ITEM.cdsUOM.";
+        }
+        else
+        {
+            var uomApi = await FindWorkingUomListPathAsync(dest, cancellationToken).ConfigureAwait(false);
+            if (uomApi is null)
+            {
+                result.Actions.Add(
+                    $"UOM master API not available on {dest.DisplayName} (GET /uom returns HTML). " +
+                    $"Item push will use UOM '{baseUom}' in POST /stockitem; tenant must accept it.");
+                result.LastApiDiagnosis =
+                    "No JSON UOM list endpoint on destination. POST /stockitem may fail with 'No corresponding master record found' until eStream enables UOM API or fixes item create.";
+            }
             else
             {
-                result.Actions.Add($"UOM {baseUom} not on destination and create failed: {uomPost.Message}");
-                result.LastApiDiagnosis = uomPost.Message;
-                _logger.LogWarning("UOM create via SDK failed for {Uom}: {Message}", baseUom, uomPost.Message);
+                var uomExists = await _api.ExistsInListAsync(dest, uomApi, "code", baseUom, cancellationToken).ConfigureAwait(false);
+                if (!uomExists)
+                {
+                    var uomPost = await TryCreateUomAsync(dest, uomApi, baseUom, cancellationToken).ConfigureAwait(false);
+                    if (uomPost.Success)
+                        result.Actions.Add($"Created UOM {baseUom} on destination via API.");
+                    else
+                        result.Actions.Add($"UOM {baseUom} not on destination and create failed: {uomPost.Message}");
+                }
             }
         }
 
@@ -127,41 +166,103 @@ public sealed class ItemPrerequisiteService : IItemPrerequisiteService
         var item = StockItemMapper.FromMasterRecord(record);
         var stockGroup = string.IsNullOrWhiteSpace(item.StockGroup) ? "DEFAULT" : item.StockGroup.Trim();
         var baseUom = ResolveBaseUom(item);
+        var sdkMode = IsSdkProvider();
 
-        var groupOnDest = await _read.GetStockGroupAsync(dest, stockGroup, cancellationToken).ConfigureAwait(false);
+        var groupExists = await StockGroupExistsAsync(dest, stockGroup, sdkMode, cancellationToken).ConfigureAwait(false);
         checks.Add(new PrerequisiteCheck
         {
             Name = "Stock group on destination",
             Ok = true,
-            Detail = groupOnDest is not null
+            Detail = groupExists
                 ? $"Stock group {stockGroup} exists on destination."
                 : dryRun
-                    ? $"Stock group {stockGroup} missing. Would create via SDK before item create."
-                    : $"Stock group {stockGroup} will be created via SDK."
+                    ? $"Stock group {stockGroup} missing. Would create via {(sdkMode ? "SDK ST_GROUP" : "POST /stockgroup")} before item create."
+                    : $"Stock group {stockGroup} will be created via {(sdkMode ? "SDK ST_GROUP" : "API")}."
         });
 
-        var uoms = await _read.GetUomsAsync(dest, cancellationToken).ConfigureAwait(false);
-        var uomExists = uoms.Any(u => string.Equals(u.Code, baseUom, StringComparison.OrdinalIgnoreCase));
-        checks.Add(new PrerequisiteCheck
+        if (sdkMode)
         {
-            Name = "UOM on destination",
-            Ok = true,
-            Detail = uomExists
-                ? $"UOM {baseUom} found on destination."
-                : dryRun
-                    ? $"UOM {baseUom} missing. Would attempt SDK create before item create."
-                    : $"UOM {baseUom} will be created if possible."
-        });
+            checks.Add(new PrerequisiteCheck
+            {
+                Name = "UOM (SDK cdsUOM)",
+                Ok = true,
+                Detail = $"Standalone /uom unsupported in SDK mode. Item create embeds UOM '{baseUom}' via ST_ITEM.cdsUOM."
+            });
+            return checks;
+        }
+
+        var uomPath = await FindWorkingUomListPathAsync(dest, cancellationToken).ConfigureAwait(false);
+        if (uomPath is null)
+        {
+            checks.Add(new PrerequisiteCheck
+            {
+                Name = "UOM master API",
+                Ok = true,
+                Detail = $"No JSON UOM endpoint on destination. Push uses '{baseUom}' in item payload (API may still reject)."
+            });
+        }
+        else
+        {
+            var uomExists = await _api.ExistsInListAsync(dest, uomPath, "code", baseUom, cancellationToken).ConfigureAwait(false);
+            checks.Add(new PrerequisiteCheck
+            {
+                Name = "UOM on destination",
+                Ok = true,
+                Detail = uomExists
+                    ? $"UOM {baseUom} found via {uomPath}."
+                    : dryRun
+                        ? $"UOM {baseUom} missing. Would attempt POST before item create."
+                        : $"UOM {baseUom} will be created if possible."
+            });
+        }
 
         return checks;
     }
 
-    private static bool LooksLikeExists(string? message) =>
-        !string.IsNullOrWhiteSpace(message)
-        && (message.Contains("unique", StringComparison.OrdinalIgnoreCase)
-            || message.Contains("PRIMARY", StringComparison.OrdinalIgnoreCase)
-            || message.Contains("already", StringComparison.OrdinalIgnoreCase)
-            || message.Contains("exists", StringComparison.OrdinalIgnoreCase));
+    private async Task<bool> StockGroupExistsAsync(
+        RegisteredDatabase dest, string stockGroup, bool sdkMode, CancellationToken cancellationToken)
+    {
+        // Prefer Firebird RO — works for any registered company without paid REST list calls.
+        var fb = await _read.GetStockGroupAsync(dest, stockGroup, cancellationToken).ConfigureAwait(false);
+        if (fb is not null)
+            return true;
+
+        if (sdkMode)
+            return false;
+
+        return await _api.ExistsInListAsync(dest, "/stockgroup?offset=0&limit=200", "code", stockGroup, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private bool IsSdkProvider() =>
+        string.Equals(
+            _writeOptions.Provider?.Trim(),
+            SqlAccountingWriteProviders.Sdk,
+            StringComparison.OrdinalIgnoreCase);
+
+    private async Task<string?> FindWorkingUomListPathAsync(RegisteredDatabase dest, CancellationToken cancellationToken)
+    {
+        foreach (var path in UomListPaths)
+        {
+            var response = await _api.GetAsync(dest, path, cancellationToken).ConfigureAwait(false);
+            if (response.IsSuccess && SqlAccountApiClient.IsJson(response.Body))
+                return path;
+        }
+        return null;
+    }
+
+    private async Task<WriteResult> TryCreateUomAsync(
+        RegisteredDatabase dest, string listPath, string uomCode, CancellationToken cancellationToken)
+    {
+        var postPath = listPath.Contains('?') ? listPath[..listPath.IndexOf('?')] : listPath;
+        var payload = System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object?>
+        {
+            ["code"] = uomCode,
+            ["description"] = uomCode,
+            ["isactive"] = true
+        });
+        return await _api.PostAsync(dest, postPath, payload, cancellationToken).ConfigureAwait(false);
+    }
 
     private static string ResolveBaseUom(StockItem item)
     {

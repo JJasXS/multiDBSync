@@ -18,6 +18,15 @@ public sealed class SqlAccountingWriteOptions
 
     /// <summary><see cref="SqlAccountingWriteProviders.Sdk"/> (this branch default) or <see cref="SqlAccountingWriteProviders.Rest"/>.</summary>
     public string Provider { get; set; } = SqlAccountingWriteProviders.Sdk;
+
+    /// <summary>
+    /// When true, SQL Accounting REST HTTP is refused even before SigV4 (SDK-only labs).
+    /// Keep false in Production so the nav API|SDK toggle can still use REST when selected.
+    /// </summary>
+    public bool BlockRestHttp { get; set; }
+
+    /// <summary>True when <see cref="BlockRestHttp"/> is set (explicit lab lock).</summary>
+    public bool ShouldRefuseRestHttp() => BlockRestHttp;
 }
 
 /// <summary>

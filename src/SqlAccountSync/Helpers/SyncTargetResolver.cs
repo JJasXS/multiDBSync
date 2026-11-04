@@ -34,7 +34,7 @@ public static class SyncTargetResolver
         }
 
         return databases
-            .Where(d => d.DbId != source.DbId && d.DbRole is "SUB" or "BOTH" or "MASTER")
+            .Where(d => d.DbId != source.DbId && IsPushableRole(d.DbRole))
             .OrderBy(d => d.DisplayName, StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
@@ -43,5 +43,12 @@ public static class SyncTargetResolver
     {
         var role = (db?.DbRole ?? "").Trim().ToUpperInvariant();
         return role is DatabaseRoles.Master or DatabaseRoles.Both;
+    }
+
+    /// <summary>Roles that may receive a master-data push (case-insensitive).</summary>
+    public static bool IsPushableRole(string? dbRole)
+    {
+        var role = (dbRole ?? "").Trim().ToUpperInvariant();
+        return role is DatabaseRoles.Sub or DatabaseRoles.Both or DatabaseRoles.Master;
     }
 }

@@ -26,6 +26,7 @@ public sealed class AccountAutoPushService : IAccountAutoPushService
     private readonly ISyncOrchestrator _sync;
     private readonly IMappingService _mapping;
     private readonly SyncOptions _options;
+    private readonly SqlAccountingWriteOptions _writeOptions;
     private readonly ILogger<AccountAutoPushService> _logger;
 
     public AccountAutoPushService(
@@ -34,6 +35,7 @@ public sealed class AccountAutoPushService : IAccountAutoPushService
         ISyncOrchestrator sync,
         IMappingService mapping,
         IOptions<SyncOptions> options,
+        IOptions<SqlAccountingWriteOptions> writeOptions,
         ILogger<AccountAutoPushService> logger)
     {
         _registry = registry;
@@ -41,6 +43,7 @@ public sealed class AccountAutoPushService : IAccountAutoPushService
         _sync = sync;
         _mapping = mapping;
         _options = options.Value;
+        _writeOptions = writeOptions.Value;
         _logger = logger;
     }
 
@@ -66,7 +69,7 @@ public sealed class AccountAutoPushService : IAccountAutoPushService
         foreach (var master in masters)
         {
             var targets = SyncTargetResolver.ResolveLinkedSubs(master, databases, links)
-                .Where(PartnerAutoPushTargets.HasApiCredentials)
+                .Where(d => PartnerAutoPushTargets.IsWriteReady(d, _writeOptions.Provider))
                 .ToList();
             if (targets.Count == 0)
             {

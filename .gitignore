@@ -13,10 +13,6 @@ out/
 *.cache
 .idea/
 *.nupkg
-.env
-.env.*
-!.env.example
-!**/.env.example
 .DS_Store
 Thumbs.db
 coverage*.json
@@ -25,7 +21,41 @@ coverage*.xml
 Data/*.fdb
 Data/*.FDB
 /secrets/
-src/SqlAccountSync/secrets/
+/src/SqlAccountSync/secrets/
+# Do not ignore Services/Secrets (source code). Only local secret drop folders above.
+
+# Environment files (any directory). Keep committed templates only.
+.env
+.env.*
+!.env.example
+!**/.env.example
+!.env*.example
+!**/.env*.example
+
+# Local credential / secret filenames (never commit)
+*credentials*.json
+credentials.json
+client_secret*.json
+.aws/credentials
+.aws/config
+user-secrets.json
+*.usersecrets.json
+appsettings.*.local.json
+appsettings.Local.json
+secrets.json
+*secret*.local.*
+
+# Private keys and certificate material
+*.pem
+*.pfx
+*.p12
+*.key
+*.ppk
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+
 # Local build/debug drop folders and captured diagnostics
 _buildcheck/
 **/_buildcheck/
@@ -34,4 +64,3 @@ src/SqlAccountSync/_api500.html
 **/_run.log
 **/_api500.html
 *.log
-

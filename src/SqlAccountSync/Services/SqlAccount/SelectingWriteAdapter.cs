@@ -1,7 +1,7 @@
 using SqlAccountSync.Models;
 using SqlAccountSync.Options;
 using SqlAccountSync.Services.Items;
-using SqlAccountSync.Services.Sdk;
+using SqlAccountSync.Services.SqlAccount.Sdk;
 using SqlAccountSync.Services.Sync;
 
 namespace SqlAccountSync.Services.SqlAccount;
@@ -9,12 +9,12 @@ namespace SqlAccountSync.Services.SqlAccount;
 /// <summary>Routes writes to REST or SDK based on the nav toggle (SYNC_SETTING).</summary>
 public sealed class SelectingWriteAdapter : ISqlAccountWriteAdapter
 {
-    private readonly SdkWriteAdapter _sdk;
+    private readonly SqlAccountSdkWriteAdapter _sdk;
     private readonly SqlAccountApiWriteAdapter _api;
     private readonly IWriteProviderSettings _settings;
 
     public SelectingWriteAdapter(
-        SdkWriteAdapter sdk,
+        SqlAccountSdkWriteAdapter sdk,
         SqlAccountApiWriteAdapter api,
         IWriteProviderSettings settings)
     {
@@ -64,21 +64,22 @@ public sealed class SelectingWriteAdapter : ISqlAccountWriteAdapter
     public async Task<WriteResult> CreateStockGroupAsync(
         RegisteredDatabase db, StockGroupRecord group, CancellationToken cancellationToken = default)
     {
-        if (await IsSdkAsync(cancellationToken).ConfigureAwait(false))
-            return await _sdk.CreateStockGroupAsync(db, group, cancellationToken).ConfigureAwait(false);
-        return await _api.CreateStockGroupAsync(db, group, cancellationToken).ConfigureAwait(false);
+        var w = await ActiveAsync(cancellationToken).ConfigureAwait(false);
+        return await w.CreateStockGroupAsync(db, group, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<WriteResult> CreateUomAsync(
-        RegisteredDatabase db, string uom, CancellationToken cancellationToken = default)
+    public async Task<WriteResult> UpdateStockGroupAsync(
+        RegisteredDatabase db, StockGroupRecord group, CancellationToken cancellationToken = default)
     {
-        if (await IsSdkAsync(cancellationToken).ConfigureAwait(false))
-            return await _sdk.CreateUomAsync(db, uom, cancellationToken).ConfigureAwait(false);
-        return new WriteResult
-        {
-            Success = false,
-            Message = "UOM create via SQL Account REST is not available; switch to SDK or create the UOM in SQL Account."
-        };
+        var w = await ActiveAsync(cancellationToken).ConfigureAwait(false);
+        return await w.UpdateStockGroupAsync(db, group, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<WriteResult> DeleteStockGroupAsync(
+        RegisteredDatabase db, string code, CancellationToken cancellationToken = default)
+    {
+        var w = await ActiveAsync(cancellationToken).ConfigureAwait(false);
+        return await w.DeleteStockGroupAsync(db, code, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<ISqlAccountWriteAdapter> ActiveAsync(CancellationToken cancellationToken) =>
