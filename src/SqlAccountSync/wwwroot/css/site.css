@@ -2332,7 +2332,7 @@ code {
 .db-path-modal { max-width: 640px; }
 .db-path-list {
   list-style: none;
-  margin: 0;
+  margin: 0 0 12px;
   padding: 0;
   max-height: min(50vh, 360px);
   overflow: auto;
@@ -2357,6 +2357,11 @@ code {
 }
 .db-path-list li:last-child button { border-bottom: 0; }
 .db-path-list button:hover { background: var(--ice-accent-soft); }
+.db-path-list .db-path-empty {
+  padding: 12px 10px;
+  color: var(--ice-muted, #5b6b7c);
+  font-size: 13px;
+}
 .secret-input,
 .copy-input {
   position: relative;

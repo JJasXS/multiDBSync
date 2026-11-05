@@ -175,14 +175,7 @@
                         </div>
                         <div class="field">
                             <label for="editListPath">Database path</label>
-                            <div class="path-input">
-                                <input id="editListPath" name="Db.FbPath" required data-db-path data-sdk-db-source data-find-page="/Databases/Edit" />
-                                <button type="button" class="path-pin" data-db-path-pin aria-label="Choose database file" title="Choose database file">
-                                    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z"/></svg>
-                                </button>
-                                <input type="file" data-db-path-file accept=".fdb,.gdb" hidden />
-                            </div>
-                            <p class="field-hint" data-db-path-hint>Use the pin to choose the company .FDB.</p>
+                            <input id="editListPath" name="Db.FbPath" required data-sdk-db-source placeholder="C:/SQLAccount/Company.FDB" />
                         </div>
                         @if (Model.IsSdkMode)
                         {
@@ -235,11 +228,11 @@
     <dialog id="dbPathMatches" class="accounts-modal db-path-modal" aria-labelledby="dbPathMatchesTitle">
         <div class="accounts-modal-form">
             <div class="accounts-modal-head">
-                <h3 id="dbPathMatchesTitle">Choose a path</h3>
+                <h3 id="dbPathMatchesTitle">Choose a file</h3>
                 <button type="button" class="accounts-modal-close" data-db-path-close aria-label="Close">&times;</button>
             </div>
             <div class="accounts-modal-body">
-                <p class="field-hint">More than one file has that name. Pick the path to use.</p>
+                <p class="field-hint" data-db-path-folder>Pick the path to use.</p>
                 <ul class="db-path-list" data-db-path-matches></ul>
             </div>
         </div>

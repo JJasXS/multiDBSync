@@ -432,6 +432,13 @@ public class EditModel : SyncPageModel
         return new JsonResult(new { paths = DatabaseFileBrowser.FindByName(name) });
     }
 
+    public IActionResult OnGetBrowse(string? dir, string? kind)
+    {
+        if (!IsAdmin) return Forbid();
+        var result = DatabaseFileBrowser.BrowseDirectory(dir, kind);
+        return new JsonResult(new { directory = result.Directory, paths = result.Paths });
+    }
+
     public async Task<IActionResult> OnPostAsync()
     {
         if (!IsAdmin) return Forbid();

@@ -75,6 +75,125 @@ public static class DatabaseFileBrowser
         return state.Found;
     }
 
+    /// <summary>
+    /// Lists allowed .dcf / .fdb files in a folder (must sit under SQL Account Share/DB roots).
+    /// </summary>
+    public static BrowseResult BrowseDirectory(string? directory, string? kind)
+    {
+        var start = ResolveBrowseDirectory(directory, kind);
+        if (start is null)
+            return BrowseResult.Empty;
+
+        var extensions = IsDcfKind(kind)
+            ? new[] { ".dcf" }
+            : new[] { ".fdb", ".gdb" };
+        var files = new List<string>();
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(start))
+            {
+                var ext = Path.GetExtension(file);
+                if (!extensions.Any(e => e.Equals(ext, StringComparison.OrdinalIgnoreCase)))
+                    continue;
+                files.Add(Display(file));
+                if (files.Count >= MaxMatches) break;
+            }
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+        {
+            return new BrowseResult(Display(start), []);
+        }
+
+        files.Sort(StringComparer.OrdinalIgnoreCase);
+        PreferName(files, "SQLACC.DCF");
+        PreferName(files, "Default.DCF");
+        return new BrowseResult(Display(start), files);
+    }
+
+    public readonly record struct BrowseResult(string Directory, IReadOnlyList<string> Paths)
+    {
+        public static BrowseResult Empty { get; } = new("", []);
+    }
+
+    private static string? ResolveBrowseDirectory(string? directoryOrFile, string? kind)
+    {
+        var raw = (directoryOrFile ?? "").Trim().Trim('"').Replace('/', '\\');
+        if (raw.Length > 0)
+        {
+            try
+            {
+                var full = Path.GetFullPath(raw);
+                var dir = Directory.Exists(full)
+                    ? full
+                    : Path.GetDirectoryName(full);
+                if (!string.IsNullOrWhiteSpace(dir) && IsAllowedDirectory(dir))
+                    return dir;
+            }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+            {
+                // fall through to defaults
+            }
+        }
+
+        if (IsDcfKind(kind))
+        {
+            var preferred = FindPreferredDcfPath().Replace('/', '\\');
+            var dir = Path.GetDirectoryName(preferred);
+            if (!string.IsNullOrWhiteSpace(dir) && Directory.Exists(dir) && IsAllowedDirectory(dir))
+                return dir;
+        }
+
+        return SearchRoots().FirstOrDefault(Directory.Exists);
+    }
+
+    private static bool IsAllowedDirectory(string directory)
+    {
+        string full;
+        try
+        {
+            full = Path.GetFullPath(directory)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
+
+        foreach (var root in SearchRoots())
+        {
+            string allowed;
+            try
+            {
+                allowed = Path.GetFullPath(root)
+                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+            {
+                continue;
+            }
+
+            if (full.Equals(allowed, StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (full.StartsWith(allowed + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsDcfKind(string? kind) =>
+        string.Equals((kind ?? "").Trim(), "dcf", StringComparison.OrdinalIgnoreCase);
+
+    private static void PreferName(List<string> files, string fileName)
+    {
+        var index = files.FindIndex(path =>
+            Path.GetFileName(path).Equals(fileName, StringComparison.OrdinalIgnoreCase));
+        if (index <= 0) return;
+        var item = files[index];
+        files.RemoveAt(index);
+        files.Insert(0, item);
+    }
+
     private static IEnumerable<string> SearchRoots()
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
