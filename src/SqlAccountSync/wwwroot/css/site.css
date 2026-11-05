@@ -2362,6 +2362,7 @@ code {
   color: var(--ice-muted, #5b6b7c);
   font-size: 13px;
 }
+.db-path-os { margin-top: 0; }
 .secret-input,
 .copy-input {
   position: relative;

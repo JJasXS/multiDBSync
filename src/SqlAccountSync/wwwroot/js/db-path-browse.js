@@ -1,3 +1,36 @@
+async function dbPathPicked(input, picker, hint) {
+  const file = picker.files && picker.files[0];
+  if (!file) return;
+  const kind = (input.getAttribute("data-path-kind") || "fdb").toLowerCase();
+  dbPathHint(hint, "", kind);
+  const findPage = input.getAttribute("data-find-page");
+  const url = findPage ? new URL(findPage, window.location.origin) : new URL(window.location.href);
+  url.searchParams.set("handler", "Find");
+  url.searchParams.set("name", file.name);
+  let data;
+  try {
+    const res = await fetch(url, { headers: { Accept: "application/json" } });
+    if (!res.ok) throw new Error("Could not look up that file.");
+    data = await res.json();
+  } catch (err) {
+    dbPathHint(hint, err.message || "Could not look up that file.", kind);
+    return;
+  }
+  const paths = data.paths || [];
+  if (paths.length === 1) {
+    input.value = paths[0];
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    return;
+  }
+  if (paths.length === 0) {
+    dbPathHint(hint, kind === "dcf"
+      ? "That .DCF is not on this server. Choose SQLACC.DCF (or your company DCF)."
+      : "That file is not on this server. Choose a company .FDB.", kind);
+    return;
+  }
+  dbPathChoose(input, paths, "More than one file has that name. Pick the path to use.");
+}
+
 async function dbPathBrowseFolder(input, hint) {
   const kind = (input.getAttribute("data-path-kind") || "fdb").toLowerCase();
   dbPathHint(hint, "", kind);
@@ -38,6 +71,7 @@ function dbPathChoose(input, paths, note, directory) {
   const list = dialog?.querySelector("[data-db-path-matches]");
   const hint = dialog?.querySelector("[data-db-path-folder]");
   const title = dialog?.querySelector("#dbPathMatchesTitle");
+  const osBtn = dialog?.querySelector("[data-db-path-os]");
   if (!dialog || !list) {
     if (paths[0]) {
       input.value = paths[0];
@@ -57,10 +91,13 @@ function dbPathChoose(input, paths, note, directory) {
   } else {
     paths.forEach((path) => list.append(dbPathMatch(dialog, input, path)));
   }
-  dialog.dataset.activeKind = (input.getAttribute("data-path-kind") || "fdb").toLowerCase();
   dialog._activeInput = input;
   dialog._activeHint = input.closest("[data-db-path-group]")?.querySelector("[data-db-path-hint]")
     || document.querySelector("[data-db-path-hint]");
+  if (osBtn) {
+    const kind = (input.getAttribute("data-path-kind") || "fdb").toLowerCase();
+    osBtn.hidden = kind !== "dcf";
+  }
   if (typeof dialog.showModal === "function") dialog.showModal();
 }
 
@@ -81,37 +118,67 @@ function dbPathMatch(dialog, input, path) {
 function dbPathHint(hint, message, kind) {
   if (!hint) return;
   const fallback = kind === "dcf"
-    ? "Use the pin to open the Share folder and pick SQLACC.DCF (or Default.DCF)."
+    ? "Use the pin for the Share folder list, or Open file explorer for another .DCF."
     : "Use the pin to choose the company .FDB.";
   hint.textContent = message || fallback;
+}
+
+function dbPathOpenOs(group) {
+  const picker = group.querySelector("[data-db-path-file]");
+  if (!picker) return;
+  picker.value = "";
+  picker.click();
 }
 
 function dbPathBindGroup(group) {
   const input = group.querySelector("[data-db-path]");
   const pin = group.querySelector("[data-db-path-pin]");
+  const picker = group.querySelector("[data-db-path-file]");
   const hint = group.querySelector("[data-db-path-hint]");
   if (!input || !pin) return;
 
+  const kind = (input.getAttribute("data-path-kind") || "fdb").toLowerCase();
   pin.addEventListener("click", () => {
-    dbPathBrowseFolder(input, hint);
+    if (kind === "dcf") dbPathBrowseFolder(input, hint);
+    else dbPathOpenOs(group);
   });
+  if (picker) {
+    picker.addEventListener("change", () => dbPathPicked(input, picker, hint));
+  }
 }
 
 function dbPathInit() {
   document.querySelectorAll("[data-db-path-group]").forEach(dbPathBindGroup);
 
-  // Legacy single-picker pages (no group wrapper)
   if (!document.querySelector("[data-db-path-group]")) {
     const input = document.querySelector("[data-db-path]");
     const pin = document.querySelector("[data-db-path-pin]");
+    const picker = document.querySelector("[data-db-path-file]");
     const hint = document.querySelector("[data-db-path-hint]");
+    const group = document.body;
     if (input && pin) {
-      pin.addEventListener("click", () => dbPathBrowseFolder(input, hint));
+      const kind = (input.getAttribute("data-path-kind") || "fdb").toLowerCase();
+      pin.addEventListener("click", () => {
+        if (kind === "dcf") dbPathBrowseFolder(input, hint);
+        else {
+          if (!picker) return;
+          picker.value = "";
+          picker.click();
+        }
+      });
+      if (picker) picker.addEventListener("change", () => dbPathPicked(input, picker, hint));
     }
   }
 
   const dialog = document.getElementById("dbPathMatches");
   dialog?.querySelector("[data-db-path-close]")?.addEventListener("click", () => dialog.close());
+  dialog?.querySelector("[data-db-path-os]")?.addEventListener("click", () => {
+    const input = dialog._activeInput;
+    const group = input?.closest("[data-db-path-group]");
+    if (!group) return;
+    dialog.close();
+    dbPathOpenOs(group);
+  });
   dialog?.addEventListener("cancel", (e) => {
     e.preventDefault();
     dialog.close();

@@ -105,9 +105,16 @@
                                 <input id="editDbPort" name="Db.FbPort" value="@d.FbPort" />
                             </div>
                         </div>
-                        <div class="field">
+                        <div class="field" data-db-path-group>
                             <label for="editDbPath">Database path</label>
-                            <input id="editDbPath" name="Db.FbPath" required value="@d.FbPath" data-sdk-db-source placeholder="C:/SQLAccount/Company.FDB" />
+                            <div class="path-input">
+                                <input id="editDbPath" name="Db.FbPath" required value="@d.FbPath" data-db-path data-path-kind="fdb" data-sdk-db-source data-find-page="/Databases/Edit/@d.DbId" placeholder="C:/SQLAccount/Company.FDB" />
+                                <button type="button" class="path-pin" data-db-path-pin aria-label="Choose database file" title="Choose database file">
+                                    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z"/></svg>
+                                </button>
+                                <input type="file" data-db-path-file accept=".fdb,.gdb" hidden />
+                            </div>
+                            <p class="field-hint" data-db-path-hint>Use the pin to choose the company .FDB.</p>
                         </div>
                         @if (Model.IsSdkMode)
                         {
@@ -173,6 +180,7 @@
             <div class="accounts-modal-body">
                 <p class="field-hint" data-db-path-folder>Pick the path to use.</p>
                 <ul class="db-path-list" data-db-path-matches></ul>
+                <button type="button" class="btn secondary db-path-os" data-db-path-os>Open file explorer…</button>
             </div>
         </div>
     </dialog>
