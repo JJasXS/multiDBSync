@@ -30,17 +30,20 @@
         <details class="report-load-warning report-load-warning--icon">
             <summary aria-label="@failedLabel. Show error details">
                 <span class="report-load-warning-icon" aria-hidden="true">!</span>
-                <span class="visually-hidden">@failedLabel</span>
+                <span class="visually-hidden">@failedLabel. @string.Join("; ", failureMessages)</span>
             </summary>
             <div class="report-load-warning-panel" role="region" aria-label="Load errors">
                 <p class="report-load-warning-panel-title">@failedLabel</p>
-                <p class="report-load-warning-panel-hint">These companies failed to load. Results above may be incomplete.</p>
-                <ul>
-                    @foreach (var message in failureMessages)
-                    {
-                        <li>@message</li>
-                    }
-                </ul>
+                @if (failureMessages.Count > 0)
+                {
+                    <ul class="report-load-warning-panel-list">
+                        @foreach (var message in failureMessages)
+                        {
+                            <li>@message</li>
+                        }
+                    </ul>
+                }
+                <p class="report-load-warning-panel-hint">Results may be incomplete.</p>
             </div>
         </details>
     </div>
@@ -53,17 +56,17 @@
         <details class="report-load-warning report-load-warning--icon">
             <summary aria-label="@emptyLabel. Show details">
                 <span class="report-load-warning-icon" aria-hidden="true">!</span>
-                <span class="visually-hidden">@emptyLabel</span>
+                <span class="visually-hidden">@emptyLabel: @string.Join(", ", emptyCompanies)</span>
             </summary>
             <div class="report-load-warning-panel" role="region" aria-label="Empty companies">
                 <p class="report-load-warning-panel-title">@emptyLabel</p>
-                <p class="report-load-warning-panel-hint">These companies have no data for the selected year.</p>
-                <ul>
-                    @foreach (var company in emptyCompanies)
+                <ul class="report-load-warning-panel-list">
+                    @foreach (var name in emptyCompanies)
                     {
-                        <li>@company</li>
+                        <li>@name</li>
                     }
                 </ul>
+                <p class="report-load-warning-panel-hint">No data for the selected year.</p>
             </div>
         </details>
     </div>

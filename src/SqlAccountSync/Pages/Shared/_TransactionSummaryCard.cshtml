@@ -217,6 +217,7 @@
             };
 
             const results = root.querySelector("[data-txn-results]");
+            const warningHost = root.querySelector("[data-txn-warning]");
             const refreshDelayMs = 300;
             let refreshTimer = 0;
             let refreshInFlight = false;
@@ -226,6 +227,14 @@
                 txnPreview.status = "loading";
                 applyStatus();
                 root.setAttribute("aria-busy", "true");
+            };
+
+            const parkWarning = () => {
+                if (!warningHost || !results) return;
+                warningHost.replaceChildren();
+                results.querySelectorAll(".report-load-warning-slot").forEach((slot) => {
+                    warningHost.appendChild(slot);
+                });
             };
 
             const refreshDetails = async () => {
@@ -244,6 +253,7 @@
                     });
                     if (!response.ok) throw new Error(String(response.status));
                     results.innerHTML = await response.text();
+                    parkWarning();
                     txnPreview.status = "ready";
                     applyStatus();
                     applyColumns();
@@ -253,6 +263,7 @@
                     pageUrl.search = pageQuery.toString();
                     history.replaceState(null, "", pageUrl);
                 } catch {
+                    if (warningHost) warningHost.replaceChildren();
                     txnPreview.status = "error";
                     applyStatus();
                     root.removeAttribute("aria-busy");
@@ -301,19 +312,26 @@
                 refreshDetails();
             });
 
-            document.addEventListener("click", (event) => {
-                root.querySelectorAll("details.txn-col-menu").forEach((menu) => {
-                    if (!menu.contains(event.target)) menu.removeAttribute("open");
+            const closeOutsideDetails = (selector, target) => {
+                root.querySelectorAll(selector).forEach((menu) => {
+                    if (!menu.contains(target)) menu.removeAttribute("open");
                 });
+            };
+
+            document.addEventListener("click", (event) => {
+                closeOutsideDetails("details.txn-col-menu", event.target);
+                closeOutsideDetails("details.report-load-warning", event.target);
             });
 
             root.addEventListener("keydown", (event) => {
                 if (event.key !== "Escape") return;
-                root.querySelectorAll("details.txn-col-menu").forEach((menu) => menu.removeAttribute("open"));
+                root.querySelectorAll("details.txn-col-menu, details.report-load-warning")
+                    .forEach((menu) => menu.removeAttribute("open"));
             });
 
             applyColumns();
             applyDatabases();
+            parkWarning();
             applyStatus();
             window.addEventListener("resize", () => applyColumns());
         })();

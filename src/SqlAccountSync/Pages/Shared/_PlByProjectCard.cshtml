@@ -164,7 +164,7 @@
             });
 
             document.addEventListener("click", (event) => {
-                root.querySelectorAll("details.txn-col-menu").forEach((menu) => {
+                root.querySelectorAll("details.txn-col-menu, details.report-load-warning").forEach((menu) => {
                     if (!menu.contains(event.target)) menu.removeAttribute("open");
                 });
             });
@@ -184,7 +184,8 @@
 
             root.addEventListener("keydown", (event) => {
                 if (event.key !== "Escape") return;
-                root.querySelectorAll("details.txn-col-menu").forEach((menu) => menu.removeAttribute("open"));
+                root.querySelectorAll("details.txn-col-menu, details.report-load-warning")
+                    .forEach((menu) => menu.removeAttribute("open"));
             });
 
             applyColumns();

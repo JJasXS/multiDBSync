@@ -21,6 +21,7 @@
                 }
             </select>
         </div>
+        <div class="so-filter-warning" data-so-warning aria-live="polite" title="Load warnings"></div>
         <div class="txn-filter-actions">
             <button type="button" class="btn secondary" data-so-export-all>Export to Excel</button>
         </div>
@@ -42,6 +43,7 @@
 
             const filters = root.querySelector("[data-so-filters]");
             const results = root.querySelector("[data-so-results]");
+            const warningHost = root.querySelector("[data-so-warning]");
             let requestSeq = 0;
 
             const panels = () => root.querySelectorAll("[data-so-panel]");
@@ -50,6 +52,13 @@
                 panels().forEach((panel) => {
                     panel.hidden = panel.getAttribute("data-so-panel") !== status;
                 });
+            };
+
+            const parkWarning = () => {
+                if (!warningHost || !results) return;
+                warningHost.replaceChildren();
+                const slot = results.querySelector(".report-load-warning-slot");
+                if (slot) warningHost.appendChild(slot);
             };
 
             const syncHeaderOffset = () => {
@@ -90,11 +99,13 @@
                         throw new Error(String(response.status));
                     }
                     results.innerHTML = await response.text();
+                    parkWarning();
                     applyStatus("ready");
                     syncHeaderOffset();
                     root.removeAttribute("aria-busy");
                 } catch {
                     if (seq !== requestSeq) return;
+                    if (warningHost) warningHost.replaceChildren();
                     applyStatus("error");
                     root.removeAttribute("aria-busy");
                 }
@@ -126,6 +137,18 @@
             filters?.addEventListener("submit", (event) => {
                 event.preventDefault();
                 refreshDetails();
+            });
+
+            document.addEventListener("click", (event) => {
+                root.querySelectorAll("details.report-load-warning").forEach((menu) => {
+                    if (!menu.contains(event.target)) menu.removeAttribute("open");
+                });
+            });
+
+            root.addEventListener("keydown", (event) => {
+                if (event.key !== "Escape") return;
+                root.querySelectorAll("details.report-load-warning")
+                    .forEach((menu) => menu.removeAttribute("open"));
             });
 
             const initialStatus = root.getAttribute("data-so-status") || "loading";
