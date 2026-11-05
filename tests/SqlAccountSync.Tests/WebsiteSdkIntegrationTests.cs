@@ -306,6 +306,8 @@ public class WebsiteSdkIntegrationTests
             return Task.FromResult(action(new FakeComApp()));
         }
 
+        public SqlAccSessionStatus GetStatus() => new(false, null, false);
+
         private sealed class Noop : IDisposable
         {
             public void Dispose() { }

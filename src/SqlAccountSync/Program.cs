@@ -348,11 +348,17 @@ if (app.Environment.IsDevelopment())
 // Public liveness only — no queue/SDK internals (master security hardening).
 app.MapGet("/health", () => Results.Json(new { status = "ok" })).AllowAnonymous();
 // Detailed health for authenticated admins.
-app.MapGet("/health/detail", async (HttpContext http, IJobQueue queue, ISdkSessionManager sdk, IConfiguration config) =>
+app.MapGet("/health/detail", async (
+    HttpContext http,
+    IJobQueue queue,
+    ISdkSessionManager sdk,
+    ISqlAccSessionManager writeSessions,
+    IConfiguration config) =>
 {
     var snap = await queue.GetHealthAsync();
     var lease = config.GetValue("Sync:ProcessingLeaseSeconds", 900);
     var sdkHealth = sdk.GetHealth();
+    var writeStatus = writeSessions.GetStatus();
     var status = "ok";
     if (!sdkHealth.ProgIdRegistered)
         status = "sdk-offline";
@@ -368,8 +374,9 @@ app.MapGet("/health/detail", async (HttpContext http, IJobQueue queue, ISdkSessi
         sdk = new
         {
             progIdRegistered = sdkHealth.ProgIdRegistered,
-            loggedIn = sdkHealth.LoggedIn,
-            currentCompany = sdkHealth.CurrentCompany
+            loggedIn = writeStatus.LoggedIn,
+            currentCompany = writeStatus.ActiveCompany,
+            attachedToUserWindow = writeStatus.AttachedToUserWindow
         },
         queue = new
         {

@@ -55,13 +55,13 @@ public sealed class SqlAccSdkOptions
     /// <summary>
     /// After each SDK write/use finishes, call Logout so the concurrent user seat is freed
     /// (1-user licenses cannot open SQL Account while sync stays logged in).
+    /// When attached to a user window, Logout still runs; the window is left at the login screen.
     /// </summary>
     public bool LogoutAfterUse { get; set; } = true;
 
     /// <summary>
     /// After Logout, dispose the owned COM LocalServer and close leftover SQLACC.exe.
-    /// Skipped when SQL Account was already open before sync took over (window is kept).
-    /// Also ignored when attached to an interactive window.
+    /// Skipped when attached to a user-owned SQL Account window (window is kept, logged out).
     /// </summary>
     public bool ReleaseSqlAccAfterUse { get; set; } = true;
 

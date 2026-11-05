@@ -93,5 +93,7 @@ public class SdkSessionDiagnosticsTests
 
         public Task<T> RunAsync<T>(RegisteredDatabase db, Func<ISqlAccComApp, T> action, CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("Test must not open COM.");
+
+        public SqlAccSessionStatus GetStatus() => new(false, null, false);
     }
 }

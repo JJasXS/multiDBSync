@@ -1071,6 +1071,9 @@ public sealed class SqlAccSdkWebsiteFunctionalProbe
             }, cancellationToken).ConfigureAwait(false);
         }
 
+        public SqlAccSessionStatus GetStatus() =>
+            new(_app?.IsLogin == true, _key, _app?.AttachedToRunningInstance == true);
+
         private void EnsureLogin(RegisteredDatabase db)
         {
             var file = Path.GetFileName((db.FbPath ?? "").Trim().Replace('\\', '/'));

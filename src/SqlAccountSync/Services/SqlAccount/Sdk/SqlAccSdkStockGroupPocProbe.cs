@@ -358,6 +358,9 @@ public sealed class SqlAccSdkStockGroupPocProbe
         public Task<IDisposable> UseCompanyAsync(RegisteredDatabase db, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException("Use RunAsync.");
 
+        public SqlAccSessionStatus GetStatus() =>
+            new(_app?.IsLogin == true, _activeKey, _app?.AttachedToRunningInstance == true);
+
         public async Task<T> RunAsync<T>(RegisteredDatabase db, Func<ISqlAccComApp, T> action, CancellationToken cancellationToken = default)
         {
             await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
