@@ -402,6 +402,7 @@ public class EditModel : SyncPageModel
     {
         Db.DbRole = DatabaseRoles.Master;
         ApplyFirebirdDefaults(Db);
+        SdkDcfPath = DatabaseFileBrowser.FindPreferredDcfPath();
     }
 
     private static void ApplyFirebirdDefaults(RegisteredDatabase db)
