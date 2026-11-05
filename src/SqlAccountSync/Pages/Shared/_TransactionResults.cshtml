@@ -25,15 +25,16 @@
             failureMessages.Add(row.DatabaseName.Trim());
     }
     var failedWord = failedCompanies.Count == 1 ? "company" : "companies";
-    var failedLabel = $"Partial data shown — {failedCompanies.Count} {failedWord} could not be loaded.";
+    var failedLabel = $"Could not load {failedCompanies.Count} {failedWord}";
     <div class="report-load-warning-slot" role="status" data-txn-panel="ready">
         <details class="report-load-warning report-load-warning--icon">
-            <summary aria-label="@failedLabel Show error details">
+            <summary aria-label="@failedLabel. Show error details">
                 <span class="report-load-warning-icon" aria-hidden="true">!</span>
                 <span class="visually-hidden">@failedLabel</span>
             </summary>
             <div class="report-load-warning-panel" role="region" aria-label="Load errors">
                 <p class="report-load-warning-panel-title">@failedLabel</p>
+                <p class="report-load-warning-panel-hint">These companies failed to load. Results above may be incomplete.</p>
                 <ul>
                     @foreach (var message in failureMessages)
                     {
@@ -46,16 +47,17 @@
 }
 @if (emptyCompanies.Count > 0)
 {
-    var emptyWord = emptyCompanies.Count == 1 ? "company has" : "companies have";
-    var emptyLabel = $"No data — {emptyCompanies.Count} {emptyWord} no rows for this year.";
+    var emptyWord = emptyCompanies.Count == 1 ? "company" : "companies";
+    var emptyLabel = $"No rows for {emptyCompanies.Count} {emptyWord}";
     <div class="report-load-warning-slot" role="status" data-txn-panel="ready">
         <details class="report-load-warning report-load-warning--icon">
-            <summary aria-label="@emptyLabel Show details">
+            <summary aria-label="@emptyLabel. Show details">
                 <span class="report-load-warning-icon" aria-hidden="true">!</span>
                 <span class="visually-hidden">@emptyLabel</span>
             </summary>
             <div class="report-load-warning-panel" role="region" aria-label="Empty companies">
                 <p class="report-load-warning-panel-title">@emptyLabel</p>
+                <p class="report-load-warning-panel-hint">These companies have no data for the selected year.</p>
                 <ul>
                     @foreach (var company in emptyCompanies)
                     {
