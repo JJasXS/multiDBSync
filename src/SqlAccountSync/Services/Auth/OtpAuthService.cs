@@ -41,7 +41,6 @@ public sealed class OtpAuthService
     private readonly IConfiguration _config;
     private readonly SmtpOptions _smtp;
     private readonly SyncOptions _sync;
-    private readonly IHostEnvironment _env;
     private readonly ILogger<OtpAuthService> _logger;
 
     public OtpAuthService(
@@ -54,7 +53,6 @@ public sealed class OtpAuthService
         IConfiguration config,
         IOptions<SmtpOptions> smtp,
         IOptions<SyncOptions> sync,
-        IHostEnvironment env,
         ILogger<OtpAuthService> logger,
         IAmazonSecretsManager? aws = null)
     {
@@ -67,7 +65,6 @@ public sealed class OtpAuthService
         _config = config;
         _smtp = smtp.Value;
         _sync = sync.Value;
-        _env = env;
         _logger = logger;
         _aws = aws;
     }
@@ -118,23 +115,19 @@ public sealed class OtpAuthService
         if (debugCode is not null)
         {
             _logger.LogWarning(
-                "OTP email not delivered in local Development ({Error}); debug OTP returned to loopback UI only.",
+                "OTP email not delivered ({Error}); AppMode=dev so OTP is shown on the login page.",
                 err);
-            return (true, "Development mode: use the code shown on this page.", debugCode);
+            return (true, "Dev mode: use the code shown on this page.", debugCode);
         }
 
         return (false, "Could not send the sign-in email. Try again later.", null);
     }
 
     /// <summary>
-    /// Debug OTP in HTTP responses requires Development + AppMode=dev + AllowLocalOtpReveal + loopback IP.
-    /// Never active for non-loopback clients (publicly reachable deployments).
+    /// Show OTP in the login UI only when <c>Sync:AppMode=dev</c> (e.g. <c>APP_MODE=dev</c>).
+    /// Production (<c>AppMode=prod</c>) never returns the code — email only.
     /// </summary>
-    internal bool CanRevealDebugOtp(string? clientIp) =>
-        _env.IsDevelopment()
-        && _sync.IsDevAppMode
-        && _sync.AllowLocalOtpReveal
-        && HostHardening.IsLoopbackIp(clientIp);
+    internal bool CanRevealDebugOtp(string? clientIp) => _sync.IsDevAppMode;
 
     private static string GenerateOtpCode() =>
         RandomNumberGenerator.GetInt32(100000, 1000000).ToString("D6");

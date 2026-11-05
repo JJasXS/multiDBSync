@@ -63,8 +63,7 @@ public class LoginModel : PageModel
 
         var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
         var (ok, msg, debugCode) = await _auth.SendOtpAsync(email ?? "", ip).ConfigureAwait(false);
-        // Defense in depth: never put OTP on the wire unless the TCP peer is loopback.
-        var reveal = debugCode is not null && HostHardening.IsLoopbackIp(ip) ? debugCode : null;
+        // debugCode is only set when Sync:AppMode=dev (see OtpAuthService.CanRevealDebugOtp).
         return new JsonResult(new
         {
             success = ok,
@@ -72,7 +71,7 @@ public class LoginModel : PageModel
             email = (email ?? "").Trim(),
             expiresInSeconds = OtpSeconds,
             resendCooldownSeconds = OtpAuthService.SendCooldownSeconds,
-            debugOtp = reveal
+            debugOtp = debugCode
         });
     }
 

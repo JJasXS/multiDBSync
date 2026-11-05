@@ -126,18 +126,15 @@ public sealed class SyncOptions
     public bool AllowProductionConnections { get; set; }
     public bool AllowCrossEnvironment { get; set; }
     /// <summary>
-    /// <c>dev</c> = developer testing phase. <c>prod</c> = email OTP only (default).
-    /// Debug OTP reveal also requires <see cref="AllowLocalOtpReveal"/>, Development env, and loopback client.
+    /// <c>dev</c> = show OTP on the login page (no email needed).
+    /// <c>prod</c> = email OTP only; code is never returned to the browser.
     /// </summary>
     public string AppMode { get; set; } = "prod";
     /// <summary>Obsolete: ignored. Kept so old config keys do not break binding.</summary>
     public bool DebugOtpToConsole { get; set; }
     /// <summary>Obsolete: ignored. Fixed OTPs are no longer supported.</summary>
     public string MockSignInCode { get; set; } = "";
-    /// <summary>
-    /// Explicit opt-in to return OTP in the login JSON response. Still requires Development + AppMode=dev
-    /// and a loopback client IP. Default false — never enable on publicly reachable hosts.
-    /// </summary>
+    /// <summary>Obsolete: ignored. OTP reveal is gated by <see cref="IsDevAppMode"/> only.</summary>
     public bool AllowLocalOtpReveal { get; set; }
     /// <summary>
     /// Secret ref (<c>env:</c> / <c>sm:</c>) for HMAC pepper used to hash OTPs. Required for multi-instance.

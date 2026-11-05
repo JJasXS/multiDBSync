@@ -44,31 +44,23 @@ public sealed class OtpAuthServiceTests
     }
 
     [Fact]
-    public async Task ProductionHosting_NeverReturnsDebugOtp()
+    public async Task ProdAppMode_NeverReturnsDebugOtp()
     {
         var user = ActiveUser();
-        var sut = CreateSut(user, isDevelopment: false, appMode: "dev", allowReveal: true);
+        var sut = CreateSut(user, isDevelopment: false, appMode: "prod", allowReveal: true);
         var (_, _, debug) = await sut.SendOtpAsync(user.Email, "127.0.0.1");
         Assert.Null(debug);
+        Assert.False(sut.CanRevealDebugOtp("127.0.0.1"));
     }
 
     [Fact]
-    public async Task PublicClientIp_NeverReturnsDebugOtp_EvenInDev()
+    public async Task DevAppMode_ReturnsDebugOtp_EvenForPublicClientIp()
     {
         var user = ActiveUser();
-        var sut = CreateSut(user, isDevelopment: true, appMode: "dev", allowReveal: true);
+        var sut = CreateSut(user, isDevelopment: false, appMode: "dev", allowReveal: false);
         var (_, _, debug) = await sut.SendOtpAsync(user.Email, "203.0.113.10");
-        Assert.Null(debug);
-        Assert.False(sut.CanRevealDebugOtp("203.0.113.10"));
-    }
-
-    [Fact]
-    public async Task DevReveal_RequiresExplicitAllowLocalOtpReveal()
-    {
-        var user = ActiveUser();
-        var sut = CreateSut(user, isDevelopment: true, appMode: "dev", allowReveal: false);
-        var (_, _, debug) = await sut.SendOtpAsync(user.Email, "127.0.0.1");
-        Assert.Null(debug);
+        Assert.False(string.IsNullOrWhiteSpace(debug));
+        Assert.True(sut.CanRevealDebugOtp("203.0.113.10"));
     }
 
     [Fact]
@@ -218,7 +210,6 @@ public sealed class OtpAuthServiceTests
             config,
             smtp,
             sync,
-            new FakeHostEnv(isDevelopment),
             NullLogger<OtpAuthService>.Instance);
     }
 
