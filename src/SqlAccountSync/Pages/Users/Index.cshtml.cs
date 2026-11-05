@@ -70,6 +70,36 @@ public class IndexModel : SyncPageModel
         }
     }
 
+    public async Task<IActionResult> OnPostDeleteAsync(int id)
+    {
+        if (!IsAdmin)
+            return Forbid();
+
+        try
+        {
+            var target = await _users.GetByIdAsync(id) ?? throw new InvalidOperationException("User not found.");
+            await _users.DeleteViewerAsync(id, CurrentUserId, CurrentEmail);
+            await _audit.WriteAsync(new AuditEntry
+            {
+                UserEmail = CurrentEmail,
+                Action = "USER DELETED USER",
+                RecordId = target.Email,
+                Result = "SUCCESS",
+                BeforeJson = $"{{\"userId\":{target.UserId},\"role\":\"{target.Role}\",\"name\":\"{EscapeJson(target.DisplayName)}\"}}"
+            });
+            return new JsonResult(new
+            {
+                ok = true,
+                id = target.UserId,
+                message = $"Deleted {target.DisplayName} ({target.Email})."
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new JsonResult(new { ok = false, message = ex.Message }) { StatusCode = 400 };
+        }
+    }
+
     private async Task SetActiveAsync(int id, bool active)
     {
         var target = await _users.GetByIdAsync(id) ?? throw new InvalidOperationException("User not found.");
@@ -99,6 +129,9 @@ public class IndexModel : SyncPageModel
         return me.Length > 0 && them.Length > 0
             && string.Equals(them, me, StringComparison.OrdinalIgnoreCase);
     }
+
+    private static string EscapeJson(string? value) =>
+        (value ?? "").Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal);
 
     private async Task LoadAsync() => Users = await _users.ListAsync();
 }

@@ -4,25 +4,24 @@
     ViewData["Title"] = "User management";
     var activeAdminCount = Model.Users.Count(u => u.IsActive && AppRoles.Rank(u.Role) >= AppRoles.Rank(AppRoles.Admin));
 }
-@if (!string.IsNullOrWhiteSpace(Model.Message))
-{
-    <div class="flash @(Model.Error ? "flash-err" : "flash-ok")">@Model.Message</div>
-}
+<div id="usersFlash" class="flash @(Model.Error ? "flash-err" : "flash-ok")" @(string.IsNullOrWhiteSpace(Model.Message) ? "hidden" : null)>@Model.Message</div>
 <div class="users-page">
     <div class="card users-list-card">
-        @if (Model.IsAdmin)
-        {
-            <div class="card-head users-card-head">
-                <details class="kebab">
-                    <summary aria-label="Actions">
-                        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="5" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="19" r="1.6" fill="currentColor"/></svg>
-                    </summary>
-                    <div class="kebab-menu">
-                        <button type="button" id="openAddUser">Add user</button>
-                    </div>
-                </details>
+        <div class="card-head users-card-head">
+            <div class="users-card-title">
+                <svg class="users-card-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+                    <path fill="currentColor" d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5C15 14.17 10.33 13 8 13zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
+                </svg>
+                <h3>User Accounts</h3>
             </div>
-        }
+            @if (Model.IsAdmin)
+            {
+                <button type="button" id="openAddUser" class="btn users-add-btn">
+                    <span class="users-add-plus" aria-hidden="true">+</span>
+                    Add User
+                </button>
+            }
+        </div>
         @if (Model.Users.Count == 0)
         {
             <p class="empty">No users yet.</p>
@@ -39,8 +38,8 @@
                             <th>Mobile</th>
                             <th>Email</th>
                             <th>Role</th>
-                            <th>Status</th>
-                            <th>Action</th>
+                            <th class="users-col-status">Status</th>
+                            <th class="users-col-actions">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -55,56 +54,95 @@
                         // Only the sole remaining active admin is locked — another admin can turn this one off.
                         var isLastAdmin = u.IsActive && isAdminRole && activeAdminCount <= 1;
                         var locked = u.IsActive && (isSelf || isLastAdmin);
-                        var lockNote = isSelf ? "Your account" : "Last admin";
                         var lockTitle = isSelf
                             ? "You cannot turn off your own account."
                             : "The last ADMIN must stay on.";
                         var when = u.CreatedAt.Year < 2000 ? "—" : u.CreatedAt.ToString("dd/MM/yyyy HH:mm");
-                        <tr>
+                        var isViewer = string.Equals(AppRoles.Normalize(u.Role), AppRoles.Viewer, StringComparison.Ordinal);
+                        <tr data-user-id="@u.UserId">
                             <td>@when</td>
                             <td>@u.Code</td>
                             <td>@u.DisplayName</td>
                             <td>@(string.IsNullOrWhiteSpace(u.Mobile) ? "—" : u.Mobile)</td>
                             <td>@(string.IsNullOrWhiteSpace(u.Email) ? "—" : u.Email)</td>
                             <td>@u.Role</td>
-                            <td>
-                                <span class="badge @(u.IsActive ? "badge-online" : "badge-disabled")">
+                            <td class="users-col-status">
+                                <span class="user-status-pill @(u.IsActive ? "is-active" : "is-inactive")">
                                     @(u.IsActive ? "Active" : "Inactive")
                                 </span>
                             </td>
-                            <td>
+                            <td class="users-col-actions">
                                 @if (!Model.IsAdmin)
                                 {
                                     <span class="muted">—</span>
                                 }
-                                else if (locked)
-                                {
-                                    <span class="user-switch is-on is-locked" title="@lockTitle">
-                                        <span class="user-switch-track" aria-hidden="true"><span class="user-switch-knob"></span></span>
-                                    </span>
-                                    <span class="muted user-switch-note">@lockNote</span>
-                                }
-                                else if (u.IsActive)
-                                {
-                                    <form method="post" class="user-switch-form" asp-page-handler="SetActive" asp-route-id="@u.UserId">
-                                        <input type="hidden" name="active" value="false" />
-                                        <button class="user-switch is-on" type="submit" aria-pressed="true" aria-label="Set inactive"
-                                                data-confirm="Turn off @u.DisplayName? They will not be able to sign in."
-                                                data-confirm-title="Turn off user"
-                                                data-confirm-ok="Turn off"
-                                                data-confirm-danger>
-                                            <span class="user-switch-track" aria-hidden="true"><span class="user-switch-knob"></span></span>
-                                        </button>
-                                    </form>
-                                }
                                 else
                                 {
-                                    <form method="post" class="user-switch-form" asp-page-handler="SetActive" asp-route-id="@u.UserId">
-                                        <input type="hidden" name="active" value="true" />
-                                        <button class="user-switch" type="submit" aria-pressed="false" aria-label="Set active">
-                                            <span class="user-switch-track" aria-hidden="true"><span class="user-switch-knob"></span></span>
-                                        </button>
-                                    </form>
+                                    <div class="user-actions">
+                                        <div class="user-switch-group">
+                                        @if (locked)
+                                        {
+                                            <span class="user-switch is-on is-locked" title="@lockTitle">
+                                                <span class="user-switch-track" aria-hidden="true"><span class="user-switch-knob"></span></span>
+                                            </span>
+                                            <span class="user-switch-state">Enabled</span>
+                                        }
+                                        else if (u.IsActive)
+                                        {
+                                            <form method="post" class="user-switch-form" asp-page-handler="SetActive" asp-route-id="@u.UserId">
+                                                <input type="hidden" name="active" value="false" />
+                                                <button class="user-switch is-on" type="submit" aria-pressed="true" aria-label="Set inactive"
+                                                        data-confirm="Turn off @u.DisplayName? They will not be able to sign in."
+                                                        data-confirm-title="Turn off user"
+                                                        data-confirm-ok="Turn off"
+                                                        data-confirm-danger>
+                                                    <span class="user-switch-track" aria-hidden="true"><span class="user-switch-knob"></span></span>
+                                                </button>
+                                            </form>
+                                            <span class="user-switch-state">Enabled</span>
+                                        }
+                                        else
+                                        {
+                                            <form method="post" class="user-switch-form" asp-page-handler="SetActive" asp-route-id="@u.UserId">
+                                                <input type="hidden" name="active" value="true" />
+                                                <button class="user-switch" type="submit" aria-pressed="false" aria-label="Set active">
+                                                    <span class="user-switch-track" aria-hidden="true"><span class="user-switch-knob"></span></span>
+                                                </button>
+                                            </form>
+                                            <span class="user-switch-state is-off">Disabled</span>
+                                        }
+                                        </div>
+                                        <span class="user-actions-sep" aria-hidden="true"></span>
+                                        @if (isSelf)
+                                        {
+                                            <span class="user-self-chip" title="@lockTitle">
+                                                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
+                                                    <path fill="currentColor" d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                                                </svg>
+                                                <span>Your account</span>
+                                            </span>
+                                        }
+                                        else if (isViewer)
+                                        {
+                                            <button type="button"
+                                                    class="user-delete-btn"
+                                                    title="Delete User"
+                                                    aria-label="Delete User"
+                                                    data-user-delete
+                                                    data-user-id="@u.UserId"
+                                                    data-user-name="@u.DisplayName"
+                                                    data-user-email="@(u.Email ?? "")">
+                                                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
+                                                    <path fill="currentColor" d="M9 3h6a1 1 0 0 1 1 1v1h4v2H4V5h4V4a1 1 0 0 1 1-1zm-2 4h10l-.8 12.1A2 2 0 0 1 14.2 21H9.8a2 2 0 0 1-2-1.9L7 7zm3 3v8h1.5V10H10zm3.5 0v8H15V10h-1.5z"/>
+                                                </svg>
+                                                <span>Delete</span>
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <span class="user-actions-empty">—</span>
+                                        }
+                                    </div>
                                 }
                             </td>
                         </tr>
@@ -117,6 +155,7 @@
 </div>
 @if (Model.IsAdmin)
 {
+    <form id="userDeleteAntiForgery" method="post" class="sr-only" aria-hidden="true">@Html.AntiForgeryToken()</form>
     <dialog id="addUserDialog" class="accounts-modal" aria-labelledby="addUserTitle">
         <form method="post" class="accounts-modal-form">
             <div class="accounts-modal-head">
@@ -156,13 +195,73 @@
             const dialog = document.getElementById("addUserDialog");
             if (dialog && typeof dialog.showModal === "function" && !dialog.open) dialog.showModal();
         }
-        document.getElementById("openAddUser")?.addEventListener("click", () => {
-            document.querySelector(".users-list-card details.kebab")?.removeAttribute("open");
-            openAddUser();
-        });
+        document.getElementById("openAddUser")?.addEventListener("click", () => openAddUser());
         document.querySelectorAll("[data-add-user-close]").forEach((btn) => {
             btn.addEventListener("click", () => document.getElementById("addUserDialog")?.close());
         });
+
+        (() => {
+            const flash = document.getElementById("usersFlash");
+            const tokenInput = document.querySelector('#userDeleteAntiForgery input[name="__RequestVerificationToken"]');
+            const showFlash = (message, isError) => {
+                if (!flash) return;
+                flash.hidden = false;
+                flash.textContent = message || "";
+                flash.classList.toggle("flash-err", !!isError);
+                flash.classList.toggle("flash-ok", !isError);
+            };
+            document.querySelectorAll("[data-user-delete]").forEach((btn) => {
+                btn.addEventListener("click", async () => {
+                    if (btn.disabled) return;
+                    const id = btn.getAttribute("data-user-id") || "";
+                    const name = btn.getAttribute("data-user-name") || "";
+                    const email = btn.getAttribute("data-user-email") || "";
+                    const ask = typeof window.appConfirm === "function" ? window.appConfirm : null;
+                    if (!ask) return;
+                    const ok = await ask({
+                        title: "Delete User?",
+                        message: "Are you sure you want to permanently delete this user account? This action cannot be undone.\n\nName: "
+                            + name + "\nEmail: " + (email || "—"),
+                        okLabel: "Delete User",
+                        cancelLabel: "Cancel",
+                        danger: true
+                    });
+                    if (!ok) return;
+
+                    btn.disabled = true;
+                    const body = new URLSearchParams();
+                    body.set("id", id);
+                    if (tokenInput?.value) body.set("__RequestVerificationToken", tokenInput.value);
+                    try {
+                        const res = await fetch("?handler=Delete", {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/x-www-form-urlencoded",
+                                "RequestVerificationToken": tokenInput?.value || "",
+                                "X-Requested-With": "fetch"
+                            },
+                            body
+                        });
+                        const data = await res.json().catch(() => ({}));
+                        if (!res.ok || !data.ok) {
+                            showFlash(data.message || "Delete failed.", true);
+                            btn.disabled = false;
+                            return;
+                        }
+                        document.querySelector(`tr[data-user-id="${CSS.escape(String(data.id || id))}"]`)?.remove();
+                        showFlash(data.message || "User deleted.", false);
+                        const tbody = document.querySelector(".users-table tbody");
+                        if (tbody && !tbody.querySelector("tr[data-user-id]")) {
+                            const card = document.querySelector(".users-list-card .table-wrap");
+                            if (card) card.outerHTML = '<p class="empty">No users yet.</p>';
+                        }
+                    } catch {
+                        showFlash("Delete failed. Try again.", true);
+                        btn.disabled = false;
+                    }
+                });
+            });
+        })();
     </script>
     @if (Model.Error)
     {

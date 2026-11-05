@@ -17,6 +17,11 @@ public interface ILoginUserStore
     Task SetActiveAsync(int userId, bool active, CancellationToken cancellationToken = default);
     Task SetRoleAsync(int userId, string role, CancellationToken cancellationToken = default);
     Task<int> CountActiveAdminsAsync(CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Permanently deletes a VIEWER row from the website login table <c>SY_USER</c> only.
+    /// Does not touch SQL Accounting companies, sync jobs, or historical logs.
+    /// </summary>
+    Task DeleteViewerAsync(int userId, int currentUserId, string? currentEmail, CancellationToken cancellationToken = default);
 }
 
 /// <summary>Users live in the AWS login database <c>SY_USER</c>, not <c>SYNC.FDB</c>.</summary>
@@ -115,6 +120,30 @@ public sealed class LoginUserStore : ILoginUserStore
             throw new InvalidOperationException("The last ADMIN must stay on.");
 
         await WriteRoleAsync(conn, userId, role, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task DeleteViewerAsync(
+        int userId, int currentUserId, string? currentEmail, CancellationToken cancellationToken = default)
+    {
+        await using var conn = await OpenAsync(cancellationToken).ConfigureAwait(false);
+        var row = await ReadByIdAsync(conn, userId, cancellationToken).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("User not found.");
+        var user = await ToUserAsync(conn, row, cancellationToken).ConfigureAwait(false);
+        LoginUserDeleteRules.EnsureCanDelete(user, currentUserId, currentEmail);
+
+        try
+        {
+            await using var cmd = new FbCommand("DELETE FROM SY_USER WHERE AUTOKEY = @Id", conn);
+            cmd.Parameters.AddWithValue("@Id", userId);
+            var affected = await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            if (affected <= 0)
+                throw new InvalidOperationException("User not found.");
+        }
+        catch (FbException)
+        {
+            throw new InvalidOperationException(
+                "This user cannot be deleted safely because related login records still depend on it.");
+        }
     }
 
     public async Task<int> CountActiveAdminsAsync(CancellationToken cancellationToken = default)
