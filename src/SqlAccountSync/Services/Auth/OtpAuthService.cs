@@ -307,56 +307,112 @@ public sealed class OtpAuthService
     }
 
     /// <summary>
-    /// Same merge order as eQuotation / ApprovalPO:
-    /// appsettings Smtp → tenant email/proaccEmail → smtpCredentialsSecretRef → smtpAppPasswordSecretRef.
+    /// Tries Gmail (tenant email + smtpAppPasswordSecretRef) first, then corporate
+    /// smtpCredentialsSecretRef / appsettings. Instant Gmail inbox delivery needs a valid
+    /// App Password in Secrets Manager; corporate SMTP may accept mail without Gmail notifying.
     /// </summary>
     private async Task<(bool Sent, string? Error)> TrySendEmailAsync(
         string toAddress, string subject, string htmlBody, CancellationToken cancellationToken)
     {
-        var settings = await ResolveSmtpSettingsAsync(cancellationToken).ConfigureAwait(false);
-        if (settings.Error is not null)
-            return (false, settings.Error);
+        var (candidates, configError) = await BuildSmtpCandidatesAsync(cancellationToken).ConfigureAwait(false);
+        if (configError is not null)
+            return (false, configError);
+        if (candidates.Count == 0)
+            return (false, "SMTP is not configured.");
 
-        try
+        Exception? last = null;
+        foreach (var settings in candidates)
         {
-            await SendSmtpHtmlAsync(settings.Value!, toAddress, subject, htmlBody, cancellationToken).ConfigureAwait(false);
-            _logger.LogInformation("OTP email sent to {Email} via {Host}:{Port}", toAddress, settings.Value!.Host, settings.Value.Port);
-            return (true, null);
+            try
+            {
+                await SendSmtpHtmlAsync(settings, toAddress, subject, htmlBody, cancellationToken)
+                    .ConfigureAwait(false);
+                _logger.LogInformation(
+                    "OTP email sent to {Email} via {Host}:{Port} ({Label})",
+                    toAddress, settings.Host, settings.Port, settings.Label);
+                return (true, null);
+            }
+            catch (Exception ex)
+            {
+                last = ex;
+                _logger.LogWarning(
+                    ex,
+                    "SMTP send failed via {Host}:{Port} ({Label}); trying next candidate if any.",
+                    settings.Host, settings.Port, settings.Label);
+            }
         }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "SMTP send failed.");
-            return (false, "Could not send the sign-in email.");
-        }
+
+        _logger.LogWarning(last, "All SMTP candidates failed for OTP to {Email}.", toAddress);
+        return (false, "Could not send the sign-in email.");
     }
 
-    private sealed record SmtpSettings(string Host, int Port, string User, string Pass, bool EnableSsl);
+    private sealed record SmtpSettings(string Host, int Port, string User, string Pass, bool EnableSsl, string Label);
 
-    private async Task<(SmtpSettings? Value, string? Error)> ResolveSmtpSettingsAsync(CancellationToken cancellationToken)
+    private async Task<(List<SmtpSettings> Candidates, string? Error)> BuildSmtpCandidatesAsync(
+        CancellationToken cancellationToken)
     {
         var tenantEmail = await LoadTenantEmailOverrideAsync(cancellationToken).ConfigureAwait(false);
         if (tenantEmail?.OtpEnabled == false)
-            return (null, "OTP email is disabled for this tenant.");
+            return ([], "OTP email is disabled for this tenant.");
 
-        var host = FirstNonEmpty(_smtp.Host, "smtp.gmail.com")!;
-        var port = _smtp.Port <= 0 ? 587 : _smtp.Port;
-        var user = FirstNonEmpty(_smtp.User, _smtp.From) ?? "";
-        ApplyTenantSmtpFields(tenantEmail, ref host, ref port, ref user);
+        var list = new List<SmtpSettings>(2);
+        var gmail = await TryBuildGmailCandidateAsync(tenantEmail, cancellationToken).ConfigureAwait(false);
+        if (gmail is not null)
+            list.Add(gmail);
 
-        var bundle = await LoadSmtpCredentialsBundleAsync(tenantEmail, cancellationToken).ConfigureAwait(false);
-        ApplyBundleSmtpFields(bundle, ref host, ref port, ref user);
+        var corporate = await TryBuildCredentialsCandidateAsync(tenantEmail, cancellationToken).ConfigureAwait(false);
+        if (corporate is not null && !SameSmtpEndpoint(corporate, gmail))
+            list.Add(corporate);
 
-        var pass = await ResolveSmtpPasswordAsync(bundle, tenantEmail, cancellationToken).ConfigureAwait(false);
-        if (string.IsNullOrWhiteSpace(host))
-            return (null, "SMTP is not configured.");
-        if (string.IsNullOrWhiteSpace(user) || string.IsNullOrWhiteSpace(pass))
-        {
-            return (null,
-                "SMTP user or password empty. Tenant must provide proaccEmail/email smtpCredentialsSecretRef or smtpAppPasswordSecretRef (same as eQuotation), and the app needs AWS credentials to read Secrets Manager.");
-        }
+        if (list.Count > 0)
+            return (list, null);
 
-        return (new SmtpSettings(host, port, user, pass, _smtp.EnableSsl), null);
+        return ([],
+            "SMTP user or password empty. Tenant must provide email smtpAppPasswordSecretRef (Gmail) or proaccEmail smtpCredentialsSecretRef, and the app needs AWS credentials to read Secrets Manager.");
     }
+
+    private async Task<SmtpSettings?> TryBuildGmailCandidateAsync(
+        TenantEmailOverride? tenantEmail, CancellationToken cancellationToken)
+    {
+        var host = FirstNonEmpty(tenantEmail?.SmtpHost, _smtp.Host, "smtp.gmail.com")!;
+        if (!host.Contains("gmail", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var port = tenantEmail?.SmtpPort is > 0
+            ? tenantEmail.SmtpPort.Value
+            : (_smtp.Port <= 0 ? 587 : _smtp.Port);
+        var user = FirstNonEmpty(tenantEmail?.SmtpSenderEmail, _smtp.User, _smtp.From) ?? "";
+        var fallback = await _secrets.ResolveAsync(_smtp.PasswordSecretRef, cancellationToken).ConfigureAwait(false) ?? "";
+        var pass = (await TenantSmtpSecretResolver.ResolveSmtpPasswordAsync(
+                _aws, tenantEmail?.SmtpAppPasswordSecretRef, fallback, cancellationToken)
+            .ConfigureAwait(false) ?? "").Replace(" ", "").Trim();
+        if (string.IsNullOrWhiteSpace(user) || string.IsNullOrWhiteSpace(pass))
+            return null;
+
+        return new SmtpSettings(host, port, user, pass, _smtp.EnableSsl, "gmail-app-password");
+    }
+
+    private async Task<SmtpSettings?> TryBuildCredentialsCandidateAsync(
+        TenantEmailOverride? tenantEmail, CancellationToken cancellationToken)
+    {
+        var bundle = await LoadSmtpCredentialsBundleAsync(tenantEmail, cancellationToken).ConfigureAwait(false);
+        var host = FirstNonEmpty(bundle?.Host, tenantEmail?.SmtpHost, _smtp.Host) ?? "";
+        var port = bundle?.Port is > 0
+            ? bundle.Port.Value
+            : (tenantEmail?.SmtpPort is > 0 ? tenantEmail.SmtpPort.Value : (_smtp.Port <= 0 ? 587 : _smtp.Port));
+        var user = FirstNonEmpty(bundle?.User, tenantEmail?.SmtpSenderEmail, _smtp.User, _smtp.From) ?? "";
+        var pass = await ResolveSmtpPasswordAsync(bundle, tenantEmail, cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(host) || string.IsNullOrWhiteSpace(user) || string.IsNullOrWhiteSpace(pass))
+            return null;
+
+        return new SmtpSettings(host, port, user, pass, _smtp.EnableSsl, "smtp-credentials-bundle");
+    }
+
+    private static bool SameSmtpEndpoint(SmtpSettings a, SmtpSettings? b) =>
+        b is not null
+        && a.Host.Equals(b.Host, StringComparison.OrdinalIgnoreCase)
+        && a.Port == b.Port
+        && a.User.Equals(b.User, StringComparison.OrdinalIgnoreCase);
 
     private async Task<TenantEmailOverride?> LoadTenantEmailOverrideAsync(CancellationToken cancellationToken)
     {
@@ -387,28 +443,6 @@ public sealed class OtpAuthService
         return await TenantSmtpSecretResolver
             .ResolveSmtpCredentialsSecretAsync(_aws, tenantEmail.SmtpCredentialsSecretRef, cancellationToken)
             .ConfigureAwait(false);
-    }
-
-    private static void ApplyTenantSmtpFields(
-        TenantEmailOverride? tenantEmail, ref string host, ref int port, ref string user)
-    {
-        if (tenantEmail is null)
-            return;
-        host = FirstNonEmpty(tenantEmail.SmtpHost, host)!;
-        if (tenantEmail.SmtpPort is > 0)
-            port = tenantEmail.SmtpPort.Value;
-        user = FirstNonEmpty(tenantEmail.SmtpSenderEmail, user) ?? user;
-    }
-
-    private static void ApplyBundleSmtpFields(
-        TenantSmtpCredentialsSecretPayload? bundle, ref string host, ref int port, ref string user)
-    {
-        if (bundle is null)
-            return;
-        host = FirstNonEmpty(bundle.Host, host)!;
-        if (bundle.Port is > 0)
-            port = bundle.Port.Value;
-        user = FirstNonEmpty(bundle.User, user) ?? user;
     }
 
     private async Task<string> ResolveSmtpPasswordAsync(
