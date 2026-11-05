@@ -43,6 +43,16 @@ public static class PartyFieldComparer
         return list;
     }
 
+    /// <summary>Stable hash of syncable party fields for master-delta auto-push.</summary>
+    public static string ContentHash(MasterRecord? record)
+    {
+        if (record is null)
+            return IdempotencyKey.ContentHash("");
+
+        var parts = CompareKeys.Select(key => $"{key}={Field(record, key)}");
+        return IdempotencyKey.ContentHash(string.Join('|', parts));
+    }
+
     private static string Field(MasterRecord record, string key)
     {
         if (record.Fields.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value))

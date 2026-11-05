@@ -70,6 +70,36 @@ public static class GlAccountComparer
         return changed;
     }
 
+    /// <summary>Stable hash of syncable GL fields for master-delta auto-push.</summary>
+    public static string ContentHash(GlAccountRow row, string parentCode)
+    {
+        var payload = string.Join('|',
+            $"desc={(row.Description ?? "").Trim()}",
+            $"desc2={(row.Description2 ?? "").Trim()}",
+            $"acc={(row.AccType ?? "").Trim()}",
+            $"special={(row.SpecialAccType ?? "").Trim()}",
+            $"tax={(row.Tax ?? "").Trim()}",
+            $"cf={row.CashFlowType}",
+            $"sic={(row.Sic ?? "").Trim()}",
+            $"parent={(parentCode ?? "").Trim()}");
+        return Helpers.IdempotencyKey.ContentHash(payload);
+    }
+
+    public static Dictionary<string, string> BuildHashes(IReadOnlyList<GlAccountRow> chart)
+    {
+        var byKey = IndexByDocKey(chart);
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in chart)
+        {
+            var code = (row.Code ?? "").Trim();
+            if (code.Length == 0)
+                continue;
+            map[code] = ContentHash(row, ParentCodeOf(row, byKey));
+        }
+
+        return map;
+    }
+
     private static bool Same(string? a, string? b) =>
         string.Equals((a ?? "").Trim(), (b ?? "").Trim(), StringComparison.OrdinalIgnoreCase);
 }

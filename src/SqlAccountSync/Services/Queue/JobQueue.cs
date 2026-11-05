@@ -116,7 +116,7 @@ VALUES (@JOBID, @JOBKIND, @TXNPK, @SOURCEDBID, @DESTDBID, @ENTITYCODE, @PAYLOADJ
             return new JobEnqueueResult(existing.JobId, true);
         }
 
-        if (existing.Status is JobStatuses.Retrying)
+        if (existing.Status is JobStatuses.Retrying && !AutoPushJobRules.IsAutoPushUser(job.CreatedBy))
             await BumpRetryJobAsync(job, existing.JobId, cancellationToken).ConfigureAwait(false);
 
         return new JobEnqueueResult(existing.JobId, false);

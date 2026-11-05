@@ -260,6 +260,7 @@ builder.Services.AddScoped<ITransactionEngine, TransactionEngine>();
 builder.Services.AddScoped<IAccountAutoPushService, AccountAutoPushService>();
 builder.Services.AddScoped<IAutoPushSettings, AutoPushSettings>();
 builder.Services.AddSingleton<IAutoPushSchedule, AutoPushSchedule>();
+builder.Services.AddScoped<IMasterFingerprintStore, MasterFingerprintStore>();
 builder.Services.AddScoped<IMasterMissingAutoPushService, MasterMissingAutoPushService>();
 builder.Services.AddHostedService<TenantConfigRefreshWorker>();
 builder.Services.AddHostedService<SyncWorker>();
