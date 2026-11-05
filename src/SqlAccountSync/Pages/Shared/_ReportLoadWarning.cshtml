@@ -9,19 +9,20 @@
 @if (companies.Count > 0)
 {
     var companyWord = companies.Count == 1 ? "company" : "companies";
-    <details class="report-load-warning">
-        <summary>
-            <span class="report-load-warning-text">&#9888; Partial data shown — @companies.Count @companyWord could not be loaded.</span>
-            <span class="report-load-warning-action">
-                <span class="report-load-warning-closed">View details</span>
-                <span class="report-load-warning-open">Hide details</span>
-            </span>
+    var label = $"Partial data shown — {companies.Count} {companyWord} could not be loaded.";
+    <details class="report-load-warning report-load-warning--icon">
+        <summary aria-label="@label Show error details">
+            <span class="report-load-warning-icon" aria-hidden="true">!</span>
+            <span class="visually-hidden">@label</span>
         </summary>
-        <ul>
-            @foreach (var company in companies)
-            {
-                <li>@company</li>
-            }
-        </ul>
+        <div class="report-load-warning-panel" role="region" aria-label="Load errors">
+            <p class="report-load-warning-panel-title">@label</p>
+            <ul>
+                @foreach (var company in companies)
+                {
+                    <li>@company</li>
+                }
+            </ul>
+        </div>
     </details>
 }
