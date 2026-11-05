@@ -1,0 +1,29 @@
+@page
+@model SqlAccountSync.Pages.Backup.IndexModel
+@{
+    ViewData["Title"] = "Backup SYNC.FDB";
+}
+
+<p class="muted lede">
+    Download a zip of the central control database (<code>SYNC.FDB</code>).
+    Your browser will ask where to save the file.
+</p>
+
+@if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+{
+    <div class="flash flash-err">@Model.ErrorMessage</div>
+}
+
+<div class="card" style="max-width: 560px;">
+    <div class="meta" style="margin-bottom: 12px;">
+        Source: @(Model.SourcePath ?? "(not configured)")
+    </div>
+    <form method="post" asp-page-handler="Download">
+        <button type="submit" class="btn" @(Model.BackupReady ? null : "disabled")>
+            Download SYNC.FDB zip
+        </button>
+    </form>
+    <p class="muted" style="margin-top: 12px; font-size: 13px;">
+        Copies the live file, then zips it. Prefer a quiet moment if heavy sync jobs are running.
+    </p>
+</div>

@@ -187,6 +187,20 @@ code {
   color: #0f2744;
   border-color: transparent;
 }
+.nav-backup {
+  text-align: center;
+  font-weight: 600;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 8px;
+  padding: 9px 10px;
+  color: rgba(255,255,255,.9);
+  text-decoration: none;
+}
+.nav-backup:hover {
+  background: rgba(255,255,255,.14);
+  color: #fff;
+}
 .nav-logout {
   text-align: center;
   font-weight: 600;
