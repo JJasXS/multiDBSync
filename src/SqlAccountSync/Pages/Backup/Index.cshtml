@@ -5,25 +5,47 @@
 }
 
 <p class="muted lede">
-    Download a zip of the central control database (<code>SYNC.FDB</code>).
-    Your browser will ask where to save the file.
+    Copy and zip the central control database (<code>SYNC.FDB</code>) into a server backup folder.
+    Default: <code>C:\eStream\SQLAccounting\Backup</code>.
 </p>
 
+@if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
+{
+    <div class="flash flash-ok">@Model.SuccessMessage</div>
+}
 @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
 {
     <div class="flash flash-err">@Model.ErrorMessage</div>
 }
 
-<div class="card" style="max-width: 560px;">
+<div class="card" style="max-width: 640px;">
     <div class="meta" style="margin-bottom: 12px;">
         Source: @(Model.SourcePath ?? "(not configured)")
     </div>
-    <form method="post" asp-page-handler="Download">
-        <button type="submit" class="btn" @(Model.BackupReady ? null : "disabled")>
-            Download SYNC.FDB zip
+
+    <form method="post" asp-page-handler="Save">
+        <fieldset class="backup-targets" @(Model.BackupReady ? null : "disabled")>
+            <legend>Backup folder</legend>
+            @foreach (var t in Model.Targets)
+            {
+                var isDefault = string.Equals(t.Id, Model.TargetId, StringComparison.OrdinalIgnoreCase);
+                <label class="backup-target-choice">
+                    <input type="radio" name="TargetId" value="@t.Id" @(isDefault ? "checked" : null) />
+                    <span>
+                        <strong>@t.Label</strong>
+                        <code>@t.Path</code>
+                    </span>
+                </label>
+            }
+        </fieldset>
+
+        <button type="submit" class="btn" style="margin-top: 14px;" @(Model.BackupReady ? null : "disabled")>
+            Backup SYNC.FDB
         </button>
     </form>
+
     <p class="muted" style="margin-top: 12px; font-size: 13px;">
-        Copies the live file, then zips it. Prefer a quiet moment if heavy sync jobs are running.
+        Creates the folder if needed, then writes <code>SYNC-backup-yyyyMMdd-HHmmss.zip</code>.
+        Prefer a quiet moment if heavy sync jobs are running.
     </p>
 </div>

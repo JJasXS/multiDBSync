@@ -201,6 +201,43 @@ code {
   background: rgba(255,255,255,.14);
   color: #fff;
 }
+.backup-targets {
+  border: 1px solid var(--ice-line, #d7e0ea);
+  border-radius: 10px;
+  padding: 12px 14px 6px;
+  margin: 0;
+}
+.backup-targets legend {
+  padding: 0 6px;
+  font-size: 12px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--ice-muted, #6b7c90);
+}
+.backup-target-choice {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 4px;
+  border-top: 1px solid var(--ice-line, #e6edf5);
+  cursor: pointer;
+}
+.backup-targets .backup-target-choice:first-of-type {
+  border-top: 0;
+}
+.backup-target-choice input {
+  margin-top: 4px;
+}
+.backup-target-choice span {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.backup-target-choice code {
+  font-size: 12px;
+  word-break: break-all;
+}
 .nav-logout {
   text-align: center;
   font-weight: 600;
