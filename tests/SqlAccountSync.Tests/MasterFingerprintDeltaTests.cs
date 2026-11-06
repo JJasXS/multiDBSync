@@ -148,6 +148,20 @@ public class MasterFingerprintDeltaTests
         Assert.False(AutoPushJobRules.IsAutoPushUser(null));
     }
 
+    [Fact]
+    public void MasterEnqueueGuards_rejects_sub_allows_master()
+    {
+        var master = new RegisteredDatabase { DbId = 1, DbCode = "M", DbRole = DatabaseRoles.Master };
+        var both = new RegisteredDatabase { DbId = 2, DbCode = "B", DbRole = DatabaseRoles.Both };
+        var sub = new RegisteredDatabase { DbId = 3, DbCode = "S", DbRole = DatabaseRoles.Sub };
+
+        Assert.True(MasterEnqueueGuards.IsAllowedSource(master));
+        Assert.True(MasterEnqueueGuards.IsAllowedSource(both));
+        Assert.False(MasterEnqueueGuards.IsAllowedSource(sub));
+        Assert.Null(MasterEnqueueGuards.RejectReason(master));
+        Assert.Equal(MasterEnqueueGuards.RejectSubSourceMessage, MasterEnqueueGuards.RejectReason(sub));
+    }
+
     private static MasterRecord Party(string code, string name, string control, string status) =>
         new()
         {

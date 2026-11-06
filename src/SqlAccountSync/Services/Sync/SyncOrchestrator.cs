@@ -348,7 +348,9 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
 
             return (0, string.Join(" ", dbCheck.Errors));
 
-
+        var sourceRoleReject = MasterEnqueueGuards.RejectReason(source);
+        if (sourceRoleReject is not null)
+            return (0, sourceRoleReject);
 
         var record = await LoadSourceRecordAsync(source!, entityCode, masterCode, cancellationToken).ConfigureAwait(false);
 
@@ -455,6 +457,17 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
         var queued = 0;
 
         var failed = 0;
+
+        if (sourceDbId > 0)
+        {
+            var sourceDb = await _registry.GetAsync(sourceDbId, cancellationToken).ConfigureAwait(false);
+            var sourceRoleReject = MasterEnqueueGuards.RejectReason(sourceDb);
+            if (sourceRoleReject is not null)
+            {
+                messages.Add(sourceRoleReject);
+                return (0, 1, messages);
+            }
+        }
 
         var codes = masterCodes
             .Select(c => (c ?? "").Trim())
@@ -587,6 +600,10 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
         if (dbCheck.Errors.Count > 0)
             return (0, string.Join(" ", dbCheck.Errors));
 
+        var sourceRoleReject = MasterEnqueueGuards.RejectReason(source);
+        if (sourceRoleReject is not null)
+            return (0, sourceRoleReject);
+
         var record = await LoadSourceRecordAsync(source!, entityCode, masterCode, cancellationToken).ConfigureAwait(false);
         if (record is null)
             return (0, $"Source {entityCode} {masterCode} was not found.");
@@ -647,6 +664,10 @@ VALUES (@SCOPEID, @RULEID, @RECORDCODE, @ENABLED)",
         dbCheck.Errors.AddRange(_validation.ValidateDatabase(dest, "Destination").Errors);
         if (dbCheck.Errors.Count > 0)
             return (0, string.Join(" ", dbCheck.Errors));
+
+        var sourceRoleReject = MasterEnqueueGuards.RejectReason(source);
+        if (sourceRoleReject is not null)
+            return (0, sourceRoleReject);
 
         var code = (masterCode ?? "").Trim();
         if (code.Length == 0)

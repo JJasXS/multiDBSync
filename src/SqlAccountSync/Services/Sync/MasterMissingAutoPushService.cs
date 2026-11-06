@@ -170,6 +170,9 @@ public sealed class MasterMissingAutoPushService : IMasterMissingAutoPushService
                 .ConfigureAwait(false);
         }
 
+        // Persist immediately so a later SUB-only edit cannot look like another master add.
+        await _fingerprints.ReplaceAllAsync(master.DbId, EntityCodes.Account, current, cancellationToken)
+            .ConfigureAwait(false);
         return queued;
     }
 
