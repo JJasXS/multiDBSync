@@ -54,6 +54,11 @@
                  data-resend-seconds="30"
                  data-suggested-email="@Model.SuggestedEmail">
 
+                @if (!string.IsNullOrWhiteSpace(Model.DevNotice))
+                {
+                    <div class="error-message show@(Model.DevNoticeOk ? " error-message--success" : "")" role="alert">@Model.DevNotice</div>
+                }
+
                 <div id="email-step" class="login-step active">
                     <form id="email-form">
                         @Html.AntiForgeryToken()

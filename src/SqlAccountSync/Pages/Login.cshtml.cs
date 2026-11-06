@@ -44,8 +44,21 @@ public class LoginModel : PageModel
 
     public int? MaxDatabases { get; private set; }
 
+    /// <summary>Dev-only banner after logout (TempData from Logout page).</summary>
+    public string? DevNotice { get; private set; }
+
+    public bool DevNoticeOk { get; private set; }
+
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
+        if (_sync.IsDevAppMode
+            && TempData["LoginNotice"] is string notice
+            && !string.IsNullOrWhiteSpace(notice))
+        {
+            DevNotice = notice.Trim();
+            DevNoticeOk = TempData["LoginNoticeOk"] as string == "1";
+        }
+
         var tenant = (_config["TenantBootstrap:TenantCode"]
                       ?? _config["Sync:TenantCode"]
                       ?? Environment.GetEnvironmentVariable("TENANT_CODE")

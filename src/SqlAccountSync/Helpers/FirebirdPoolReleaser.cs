@@ -9,16 +9,19 @@ namespace SqlAccountSync.Helpers;
 /// </summary>
 public static class FirebirdPoolReleaser
 {
-    public static void ClearAllPools(ILogger? logger = null)
+    /// <returns>True when pools were cleared; false when clear threw.</returns>
+    public static bool ClearAllPools(ILogger? logger = null)
     {
         try
         {
             FbConnection.ClearAllPools();
             logger?.LogInformation("Firebird connection pools cleared on logout");
+            return true;
         }
         catch (Exception ex)
         {
             logger?.LogWarning(ex, "Failed to clear Firebird connection pools on logout");
+            return false;
         }
     }
 }
