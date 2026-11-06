@@ -231,23 +231,48 @@
 
   const titleEl = dialog.querySelector("[data-confirm-title]");
   const messageEl = dialog.querySelector("[data-confirm-message]");
+  const phraseWrap = dialog.querySelector("[data-confirm-phrase-wrap]");
+  const phraseLabel = dialog.querySelector("[data-confirm-phrase-label]");
+  const phraseInput = dialog.querySelector("[data-confirm-phrase-input]");
   const okBtn = dialog.querySelector("[data-confirm-ok]");
   const altBtn = dialog.querySelector("[data-confirm-alt]");
   const cancelBtn = dialog.querySelector("[data-confirm-cancel]");
   const closeBtn = dialog.querySelector("[data-confirm-close]");
   let settle = null;
+  let requiredPhrase = "";
+
+  const syncPhraseOk = () => {
+    if (!okBtn) return;
+    if (!requiredPhrase) {
+      okBtn.disabled = false;
+      return;
+    }
+    okBtn.disabled = (phraseInput?.value || "") !== requiredPhrase;
+  };
 
   const finish = (value) => {
     if (dialog.open) dialog.close();
     const done = settle;
     settle = null;
+    requiredPhrase = "";
+    if (phraseInput) phraseInput.value = "";
     if (done) done(value);
   };
 
   cancelBtn?.addEventListener("click", () => finish("cancel"));
   closeBtn?.addEventListener("click", () => finish("cancel"));
-  okBtn?.addEventListener("click", () => finish("ok"));
+  okBtn?.addEventListener("click", () => {
+    if (okBtn.disabled) return;
+    finish("ok");
+  });
   altBtn?.addEventListener("click", () => finish("alt"));
+  phraseInput?.addEventListener("input", syncPhraseOk);
+  phraseInput?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (!okBtn?.disabled) finish("ok");
+    }
+  });
   dialog.addEventListener("cancel", (e) => {
     e.preventDefault();
     finish("cancel");
@@ -256,11 +281,17 @@
     if (e.target === dialog) finish("cancel");
   });
 
-  const askChoice = ({ title, message, okLabel, altLabel, cancelLabel, danger }) =>
+  const askChoice = ({ title, message, okLabel, altLabel, cancelLabel, danger, phrase }) =>
     new Promise((resolve) => {
       settle = resolve;
+      requiredPhrase = (phrase || "").trim();
       if (titleEl) titleEl.textContent = title || "Please confirm";
       if (messageEl) messageEl.textContent = message || "";
+      if (phraseWrap) {
+        phraseWrap.hidden = !requiredPhrase;
+        if (phraseLabel) phraseLabel.textContent = requiredPhrase;
+        if (phraseInput) phraseInput.value = "";
+      }
       if (okBtn) {
         okBtn.textContent = okLabel || "Confirm";
         okBtn.className = danger && !altLabel ? "btn danger" : "btn";
@@ -270,9 +301,11 @@
         altBtn.textContent = altLabel || "Disable all";
       }
       if (cancelBtn) cancelBtn.textContent = cancelLabel || "Cancel";
+      syncPhraseOk();
       if (typeof dialog.showModal === "function") dialog.showModal();
       else dialog.setAttribute("open", "");
-      (okBtn)?.focus();
+      if (requiredPhrase && phraseInput) phraseInput.focus();
+      else okBtn?.focus();
     });
 
   const ask = (options) => askChoice(options).then((value) => value === "ok");
@@ -328,6 +361,7 @@
         okLabel: el.getAttribute("data-confirm-ok") || "Confirm",
         cancelLabel: el.getAttribute("data-confirm-cancel") || "Cancel",
         danger: el.hasAttribute("data-confirm-danger"),
+        phrase: el.getAttribute("data-confirm-phrase") || "",
       });
       if (!ok) return;
 
@@ -356,6 +390,7 @@
         okLabel: form.getAttribute("data-confirm-ok") || "Confirm",
         cancelLabel: form.getAttribute("data-confirm-cancel") || "Cancel",
         danger: form.hasAttribute("data-confirm-danger"),
+        phrase: form.getAttribute("data-confirm-phrase") || "",
       });
       if (!ok) return;
 

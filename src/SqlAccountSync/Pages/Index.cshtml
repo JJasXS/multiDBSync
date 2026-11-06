@@ -82,17 +82,34 @@
                 </div>
                 @if (Model.CanOperate && Model.CentralConfigured)
                 {
-                    <form method="post" asp-page-handler="StopAllJobs">
-                        <button type="submit"
-                                class="btn small secondary"
-                                @(Model.ActiveJobCount == 0 ? "disabled" : null)
-                                data-confirm="Stop all pending, retrying, and processing jobs? Failed history is kept."
-                                data-confirm-title="Stop all jobs"
-                                data-confirm-ok="Stop all"
-                                data-confirm-danger>
-                            Stop all
-                        </button>
-                    </form>
+                    <details class="kebab">
+                        <summary aria-label="Job actions">
+                            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="5" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="19" r="1.6" fill="currentColor"/></svg>
+                        </summary>
+                        <div class="kebab-menu">
+                            <form method="post" asp-page-handler="StopAllJobs">
+                                <button type="submit"
+                                        @(Model.ActiveJobCount == 0 ? "disabled" : null)
+                                        data-confirm="Stop all pending, retrying, and processing jobs? Failed history is kept."
+                                        data-confirm-title="Stop all jobs"
+                                        data-confirm-ok="Stop all"
+                                        data-confirm-danger>
+                                    Stop all
+                                </button>
+                            </form>
+                            <form method="post" asp-page-handler="DeleteAllJobs">
+                                <button type="submit"
+                                        class="kebab-danger"
+                                        data-confirm="This permanently deletes every synchronization job (pending, processing, completed, and failed). Type Delete to confirm."
+                                        data-confirm-title="Delete all jobs"
+                                        data-confirm-ok="Delete all"
+                                        data-confirm-phrase="Delete"
+                                        data-confirm-danger>
+                                    Delete jobs
+                                </button>
+                            </form>
+                        </div>
+                    </details>
                 }
             </div>
             @if (!Model.CentralConfigured)

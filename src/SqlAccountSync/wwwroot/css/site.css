@@ -1418,6 +1418,22 @@ code {
   color: var(--ice-text);
   white-space: pre-line;
 }
+.app-confirm-phrase {
+  display: grid;
+  gap: 6px;
+  margin-top: 14px;
+}
+.app-confirm-phrase label {
+  font-size: 13px;
+  color: var(--ice-text-muted);
+}
+.app-confirm-phrase input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--ice-border);
+  border-radius: 8px;
+  font: inherit;
+}
 .txn-qty-modal {
   max-width: 720px;
 }

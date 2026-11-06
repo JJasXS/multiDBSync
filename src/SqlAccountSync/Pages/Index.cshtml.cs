@@ -127,4 +127,17 @@ public class IndexModel : SyncPageModel
         await OnGetAsync().ConfigureAwait(false);
         return Page();
     }
+
+    public async Task<IActionResult> OnPostDeleteAllJobsAsync()
+    {
+        if (!CanOperate)
+            return Forbid();
+
+        var deleted = await _jobs.DeleteAllAsync().ConfigureAwait(false);
+        FlashToast = deleted == 0
+            ? FlashToasts.Ok("No jobs to delete.")
+            : FlashToasts.Ok($"Deleted {deleted} job{(deleted == 1 ? "" : "s")}.");
+        await OnGetAsync().ConfigureAwait(false);
+        return Page();
+    }
 }

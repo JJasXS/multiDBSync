@@ -24,6 +24,8 @@ public interface IJobQueue
     Task CancelAsync(int jobId, CancellationToken cancellationToken = default);
     /// <summary>Cancel every PENDING, RETRYING, and PROCESSING job. Returns how many rows were updated.</summary>
     Task<int> CancelAllActiveAsync(CancellationToken cancellationToken = default);
+    /// <summary>Permanently delete every row in SYNC_JOB. Returns how many rows were removed.</summary>
+    Task<int> DeleteAllAsync(CancellationToken cancellationToken = default);
     /// <summary>Cancel PENDING jobs that have never started and have waited longer than MaxQueueWaitSeconds.</summary>
     Task<int> CancelUnstartedWaitingAsync(CancellationToken cancellationToken = default);
     /// <summary>Reclaim PROCESSING jobs whose LOCKEDAT is older than the configured lease.</summary>
@@ -233,6 +235,16 @@ UPDATE SYNC_JOB
 SET STATUS='CANCELLED', LOCKEDBY=NULL, LOCKEDAT=NULL,
     ERRORMESSAGE='Stopped by operator.'
 WHERE STATUS IN ('PENDING','RETRYING','PROCESSING')",
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<int> DeleteAllAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_db.IsConfigured)
+            return 0;
+
+        return await _db.ExecuteAsync(
+            "DELETE FROM SYNC_JOB",
             cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 

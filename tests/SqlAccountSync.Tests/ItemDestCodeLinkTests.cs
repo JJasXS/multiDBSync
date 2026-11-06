@@ -341,6 +341,7 @@ public class ItemDestCodeLinkTests
         public Task<SyncJob?> GetAsync(int jobId, CancellationToken cancellationToken = default) => Task.FromResult<SyncJob?>(null);
         public Task CancelAsync(int jobId, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task<int> CancelAllActiveAsync(CancellationToken cancellationToken = default) => Task.FromResult(0);
+        public Task<int> DeleteAllAsync(CancellationToken cancellationToken = default) => Task.FromResult(0);
         public Task<int> CancelUnstartedWaitingAsync(CancellationToken cancellationToken = default) => Task.FromResult(0);
         public Task<int> ReclaimStaleProcessingAsync(CancellationToken cancellationToken = default) => Task.FromResult(0);
         public Task UnlockProcessingAsync(int jobId, CancellationToken cancellationToken = default) => Task.CompletedTask;
