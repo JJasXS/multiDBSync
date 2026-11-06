@@ -2832,10 +2832,15 @@ input:focus, select:focus, textarea:focus {
 }
 .rel-chevron {
   flex: 0 0 auto;
-  color: var(--ice-text-muted);
+  width: 18px;
+  height: 18px;
+  color: var(--ice-heading);
+  opacity: 0.85;
   transition: transform .15s ease;
 }
+.rel-master:hover .rel-chevron { opacity: 1; color: var(--ice-accent); }
 .rel-group.is-collapsed .rel-chevron { transform: rotate(-90deg); }
+.rel-group.is-collapsed .rel-subs { display: none; }
 .rel-db-icon {
   flex: 0 0 auto;
   color: var(--ice-accent);

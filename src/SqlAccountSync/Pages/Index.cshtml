@@ -293,8 +293,8 @@
                     var onlineSubs = masterLinks.Count(l => Model.Databases.FirstOrDefault(d => d.DbId == l.SubDbId)?.ConnStatus == "ONLINE");
                     var masterOnline = m.ConnStatus == "ONLINE";
                     <section class="rel-group" data-rel-group>
-                        <button type="button" class="rel-master" data-rel-toggle aria-expanded="true">
-                            <svg class="rel-chevron" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        <button type="button" class="rel-master" data-rel-toggle aria-expanded="true" aria-label="Expand or collapse @m.DisplayName">
+                            <svg class="rel-chevron" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                             <svg class="rel-db-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
                             <span class="rel-name" title="@m.DisplayName">@m.DisplayName</span>
                             <span class="rel-role">MASTER</span>
