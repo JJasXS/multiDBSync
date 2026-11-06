@@ -163,14 +163,25 @@ public sealed class MasterMissingAutoPushService : IMasterMissingAutoPushService
             return 0;
 
         var queued = 0;
+        var createsStillPending = false;
         foreach (var dest in targets)
         {
-            queued += await EnqueueCreatesAsync(
+            var (createQueued, stillMissing) = await EnqueueCreatesAsync(
                 master, dest, EntityCodes.Account, delta.Added, messages, cancellationToken)
                 .ConfigureAwait(false);
+            queued += createQueued;
+            if (stillMissing)
+                createsStillPending = true;
         }
 
-        // Persist immediately so a later SUB-only edit cannot look like another master add.
+        if (createsStillPending)
+        {
+            messages.Add(
+                $"{master.DbCode} ACCOUNT: create still pending on at least one sub (fingerprints not advanced)");
+            return queued;
+        }
+
+        // Persist only after creates are queued or already present on every linked sub.
         await _fingerprints.ReplaceAllAsync(master.DbId, EntityCodes.Account, current, cancellationToken)
             .ConfigureAwait(false);
         return queued;
@@ -206,13 +217,17 @@ public sealed class MasterMissingAutoPushService : IMasterMissingAutoPushService
         }
 
         var queued = 0;
+        var createsStillPending = false;
         foreach (var dest in targets)
         {
             if (delta.Added.Count > 0)
             {
-                queued += await EnqueueCreatesAsync(
+                var (createQueued, stillMissing) = await EnqueueCreatesAsync(
                     master, dest, entity, delta.Added, messages, cancellationToken)
                     .ConfigureAwait(false);
+                queued += createQueued;
+                if (stillMissing)
+                    createsStillPending = true;
             }
 
             if (_options.AccountAutoUpdateEnabled && delta.Changed.Count > 0)
@@ -228,6 +243,18 @@ public sealed class MasterMissingAutoPushService : IMasterMissingAutoPushService
                     master, dest, entity, delta.Removed, messages, cancellationToken)
                     .ConfigureAwait(false);
             }
+        }
+
+        // Do not advance fingerprints while creates are still missing on a linked sub —
+        // otherwise a failed/skipped enqueue never retries the new master code.
+        if (createsStillPending)
+        {
+            messages.Add(
+                $"{master.DbCode} {entity}: create still pending on at least one sub (fingerprints not advanced)");
+            _logger.LogWarning(
+                "Auto-push {Entity} {Src}: leaving fingerprints unchanged so {Count} added code(s) can retry",
+                entity, master.DbCode, delta.Added.Count);
+            return queued;
         }
 
         await _fingerprints.ReplaceAllAsync(master.DbId, entity, current, cancellationToken)
@@ -254,7 +281,8 @@ public sealed class MasterMissingAutoPushService : IMasterMissingAutoPushService
         return map;
     }
 
-    private async Task<int> EnqueueCreatesAsync(
+    /// <returns>Queued job count, and whether any added code is still missing on dest without a job.</returns>
+    private async Task<(int Queued, bool StillMissing)> EnqueueCreatesAsync(
         RegisteredDatabase master,
         RegisteredDatabase dest,
         string entity,
@@ -271,12 +299,12 @@ public sealed class MasterMissingAutoPushService : IMasterMissingAutoPushService
         {
             _logger.LogWarning(ex, "Auto-push: failed reading {Entity} from {Db}", entity, dest.DbCode);
             messages.Add($"Skip {master.DbCode}→{dest.DbCode} {entity}: dest read failed");
-            return 0;
+            return (0, true);
         }
 
         var missing = addedCodes.Where(code => !destCodes.Contains(code)).ToList();
         if (missing.Count == 0)
-            return 0;
+            return (0, false);
 
         var (queued, failed, batchMsgs) = await _sync.EnqueueMasterBatchAsync(
             master.DbId,
@@ -294,7 +322,8 @@ public sealed class MasterMissingAutoPushService : IMasterMissingAutoPushService
         _logger.LogInformation(
             "Auto-push {Entity} {Src}→{Dest}: {Missing} added, queued {Queued}, failed {Failed}",
             entity, master.DbCode, dest.DbCode, missing.Count, queued, failed);
-        return queued;
+        // Still missing when nothing was queued for codes that dest does not have yet.
+        return (queued, queued <= 0 || failed > 0);
     }
 
     private async Task<int> EnqueueUpdatesAsync(
