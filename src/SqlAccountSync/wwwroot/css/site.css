@@ -3420,12 +3420,13 @@ input:focus, select:focus, textarea:focus {
 }
 .users-table thead th.users-col-actions,
 .users-table tbody td.users-col-actions {
-  text-align: center;
+  text-align: left;
   vertical-align: middle;
   white-space: nowrap;
-  width: 1%;
-  padding-left: 10px;
-  padding-right: 12px;
+  min-width: 11.5rem;
+  width: 12rem;
+  padding-left: 12px;
+  padding-right: 14px;
 }
 .users-table .user-status-pill {
   display: inline-flex;
@@ -3450,20 +3451,46 @@ input:focus, select:focus, textarea:focus {
 .user-actions {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   flex-wrap: nowrap;
-  gap: 8px;
-  min-height: 30px;
+  gap: 10px;
+  min-height: 34px;
   width: 100%;
 }
-.user-actions .accounts-icon-btn {
-  margin: 0 auto;
+.user-actions .user-action-slot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-width: 2.5rem;
+  min-height: 34px;
+}
+.user-actions .accounts-icon-btn.accounts-status-delete {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  margin: 0;
+  border-radius: 10px;
+  border: 1px solid rgba(180, 35, 24, 0.18);
+  background: var(--ice-danger-soft);
+  color: #b42318;
+  align-items: center;
+  justify-content: center;
+}
+.user-actions .accounts-icon-btn.accounts-status-delete:hover {
+  background: #f8d7d4;
+  border-color: rgba(180, 35, 24, 0.32);
+  color: #912018;
+}
+.user-actions .accounts-icon-btn.accounts-status-delete svg {
+  width: 20px;
+  height: 20px;
 }
 .user-switch-group {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   flex: 0 0 auto;
+  min-width: 5.75rem;
 }
 .user-switch-form {
   display: inline-flex;
@@ -3483,22 +3510,27 @@ input:focus, select:focus, textarea:focus {
 .user-actions-sep {
   display: inline-block;
   width: 1px;
-  height: 18px;
+  height: 22px;
   background: var(--ice-border-soft);
   flex: 0 0 auto;
 }
 .user-actions-empty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  min-height: 34px;
   color: var(--ice-text-muted);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1;
 }
 .user-self-chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 28px;
-  padding: 3px 10px;
-  border-radius: 8px;
+  min-height: 34px;
+  padding: 4px 12px;
+  border-radius: 10px;
   background: var(--ice-accent-soft);
   color: var(--ice-accent-hover);
   font-size: 12px;
@@ -3507,6 +3539,8 @@ input:focus, select:focus, textarea:focus {
   white-space: nowrap;
 }
 .user-self-chip svg {
+  width: 16px;
+  height: 16px;
   flex: 0 0 auto;
 }
 .user-switch {
