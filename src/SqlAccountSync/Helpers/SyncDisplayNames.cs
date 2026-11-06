@@ -74,7 +74,7 @@ public static class SyncDisplayNames
     }
 
     /// <summary>
-    /// Logs detail: "CUSTOMER under MIRACLE of 25-000-A06" (status badge carries success/queued).
+    /// Logs detail: "CUSTOMER 25-000-A06 → Miracle Database" (status badge carries success/queued).
     /// </summary>
     public static string AuditDetail(string? action, string? entity, string? recordId, string? companyName)
     {
@@ -86,14 +86,13 @@ public static class SyncDisplayNames
 
         if (IsMasterAuditAction(action) && category.Length > 0 && code.Length > 0)
         {
-            var verb = MasterAuditVerb(action);
+            var head = $"{category} {code}";
+            var kind = MasterAuditKind(action);
+            if (company.Length > 0 && kind.Length > 0)
+                return $"{head} → {company} ({kind})";
             if (company.Length > 0)
-                return verb.Length > 0
-                    ? $"{category} under {company} {verb} of {code}"
-                    : $"{category} under {company} of {code}";
-            return verb.Length > 0
-                ? $"{category} {verb} of {code}"
-                : $"{category} of {code}";
+                return $"{head} → {company}";
+            return kind.Length > 0 ? $"{head} ({kind})" : head;
         }
 
         var parts = new[] { AuditAction(action), category, code, company }
@@ -112,8 +111,8 @@ public static class SyncDisplayNames
             or "ENQUEUE_MASTER_DELETE" or "MASTER_DELETE_DONE";
     }
 
-    /// <summary>Empty for plain create/push; "update"/"delete"/"queued" when useful.</summary>
-    private static string MasterAuditVerb(string? action) =>
+    /// <summary>Optional kind tag; plain create/push stays unmarked (status column covers it).</summary>
+    private static string MasterAuditKind(string? action) =>
         (action ?? "").Trim() switch
         {
             "ENQUEUE_MASTER" or "DRY_RUN_MASTER" => "queued",
