@@ -1427,6 +1427,10 @@ code {
   font-size: 13px;
   color: var(--ice-text-muted);
 }
+.app-confirm-phrase strong {
+  color: var(--ice-heading);
+  font-weight: 700;
+}
 .app-confirm-phrase input {
   width: 100%;
   padding: 8px 10px;

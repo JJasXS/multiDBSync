@@ -232,7 +232,7 @@
   const titleEl = dialog.querySelector("[data-confirm-title]");
   const messageEl = dialog.querySelector("[data-confirm-message]");
   const phraseWrap = dialog.querySelector("[data-confirm-phrase-wrap]");
-  const phraseLabel = dialog.querySelector("[data-confirm-phrase-label]");
+  const phraseLabelHost = dialog.querySelector("[data-confirm-phrase-label-host]");
   const phraseInput = dialog.querySelector("[data-confirm-phrase-input]");
   const okBtn = dialog.querySelector("[data-confirm-ok]");
   const altBtn = dialog.querySelector("[data-confirm-alt]");
@@ -240,6 +240,20 @@
   const closeBtn = dialog.querySelector("[data-confirm-close]");
   let settle = null;
   let requiredPhrase = "";
+
+  const escapeHtml = (value) =>
+    String(value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+
+  const setPhraseLabel = (phrase) => {
+    if (!phraseLabelHost) return;
+    phraseLabelHost.innerHTML = phrase
+      ? `Type <strong data-confirm-phrase-label>${escapeHtml(phrase)}</strong> to complete`
+      : "";
+  };
 
   const syncPhraseOk = () => {
     if (!okBtn) return;
@@ -289,7 +303,7 @@
       if (messageEl) messageEl.textContent = message || "";
       if (phraseWrap) {
         phraseWrap.hidden = !requiredPhrase;
-        if (phraseLabel) phraseLabel.textContent = requiredPhrase;
+        setPhraseLabel(requiredPhrase);
         if (phraseInput) phraseInput.value = "";
       }
       if (okBtn) {
