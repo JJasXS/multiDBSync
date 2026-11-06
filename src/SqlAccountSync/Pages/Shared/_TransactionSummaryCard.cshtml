@@ -306,6 +306,11 @@
                 downloadReport(params);
             });
 
+            root.querySelector("[data-txn-refresh]")?.addEventListener("click", () => {
+                window.clearTimeout(refreshTimer);
+                refreshDetails();
+            });
+
             filters?.addEventListener("submit", (event) => {
                 event.preventDefault();
                 window.clearTimeout(refreshTimer);

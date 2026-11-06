@@ -3803,8 +3803,26 @@ input:focus, select:focus, textarea:focus {
   flex-wrap: wrap;
   gap: 8px;
   margin-left: auto;
+  align-items: center;
 }
 .txn-filter-actions .btn { min-height: 36px; }
+.report-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  min-width: 36px;
+  padding: 0;
+}
+.report-refresh-btn svg {
+  display: block;
+}
+.txn-summary[aria-busy="true"] .report-refresh-btn svg {
+  animation: report-refresh-spin .7s linear infinite;
+}
+@keyframes report-refresh-spin {
+  to { transform: rotate(360deg); }
+}
 .txn-col-menu { position: relative; width: 100%; }
 .txn-col-menu > summary {
   display: flex;

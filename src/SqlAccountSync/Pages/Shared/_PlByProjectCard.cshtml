@@ -157,6 +157,11 @@
                 downloadReport(params);
             });
 
+            root.querySelector("[data-pl-refresh]")?.addEventListener("click", () => {
+                window.clearTimeout(refreshTimer);
+                refreshDetails();
+            });
+
             filters?.addEventListener("submit", (event) => {
                 event.preventDefault();
                 window.clearTimeout(refreshTimer);
