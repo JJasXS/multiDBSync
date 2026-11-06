@@ -65,6 +65,177 @@
             }
         </div>
 
+        <div class="card">
+            <div class="card-head">
+                <div>
+                    <h3>Synchronization jobs</h3>
+                    @if (Model.CentralConfigured)
+                    {
+                        <p class="muted" style="margin:0.25rem 0 0;">
+                            Pending @Model.QueueHealth.Pending · Processing @Model.QueueHealth.Processing
+                            @if (Model.QueueHealth.Failed > 0)
+                            {
+                                <text> · Failed @Model.QueueHealth.Failed</text>
+                            }
+                        </p>
+                    }
+                </div>
+                @if (Model.CanOperate && Model.CentralConfigured)
+                {
+                    <form method="post" asp-page-handler="StopAllJobs">
+                        <button type="submit"
+                                class="btn small secondary"
+                                @(Model.ActiveJobCount == 0 ? "disabled" : null)
+                                data-confirm="Stop all pending, retrying, and processing jobs? Failed history is kept."
+                                data-confirm-title="Stop all jobs"
+                                data-confirm-ok="Stop all"
+                                data-confirm-danger>
+                            Stop all
+                        </button>
+                    </form>
+                }
+            </div>
+            @if (!Model.CentralConfigured)
+            {
+                <p class="empty">Central database is not configured.</p>
+            }
+            else if (Model.RecentJobs.Count == 0)
+            {
+                <p class="empty">No recent jobs.</p>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Job</th><th>Kind</th><th>Status</th></tr></thead>
+                        <tbody>
+                        @foreach (var j in Model.RecentJobs)
+                        {
+                            <tr>
+                                <td>@j.JobId</td>
+                                <td>@SyncDisplayNames.JobKind(j.JobKind, j.DryRun)</td>
+                                <td><span class="badge badge-@(j.Status.ToLowerInvariant())">@j.Status</span></td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+
+        @if (showMappingsUi)
+        {
+        <div class="card">
+            <div class="card-head">
+                <h3>Mappings</h3>
+                <a asp-page="/Mappings/Index" asp-route-entity="ITEM">View</a>
+            </div>
+            @if (!Model.CentralConfigured)
+            {
+                <p class="empty">Central database is not configured.</p>
+            }
+            else
+            {
+                <p class="muted">@Model.MappedCount mapped · @Model.Conflicts.Count conflict@(Model.Conflicts.Count == 1 ? "" : "s")</p>
+                @if (Model.Conflicts.Count == 0)
+                {
+                    <p class="empty">No mapping conflicts.</p>
+                }
+                else
+                {
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr><th>Entity</th><th>Master</th><th>Sub</th></tr></thead>
+                            <tbody>
+                            @foreach (var m in Model.Conflicts.Take(5))
+                            {
+                                <tr>
+                                    <td>@m.EntityCode</td>
+                                    <td>@m.MasterCode</td>
+                                    <td>@m.SubCode</td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            }
+        </div>
+        }
+
+        @if (Model.IsAdmin)
+        {
+        <div class="card">
+            <div class="card-head">
+                <h3>Users</h3>
+                <a asp-page="/Users/Index">View</a>
+            </div>
+            @if (Model.Users.Count == 0)
+            {
+                <p class="empty">No users yet.</p>
+            }
+            else
+            {
+                <p class="muted">@Model.Users.Count user@(Model.Users.Count == 1 ? "" : "s")</p>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Name</th><th>Role</th></tr></thead>
+                        <tbody>
+                        @foreach (var u in Model.Users.Take(8))
+                        {
+                            <tr>
+                                <td>@(string.IsNullOrWhiteSpace(u.DisplayName) ? u.Email : u.DisplayName)</td>
+                                <td>@u.Role</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+        }
+    </div>
+
+    <div class="map-layout-right">
+        @if (showSyncConfigUi)
+        {
+        <div class="card">
+            <div class="card-head">
+                <h3>Sync configuration</h3>
+                <a asp-page="/SyncConfig">View</a>
+            </div>
+            @if (!Model.CentralConfigured)
+            {
+                <p class="empty">Central database is not configured.</p>
+            }
+            else
+            {
+                <p class="muted">@Model.EnabledRuleCount enabled rule@(Model.EnabledRuleCount == 1 ? "" : "s")</p>
+                @if (Model.Links.Count == 0)
+                {
+                    <p class="empty">No Master → Sub links yet.</p>
+                }
+                else
+                {
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr><th>Master</th><th>Sub</th></tr></thead>
+                            <tbody>
+                            @foreach (var l in Model.Links)
+                            {
+                                <tr>
+                                    <td>@l.MasterName</td>
+                                    <td>@l.SubName</td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            }
+        </div>
+        }
+
         <div class="card rel-card">
             @{
                 DateTime? relLastChecked = null;
@@ -335,177 +506,6 @@
                 })();
             </script>
         }
-
-        @if (showMappingsUi)
-        {
-        <div class="card">
-            <div class="card-head">
-                <h3>Mappings</h3>
-                <a asp-page="/Mappings/Index" asp-route-entity="ITEM">View</a>
-            </div>
-            @if (!Model.CentralConfigured)
-            {
-                <p class="empty">Central database is not configured.</p>
-            }
-            else
-            {
-                <p class="muted">@Model.MappedCount mapped · @Model.Conflicts.Count conflict@(Model.Conflicts.Count == 1 ? "" : "s")</p>
-                @if (Model.Conflicts.Count == 0)
-                {
-                    <p class="empty">No mapping conflicts.</p>
-                }
-                else
-                {
-                    <div class="table-wrap">
-                        <table>
-                            <thead><tr><th>Entity</th><th>Master</th><th>Sub</th></tr></thead>
-                            <tbody>
-                            @foreach (var m in Model.Conflicts.Take(5))
-                            {
-                                <tr>
-                                    <td>@m.EntityCode</td>
-                                    <td>@m.MasterCode</td>
-                                    <td>@m.SubCode</td>
-                                </tr>
-                            }
-                            </tbody>
-                        </table>
-                    </div>
-                }
-            }
-        </div>
-        }
-
-        @if (Model.IsAdmin)
-        {
-        <div class="card">
-            <div class="card-head">
-                <h3>Users</h3>
-                <a asp-page="/Users/Index">View</a>
-            </div>
-            @if (Model.Users.Count == 0)
-            {
-                <p class="empty">No users yet.</p>
-            }
-            else
-            {
-                <p class="muted">@Model.Users.Count user@(Model.Users.Count == 1 ? "" : "s")</p>
-                <div class="table-wrap">
-                    <table>
-                        <thead><tr><th>Name</th><th>Role</th></tr></thead>
-                        <tbody>
-                        @foreach (var u in Model.Users.Take(8))
-                        {
-                            <tr>
-                                <td>@(string.IsNullOrWhiteSpace(u.DisplayName) ? u.Email : u.DisplayName)</td>
-                                <td>@u.Role</td>
-                            </tr>
-                        }
-                        </tbody>
-                    </table>
-                </div>
-            }
-        </div>
-        }
-    </div>
-
-    <div class="map-layout-right">
-        @if (showSyncConfigUi)
-        {
-        <div class="card">
-            <div class="card-head">
-                <h3>Sync configuration</h3>
-                <a asp-page="/SyncConfig">View</a>
-            </div>
-            @if (!Model.CentralConfigured)
-            {
-                <p class="empty">Central database is not configured.</p>
-            }
-            else
-            {
-                <p class="muted">@Model.EnabledRuleCount enabled rule@(Model.EnabledRuleCount == 1 ? "" : "s")</p>
-                @if (Model.Links.Count == 0)
-                {
-                    <p class="empty">No Master → Sub links yet.</p>
-                }
-                else
-                {
-                    <div class="table-wrap">
-                        <table>
-                            <thead><tr><th>Master</th><th>Sub</th></tr></thead>
-                            <tbody>
-                            @foreach (var l in Model.Links)
-                            {
-                                <tr>
-                                    <td>@l.MasterName</td>
-                                    <td>@l.SubName</td>
-                                </tr>
-                            }
-                            </tbody>
-                        </table>
-                    </div>
-                }
-            }
-        </div>
-        }
-
-        <div class="card">
-            <div class="card-head">
-                <div>
-                    <h3>Synchronization jobs</h3>
-                    @if (Model.CentralConfigured)
-                    {
-                        <p class="muted" style="margin:0.25rem 0 0;">
-                            Pending @Model.QueueHealth.Pending · Processing @Model.QueueHealth.Processing
-                            @if (Model.QueueHealth.Failed > 0)
-                            {
-                                <text> · Failed @Model.QueueHealth.Failed</text>
-                            }
-                        </p>
-                    }
-                </div>
-                @if (Model.CanOperate && Model.CentralConfigured)
-                {
-                    <form method="post" asp-page-handler="StopAllJobs">
-                        <button type="submit"
-                                class="btn small secondary"
-                                @(Model.ActiveJobCount == 0 ? "disabled" : null)
-                                data-confirm="Stop all pending, retrying, and processing jobs? Failed history is kept."
-                                data-confirm-title="Stop all jobs"
-                                data-confirm-ok="Stop all"
-                                data-confirm-danger>
-                            Stop all
-                        </button>
-                    </form>
-                }
-            </div>
-            @if (!Model.CentralConfigured)
-            {
-                <p class="empty">Central database is not configured.</p>
-            }
-            else if (Model.RecentJobs.Count == 0)
-            {
-                <p class="empty">No recent jobs.</p>
-            }
-            else
-            {
-                <div class="table-wrap">
-                    <table>
-                        <thead><tr><th>Job</th><th>Kind</th><th>Status</th></tr></thead>
-                        <tbody>
-                        @foreach (var j in Model.RecentJobs)
-                        {
-                            <tr>
-                                <td>@j.JobId</td>
-                                <td>@SyncDisplayNames.JobKind(j.JobKind, j.DryRun)</td>
-                                <td><span class="badge badge-@(j.Status.ToLowerInvariant())">@j.Status</span></td>
-                            </tr>
-                        }
-                        </tbody>
-                    </table>
-                </div>
-            }
-        </div>
 
         <div class="card">
             <div class="card-head">
