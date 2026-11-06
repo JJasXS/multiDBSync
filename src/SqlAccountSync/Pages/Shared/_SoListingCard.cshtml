@@ -1,7 +1,7 @@
 @model SoListingDetails
 <section class="card txn-summary so-listing" data-so-summary data-so-status="@(string.IsNullOrWhiteSpace(Model.ErrorMessage) ? "loading" : "error")">
     <div class="card-head">
-        <h3>SO Listing &amp; Occupancy</h3>
+        <h3>Sales Order Listing &amp; Occupancy</h3>
     </div>
     <form method="get" asp-page="/Reports/SoListing" class="txn-summary-filters" data-so-filters>
         <div class="txn-filter so-filter-company">
@@ -21,7 +21,18 @@
                 }
             </select>
         </div>
+        <div class="so-filter-warning" data-so-warning aria-live="polite" title="Load warnings"></div>
         <div class="txn-filter-actions">
+            <button type="button"
+                    class="btn secondary report-refresh-btn"
+                    data-so-refresh
+                    title="Refresh data"
+                    aria-label="Refresh data">
+                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+                    <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+                          d="M20 12a8 8 0 1 1-2.2-5.5M20 4v5h-5"/>
+                </svg>
+            </button>
             <button type="button" class="btn secondary" data-so-export-all>Export to Excel</button>
         </div>
     </form>
@@ -42,6 +53,7 @@
 
             const filters = root.querySelector("[data-so-filters]");
             const results = root.querySelector("[data-so-results]");
+            const warningHost = root.querySelector("[data-so-warning]");
             let requestSeq = 0;
 
             const panels = () => root.querySelectorAll("[data-so-panel]");
@@ -50,6 +62,13 @@
                 panels().forEach((panel) => {
                     panel.hidden = panel.getAttribute("data-so-panel") !== status;
                 });
+            };
+
+            const parkWarning = () => {
+                if (!warningHost || !results) return;
+                warningHost.replaceChildren();
+                const slot = results.querySelector(".report-load-warning-slot");
+                if (slot) warningHost.appendChild(slot);
             };
 
             const syncHeaderOffset = () => {
@@ -90,11 +109,13 @@
                         throw new Error(String(response.status));
                     }
                     results.innerHTML = await response.text();
+                    parkWarning();
                     applyStatus("ready");
                     syncHeaderOffset();
                     root.removeAttribute("aria-busy");
                 } catch {
                     if (seq !== requestSeq) return;
+                    if (warningHost) warningHost.replaceChildren();
                     applyStatus("error");
                     root.removeAttribute("aria-busy");
                 }
@@ -112,6 +133,9 @@
             root.querySelector("[data-so-company]")?.addEventListener("change", () => {
                 refreshDetails();
             });
+            root.querySelector("[data-so-refresh]")?.addEventListener("click", () => {
+                refreshDetails();
+            });
             root.querySelector("[data-so-export-all]")?.addEventListener("click", () => {
                 const companyId = root.querySelector("[data-so-company]")?.value ?? "";
                 const params = new URLSearchParams();
@@ -126,6 +150,18 @@
             filters?.addEventListener("submit", (event) => {
                 event.preventDefault();
                 refreshDetails();
+            });
+
+            document.addEventListener("click", (event) => {
+                root.querySelectorAll("details.report-load-warning").forEach((menu) => {
+                    if (!menu.contains(event.target)) menu.removeAttribute("open");
+                });
+            });
+
+            root.addEventListener("keydown", (event) => {
+                if (event.key !== "Escape") return;
+                root.querySelectorAll("details.report-load-warning")
+                    .forEach((menu) => menu.removeAttribute("open"));
             });
 
             const initialStatus = root.getAttribute("data-so-status") || "loading";

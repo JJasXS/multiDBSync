@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using SqlAccountSync.Helpers;
 using SqlAccountSync.Models;
 using SqlAccountSync.Options;
+using SqlAccountSync.Services.Accounts;
 using SqlAccountSync.Services.Databases;
 using SqlAccountSync.Services.Mapping;
 using SqlAccountSync.Services.SqlAccount;
@@ -10,8 +11,8 @@ using SqlAccountSync.Services.SqlAccount;
 namespace SqlAccountSync.Services.Sync;
 
 /// <summary>
-/// Queues create (and when enabled update/delete) jobs for master party/account codes
-/// that linked subs need, driven by Push-page auto-push checkboxes.
+/// Queues create/update/delete jobs for master party/account codes when the
+/// master itself changes (fingerprints). SUB-only edits/deletes do not enqueue.
 /// </summary>
 public interface IMasterMissingAutoPushService
 {
@@ -26,6 +27,7 @@ public sealed class MasterMissingAutoPushService : IMasterMissingAutoPushService
     private readonly ISqlAccountReadAdapter _read;
     private readonly ISyncOrchestrator _sync;
     private readonly IMappingService _mapping;
+    private readonly IMasterFingerprintStore _fingerprints;
     private readonly SyncOptions _options;
     private readonly SqlAccountingWriteOptions _writeOptions;
     private readonly ILogger<MasterMissingAutoPushService> _logger;
@@ -36,6 +38,7 @@ public sealed class MasterMissingAutoPushService : IMasterMissingAutoPushService
         ISqlAccountReadAdapter read,
         ISyncOrchestrator sync,
         IMappingService mapping,
+        IMasterFingerprintStore fingerprints,
         IOptions<SyncOptions> options,
         IOptions<SqlAccountingWriteOptions> writeOptions,
         ILogger<MasterMissingAutoPushService> logger)
@@ -45,6 +48,7 @@ public sealed class MasterMissingAutoPushService : IMasterMissingAutoPushService
         _read = read;
         _sync = sync;
         _mapping = mapping;
+        _fingerprints = fingerprints;
         _options = options.Value;
         _writeOptions = writeOptions.Value;
         _logger = logger;
@@ -93,11 +97,10 @@ public sealed class MasterMissingAutoPushService : IMasterMissingAutoPushService
                 continue;
             }
 
-            var masterCodes = await LoadCodesAsync(master, entities, messages, cancellationToken).ConfigureAwait(false);
-            foreach (var dest in targets)
+            foreach (var entity in entities)
             {
-                var pairQueued = await PushDestAsync(
-                    master, dest, entities, masterCodes, messages, cancellationToken).ConfigureAwait(false);
+                var pairQueued = await PushEntityAsync(
+                    master, targets, entity, messages, cancellationToken).ConfigureAwait(false);
                 if (pairQueued == 0)
                     skippedPairs++;
                 queued += pairQueued;
@@ -107,49 +110,183 @@ public sealed class MasterMissingAutoPushService : IMasterMissingAutoPushService
         return (queued, skippedPairs, messages);
     }
 
-    private async Task<int> PushDestAsync(
+    private async Task<int> PushEntityAsync(
         RegisteredDatabase master,
-        RegisteredDatabase dest,
-        IReadOnlyList<string> entities,
-        Dictionary<string, HashSet<string>> masterCodes,
+        IReadOnlyList<RegisteredDatabase> targets,
+        string entity,
         List<string> messages,
         CancellationToken cancellationToken)
     {
-        var queued = 0;
-        foreach (var entity in entities)
-        {
-            if (!masterCodes.TryGetValue(entity, out var source) || source.Count == 0)
-                continue;
-
-            // Account create stays here; account update/delete runs in AccountAutoPushService.
-            if (string.Equals(entity, EntityCodes.Account, StringComparison.OrdinalIgnoreCase))
-            {
-                queued += await PushMissingAsync(master, dest, entity, source, messages, cancellationToken)
-                    .ConfigureAwait(false);
-                continue;
-            }
-
-            if (!PartnerSyncRules.IsPartyEntity(entity))
-                continue;
-
-            queued += await PushMissingAsync(master, dest, entity, source, messages, cancellationToken)
+        // Account update/delete (and fingerprint replace) run in AccountAutoPushService.
+        if (string.Equals(entity, EntityCodes.Account, StringComparison.OrdinalIgnoreCase))
+            return await PushAccountCreatesAsync(master, targets, messages, cancellationToken)
                 .ConfigureAwait(false);
-            if (_options.AccountAutoUpdateEnabled)
-                queued += await PushPartyChangedAsync(master, dest, entity, source, messages, cancellationToken)
-                    .ConfigureAwait(false);
-            if (_options.AccountAutoDeleteEnabled)
-                queued += await PushPartyDeletedAsync(master, dest, entity, source, messages, cancellationToken)
-                    .ConfigureAwait(false);
+
+        if (!PartnerSyncRules.IsPartyEntity(entity))
+            return 0;
+
+        return await PushPartyEntityAsync(master, targets, entity, messages, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private async Task<int> PushAccountCreatesAsync(
+        RegisteredDatabase master,
+        IReadOnlyList<RegisteredDatabase> targets,
+        List<string> messages,
+        CancellationToken cancellationToken)
+    {
+        List<GlAccountRow> chart;
+        try
+        {
+            chart = await _read.GetGlChartAsync(master, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Auto-push: failed reading ACCOUNT from {Db}", master.DbCode);
+            messages.Add($"Skip {master.DbCode} ACCOUNT: read failed ({ex.Message})");
+            return 0;
         }
 
+        var current = GlAccountComparer.BuildHashes(chart);
+        var stored = await _fingerprints.ListAsync(master.DbId, EntityCodes.Account, cancellationToken)
+            .ConfigureAwait(false);
+        var delta = MasterFingerprintDelta.Diff(current, stored);
+        if (delta.SeedOnly)
+        {
+            await _fingerprints.ReplaceAllAsync(master.DbId, EntityCodes.Account, current, cancellationToken)
+                .ConfigureAwait(false);
+            messages.Add($"{master.DbCode} ACCOUNT: seeded {current.Count} fingerprints (no jobs)");
+            return 0;
+        }
+
+        if (delta.Added.Count == 0)
+            return 0;
+
+        var queued = 0;
+        var createsStillPending = false;
+        foreach (var dest in targets)
+        {
+            var (createQueued, stillMissing) = await EnqueueCreatesAsync(
+                master, dest, EntityCodes.Account, delta.Added, messages, cancellationToken)
+                .ConfigureAwait(false);
+            queued += createQueued;
+            if (stillMissing)
+                createsStillPending = true;
+        }
+
+        if (createsStillPending)
+        {
+            messages.Add(
+                $"{master.DbCode} ACCOUNT: create still pending on at least one sub (fingerprints not advanced)");
+            return queued;
+        }
+
+        // Persist only after creates are queued or already present on every linked sub.
+        await _fingerprints.ReplaceAllAsync(master.DbId, EntityCodes.Account, current, cancellationToken)
+            .ConfigureAwait(false);
         return queued;
     }
 
-    private async Task<int> PushMissingAsync(
+    private async Task<int> PushPartyEntityAsync(
+        RegisteredDatabase master,
+        IReadOnlyList<RegisteredDatabase> targets,
+        string entity,
+        List<string> messages,
+        CancellationToken cancellationToken)
+    {
+        Dictionary<string, string> current;
+        try
+        {
+            current = await BuildPartyHashesAsync(master, entity, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Auto-push: failed reading {Entity} from {Db}", entity, master.DbCode);
+            messages.Add($"Skip {master.DbCode} {entity}: read failed ({ex.Message})");
+            return 0;
+        }
+
+        var stored = await _fingerprints.ListAsync(master.DbId, entity, cancellationToken).ConfigureAwait(false);
+        var delta = MasterFingerprintDelta.Diff(current, stored);
+        if (delta.SeedOnly)
+        {
+            await _fingerprints.ReplaceAllAsync(master.DbId, entity, current, cancellationToken)
+                .ConfigureAwait(false);
+            messages.Add($"{master.DbCode} {entity}: seeded {current.Count} fingerprints (no jobs)");
+            return 0;
+        }
+
+        var queued = 0;
+        var createsStillPending = false;
+        foreach (var dest in targets)
+        {
+            if (delta.Added.Count > 0)
+            {
+                var (createQueued, stillMissing) = await EnqueueCreatesAsync(
+                    master, dest, entity, delta.Added, messages, cancellationToken)
+                    .ConfigureAwait(false);
+                queued += createQueued;
+                if (stillMissing)
+                    createsStillPending = true;
+            }
+
+            if (_options.AccountAutoUpdateEnabled && delta.Changed.Count > 0)
+            {
+                queued += await EnqueueUpdatesAsync(
+                    master, dest, entity, delta.Changed, messages, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
+            if (_options.AccountAutoDeleteEnabled && delta.Removed.Count > 0)
+            {
+                queued += await PushPartyDeletedAsync(
+                    master, dest, entity, delta.Removed, messages, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+        }
+
+        // Do not advance fingerprints while creates are still missing on a linked sub —
+        // otherwise a failed/skipped enqueue never retries the new master code.
+        if (createsStillPending)
+        {
+            messages.Add(
+                $"{master.DbCode} {entity}: create still pending on at least one sub (fingerprints not advanced)");
+            _logger.LogWarning(
+                "Auto-push {Entity} {Src}: leaving fingerprints unchanged so {Count} added code(s) can retry",
+                entity, master.DbCode, delta.Added.Count);
+            return queued;
+        }
+
+        await _fingerprints.ReplaceAllAsync(master.DbId, entity, current, cancellationToken)
+            .ConfigureAwait(false);
+        return queued;
+    }
+
+    private async Task<Dictionary<string, string>> BuildPartyHashesAsync(
+        RegisteredDatabase master,
+        string entity,
+        CancellationToken cancellationToken)
+    {
+        var codes = await ReadCodesAsync(master, entity, cancellationToken).ConfigureAwait(false);
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var code in codes)
+        {
+            var detail = await _read.GetPartyDetailAsync(master, entity, code, cancellationToken)
+                .ConfigureAwait(false);
+            if (detail is null)
+                continue;
+            map[code] = PartyFieldComparer.ContentHash(detail);
+        }
+
+        return map;
+    }
+
+    /// <returns>Queued job count, and whether any added code is still missing on dest without a job.</returns>
+    private async Task<(int Queued, bool StillMissing)> EnqueueCreatesAsync(
         RegisteredDatabase master,
         RegisteredDatabase dest,
         string entity,
-        HashSet<string> source,
+        IReadOnlyList<string> addedCodes,
         List<string> messages,
         CancellationToken cancellationToken)
     {
@@ -162,12 +299,12 @@ public sealed class MasterMissingAutoPushService : IMasterMissingAutoPushService
         {
             _logger.LogWarning(ex, "Auto-push: failed reading {Entity} from {Db}", entity, dest.DbCode);
             messages.Add($"Skip {master.DbCode}→{dest.DbCode} {entity}: dest read failed");
-            return 0;
+            return (0, true);
         }
 
-        var missing = source.Where(code => !destCodes.Contains(code)).ToList();
+        var missing = addedCodes.Where(code => !destCodes.Contains(code)).ToList();
         if (missing.Count == 0)
-            return 0;
+            return (0, false);
 
         var (queued, failed, batchMsgs) = await _sync.EnqueueMasterBatchAsync(
             master.DbId,
@@ -175,66 +312,35 @@ public sealed class MasterMissingAutoPushService : IMasterMissingAutoPushService
             entity,
             missing,
             dryRun: false,
-            user: "system:auto-push",
+            user: AutoPushJobRules.PartyUser,
             cancellationToken,
             reviveCancelled: false).ConfigureAwait(false);
 
-        messages.Add($"{master.DbCode}→{dest.DbCode} {entity}: missing={missing.Count}, queued={queued}, failed={failed}");
+        messages.Add($"{master.DbCode}→{dest.DbCode} {entity}: added={missing.Count}, queued={queued}, failed={failed}");
         if (failed > 0)
             messages.AddRange(batchMsgs.Take(3));
         _logger.LogInformation(
-            "Auto-push {Entity} {Src}→{Dest}: {Missing} missing, queued {Queued}, failed {Failed}",
+            "Auto-push {Entity} {Src}→{Dest}: {Missing} added, queued {Queued}, failed {Failed}",
             entity, master.DbCode, dest.DbCode, missing.Count, queued, failed);
-        return queued;
+        // Still missing when nothing was queued for codes that dest does not have yet.
+        return (queued, queued <= 0 || failed > 0);
     }
 
-    private async Task<int> PushPartyChangedAsync(
+    private async Task<int> EnqueueUpdatesAsync(
         RegisteredDatabase master,
         RegisteredDatabase dest,
         string entity,
-        HashSet<string> sourceCodes,
+        IReadOnlyList<string> changed,
         List<string> messages,
         CancellationToken cancellationToken)
     {
-        HashSet<string> destCodes;
-        try
-        {
-            destCodes = await ReadCodesAsync(dest, entity, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Auto-update: failed reading {Entity} from {Db}", entity, dest.DbCode);
-            return 0;
-        }
-
-        var shared = sourceCodes.Where(destCodes.Contains).Take(Math.Max(1, _options.AccountAutoDeleteMaxPerCycle * 4)).ToList();
-        if (shared.Count == 0)
-            return 0;
-
-        var sourceByCode = new Dictionary<string, MasterRecord>(StringComparer.OrdinalIgnoreCase);
-        var destByCode = new Dictionary<string, MasterRecord>(StringComparer.OrdinalIgnoreCase);
-        foreach (var code in shared)
-        {
-            var src = await _read.GetPartyDetailAsync(master, entity, code, cancellationToken).ConfigureAwait(false);
-            var dst = await _read.GetPartyDetailAsync(dest, entity, code, cancellationToken).ConfigureAwait(false);
-            if (src is not null)
-                sourceByCode[code] = src;
-            if (dst is not null)
-                destByCode[code] = dst;
-        }
-
-        var changed = PartyFieldComparer.CollectDifferingCodes(sourceByCode, destByCode)
-            .Take(Math.Max(1, _options.AccountAutoDeleteMaxPerCycle))
-            .ToList();
-        if (changed.Count == 0)
-            return 0;
-
+        var limited = changed.Take(Math.Max(1, _options.AccountAutoDeleteMaxPerCycle)).ToList();
         var queued = 0;
         var failed = 0;
-        foreach (var code in changed)
+        foreach (var code in limited)
         {
             var (jobId, msg) = await _sync.EnqueueMasterUpdateAsync(
-                master.DbId, dest.DbId, entity, code, "system:auto-push", cancellationToken)
+                master.DbId, dest.DbId, entity, code, AutoPushJobRules.PartyUser, cancellationToken)
                 .ConfigureAwait(false);
             if (jobId > 0)
                 queued++;
@@ -246,7 +352,7 @@ public sealed class MasterMissingAutoPushService : IMasterMissingAutoPushService
             }
         }
 
-        messages.Add($"{master.DbCode}→{dest.DbCode} {entity}: changed={changed.Count}, queued={queued}, failed={failed}");
+        messages.Add($"{master.DbCode}→{dest.DbCode} {entity}: changed={limited.Count}, queued={queued}, failed={failed}");
         return queued;
     }
 
@@ -254,15 +360,19 @@ public sealed class MasterMissingAutoPushService : IMasterMissingAutoPushService
         RegisteredDatabase master,
         RegisteredDatabase dest,
         string entity,
-        HashSet<string> masterCodes,
+        IReadOnlyList<string> removedCodes,
         List<string> messages,
         CancellationToken cancellationToken)
     {
+        var removed = removedCodes
+            .Select(c => c.Trim())
+            .Where(c => c.Length > 0)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var maps = await _mapping.ListAsync(master.DbId, dest.DbId, entity, cancellationToken).ConfigureAwait(false);
         var candidates = maps
             .Where(m => string.Equals(m.Status, MappingStatuses.Mapped, StringComparison.OrdinalIgnoreCase))
             .Where(m => !string.IsNullOrWhiteSpace(m.SubKey))
-            .Where(m => !masterCodes.Contains((m.MasterCode ?? "").Trim()))
+            .Where(m => removed.Contains((m.MasterCode ?? "").Trim()))
             .Take(Math.Max(1, _options.AccountAutoDeleteMaxPerCycle))
             .ToList();
         if (candidates.Count == 0)
@@ -290,7 +400,7 @@ public sealed class MasterMissingAutoPushService : IMasterMissingAutoPushService
             }
 
             var (jobId, msg) = await _sync.EnqueueMasterDeleteAsync(
-                master.DbId, dest.DbId, entity, code, map.MappingId, "system:auto-push", cancellationToken)
+                master.DbId, dest.DbId, entity, code, map.MappingId, AutoPushJobRules.PartyUser, cancellationToken)
                 .ConfigureAwait(false);
             if (jobId > 0)
                 queued++;
@@ -305,29 +415,6 @@ public sealed class MasterMissingAutoPushService : IMasterMissingAutoPushService
         messages.Add(
             $"{master.DbCode}→{dest.DbCode} {entity}: delete-candidates={candidates.Count}, queued={queued}, skipped={skipped}, failed={failed}");
         return queued;
-    }
-
-    private async Task<Dictionary<string, HashSet<string>>> LoadCodesAsync(
-        RegisteredDatabase db,
-        IReadOnlyList<string> entities,
-        List<string> messages,
-        CancellationToken cancellationToken)
-    {
-        var map = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
-        foreach (var entity in entities)
-        {
-            try
-            {
-                map[entity] = await ReadCodesAsync(db, entity, cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Auto-push: failed reading {Entity} from {Db}", entity, db.DbCode);
-                messages.Add($"Skip {db.DbCode} {entity}: read failed ({ex.Message})");
-            }
-        }
-
-        return map;
     }
 
     private async Task<HashSet<string>> ReadCodesAsync(

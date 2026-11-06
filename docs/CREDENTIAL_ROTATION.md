@@ -37,7 +37,7 @@ Never commit the new password. Never use Firebird’s default `masterkey` outsid
 
 ## AllowedHosts / reverse proxy
 
-1. Production **requires** an explicit `AllowedHosts` value (semicolon-separated public DNS names). Startup refuses `*` or empty.
+1. Production **requires** an explicit `AllowedHosts` value (semicolon-separated public DNS names). Startup refuses `*` or empty. Private LAN IPv4s and the Windows computer name are auto-appended at runtime so office clients can use `http://<server-ip>:port` without editing AllowedHosts per site (`HostHardening__IncludeLanAddresses=false` to disable).
 2. List only trusted reverse-proxy addresses under `ForwardedHeaders:KnownProxies` / `KnownNetworks` (CIDR). Do not clear the default loopback trust to “allow all”.
 3. Auth cookies use `Secure` in Production — TLS (or trusted `X-Forwarded-Proto`) is required.
 

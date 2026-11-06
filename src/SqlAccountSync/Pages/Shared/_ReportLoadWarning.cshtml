@@ -13,17 +13,17 @@
     <details class="report-load-warning report-load-warning--icon">
         <summary aria-label="@label. Show error details">
             <span class="report-load-warning-icon" aria-hidden="true">!</span>
-            <span class="visually-hidden">@label</span>
+            <span class="visually-hidden">@label: @string.Join(", ", companies)</span>
         </summary>
         <div class="report-load-warning-panel" role="region" aria-label="Load errors">
             <p class="report-load-warning-panel-title">@label</p>
-            <p class="report-load-warning-panel-hint">These companies failed to load. Results above may be incomplete.</p>
-            <ul>
-                @foreach (var company in companies)
+            <ul class="report-load-warning-panel-list">
+                @foreach (var name in companies)
                 {
-                    <li>@company</li>
+                    <li>@name</li>
                 }
             </ul>
+            <p class="report-load-warning-panel-hint">Results may be incomplete.</p>
         </div>
     </details>
 }

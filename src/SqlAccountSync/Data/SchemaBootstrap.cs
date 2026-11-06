@@ -7,7 +7,7 @@ namespace SqlAccountSync.Data;
 
 public sealed class SchemaBootstrap
 {
-    public const int CurrentVersion = 3;
+    public const int CurrentVersion = 4;
 
     private readonly CentralDb _db;
     private readonly BootstrapOptions _bootstrap;
@@ -288,6 +288,16 @@ CREATE TABLE SYNC_SETTING (
     UPDATEDAT TIMESTAMP NOT NULL
 )", cancellationToken);
 
+        await EnsureTable(conn, "SYNC_MASTER_FINGERPRINT", @"
+CREATE TABLE SYNC_MASTER_FINGERPRINT (
+    MASTERDBID INTEGER NOT NULL,
+    ENTITYCODE VARCHAR(20) NOT NULL,
+    CODE VARCHAR(40) NOT NULL,
+    CONTENTHASH VARCHAR(64) NOT NULL,
+    UPDATEDAT TIMESTAMP NOT NULL,
+    CONSTRAINT PK_SYNC_MASTER_FP PRIMARY KEY (MASTERDBID, ENTITYCODE, CODE)
+)", cancellationToken);
+
         await SeedAsync(conn, cancellationToken);
 
         var ver = await ScalarInt(conn, "SELECT COALESCE(MAX(VERID), 0) FROM SYNC_SCHEMA_VER", cancellationToken);
@@ -295,6 +305,8 @@ CREATE TABLE SYNC_SETTING (
             await MigrateToV2Async(conn, cancellationToken);
         if (ver < 3)
             await MigrateToV3Async(conn, cancellationToken);
+        if (ver < 4)
+            await MigrateToV4Async(conn, cancellationToken);
         if (ver < CurrentVersion)
         {
             await Exec(conn, "INSERT INTO SYNC_SCHEMA_VER (VERID, APPLIEDAT) VALUES (@V, CURRENT_TIMESTAMP)",
@@ -328,6 +340,21 @@ CREATE TABLE SYNC_SETTING (
         await EnsureConstraint(conn, "SYNC_MAPPING", "UQ_SYNC_MAP_SRC",
             "UNIQUE (MASTERDBID, SUBDBID, SRCENTITYCODE, DSTENTITYCODE, MASTERCODE)", ct);
     }
+
+    /// <summary>
+    /// Master-side fingerprints so auto-push reacts to MASTER amendments only,
+    /// not SUB edit/delete drift.
+    /// </summary>
+    private static Task MigrateToV4Async(FbConnection conn, CancellationToken ct) =>
+        EnsureTable(conn, "SYNC_MASTER_FINGERPRINT", @"
+CREATE TABLE SYNC_MASTER_FINGERPRINT (
+    MASTERDBID INTEGER NOT NULL,
+    ENTITYCODE VARCHAR(20) NOT NULL,
+    CODE VARCHAR(40) NOT NULL,
+    CONTENTHASH VARCHAR(64) NOT NULL,
+    UPDATEDAT TIMESTAMP NOT NULL,
+    CONSTRAINT PK_SYNC_MASTER_FP PRIMARY KEY (MASTERDBID, ENTITYCODE, CODE)
+)", ct);
 
     private static async Task EnsureColumn(FbConnection conn, string table, string column, string ddlType, CancellationToken ct)
     {

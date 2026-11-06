@@ -400,8 +400,9 @@ public class EditModel : SyncPageModel
 
     private void ApplyNewDefaults()
     {
-        Db.DbRole = DatabaseRoles.Master;
+        Db.DbRole = DatabaseRoles.Sub;
         ApplyFirebirdDefaults(Db);
+        SdkDcfPath = DatabaseFileBrowser.FindPreferredDcfPath();
     }
 
     private static void ApplyFirebirdDefaults(RegisteredDatabase db)
@@ -429,6 +430,13 @@ public class EditModel : SyncPageModel
     {
         if (!IsAdmin) return Forbid();
         return new JsonResult(new { paths = DatabaseFileBrowser.FindByName(name) });
+    }
+
+    public IActionResult OnGetBrowse(string? dir, string? kind)
+    {
+        if (!IsAdmin) return Forbid();
+        var result = DatabaseFileBrowser.BrowseDirectory(dir, kind);
+        return new JsonResult(new { directory = result.Directory, paths = result.Paths });
     }
 
     public async Task<IActionResult> OnPostAsync()

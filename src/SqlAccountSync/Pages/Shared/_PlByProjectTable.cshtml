@@ -12,7 +12,7 @@
     string Money(decimal amount) => amount.ToString("N2", System.Globalization.CultureInfo.InvariantCulture);
     string Text(string? value) => string.IsNullOrWhiteSpace(value) ? "---" : value;
 }
-<table class="txn-matrix" data-txn-panel="ready" aria-label="PL by Project">
+<table class="txn-matrix" data-txn-panel="ready" aria-label="Profit and Loss by Project">
     <thead>
         <tr>
             <th class="pl-col-code" scope="col">CODE</th>
@@ -51,8 +51,7 @@
     {
         <tfoot>
             <tr class="pl-row-total">
-                <th class="pl-col-code" scope="row">TOTAL</th>
-                <td class="pl-col-desc"></td>
+                <th class="pl-total-label" colspan="2" scope="row">TOTAL</th>
                 @foreach (var amount in columnTotals)
                 {
                     <td class="pl-col-company">@Money(amount)</td>

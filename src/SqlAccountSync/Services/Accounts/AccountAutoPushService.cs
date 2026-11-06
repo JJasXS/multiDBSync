@@ -10,8 +10,8 @@ using SqlAccountSync.Services.Sync;
 namespace SqlAccountSync.Services.Accounts;
 
 /// <summary>
-/// Account auto update/delete only (creates are handled by MasterMissingAutoPushService).
-/// Mirrors field updates and tracked deletes when Sync options enable them.
+/// Account auto update/delete (creates are handled by MasterMissingAutoPushService).
+/// Enqueues only when the master chart fingerprint changes — not on SUB drift.
 /// </summary>
 public interface IAccountAutoPushService
 {
@@ -25,6 +25,7 @@ public sealed class AccountAutoPushService : IAccountAutoPushService
     private readonly ISqlAccountReadAdapter _read;
     private readonly ISyncOrchestrator _sync;
     private readonly IMappingService _mapping;
+    private readonly IMasterFingerprintStore _fingerprints;
     private readonly SyncOptions _options;
     private readonly SqlAccountingWriteOptions _writeOptions;
     private readonly ILogger<AccountAutoPushService> _logger;
@@ -34,6 +35,7 @@ public sealed class AccountAutoPushService : IAccountAutoPushService
         ISqlAccountReadAdapter read,
         ISyncOrchestrator sync,
         IMappingService mapping,
+        IMasterFingerprintStore fingerprints,
         IOptions<SyncOptions> options,
         IOptions<SqlAccountingWriteOptions> writeOptions,
         ILogger<AccountAutoPushService> logger)
@@ -42,6 +44,7 @@ public sealed class AccountAutoPushService : IAccountAutoPushService
         _read = read;
         _sync = sync;
         _mapping = mapping;
+        _fingerprints = fingerprints;
         _options = options.Value;
         _writeOptions = writeOptions.Value;
         _logger = logger;
@@ -89,17 +92,31 @@ public sealed class AccountAutoPushService : IAccountAutoPushService
                 continue;
             }
 
-            if (masterChart.Count == 0)
+            var current = GlAccountComparer.BuildHashes(masterChart);
+            var stored = await _fingerprints.ListAsync(master.DbId, EntityCodes.Account, cancellationToken)
+                .ConfigureAwait(false);
+            var delta = MasterFingerprintDelta.Diff(current, stored);
+            if (delta.SeedOnly)
+            {
+                await _fingerprints.ReplaceAllAsync(master.DbId, EntityCodes.Account, current, cancellationToken)
+                    .ConfigureAwait(false);
+                messages.Add($"{master.DbCode} ACCOUNT: seeded {current.Count} fingerprints (no jobs)");
                 continue;
+            }
 
             foreach (var dest in targets)
             {
                 var pairQueued = await ProcessPairAsync(
-                    master, dest, masterChart, messages, cancellationToken).ConfigureAwait(false);
+                    master, dest, masterChart, delta, messages, cancellationToken).ConfigureAwait(false);
                 if (pairQueued == 0)
                     skippedPairs++;
                 queued += pairQueued;
             }
+
+            // Persist after create (MasterMissing) + update/delete decisions so SUB drift
+            // cannot re-trigger, and newly added codes stop looking "added".
+            await _fingerprints.ReplaceAllAsync(master.DbId, EntityCodes.Account, current, cancellationToken)
+                .ConfigureAwait(false);
         }
 
         return (queued, skippedPairs, messages);
@@ -109,29 +126,18 @@ public sealed class AccountAutoPushService : IAccountAutoPushService
         RegisteredDatabase master,
         RegisteredDatabase dest,
         List<GlAccountRow> masterChart,
+        MasterFingerprintDelta.Result delta,
         List<string> messages,
         CancellationToken cancellationToken)
     {
-        List<GlAccountRow> destChart;
-        try
-        {
-            destChart = await _read.GetGlChartAsync(dest, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Account auto-push: failed reading chart from {Db}", dest.DbCode);
-            messages.Add($"Skip {master.DbCode}→{dest.DbCode}: dest chart read failed");
-            return 0;
-        }
-
         var queued = 0;
 
-        if (_options.AccountAutoUpdateEnabled)
-            queued += await PushChangedAsync(master, dest, masterChart, destChart, messages, cancellationToken)
+        if (_options.AccountAutoUpdateEnabled && delta.Changed.Count > 0)
+            queued += await PushChangedAsync(master, dest, masterChart, delta.Changed, messages, cancellationToken)
                 .ConfigureAwait(false);
 
-        if (_options.AccountAutoDeleteEnabled)
-            queued += await PushDeletedAsync(master, dest, masterChart, destChart, messages, cancellationToken)
+        if (_options.AccountAutoDeleteEnabled && delta.Removed.Count > 0)
+            queued += await PushDeletedAsync(master, dest, delta.Removed, messages, cancellationToken)
                 .ConfigureAwait(false);
 
         return queued;
@@ -141,22 +147,18 @@ public sealed class AccountAutoPushService : IAccountAutoPushService
         RegisteredDatabase master,
         RegisteredDatabase dest,
         List<GlAccountRow> masterChart,
-        List<GlAccountRow> destChart,
+        IReadOnlyList<string> changedCodes,
         List<string> messages,
         CancellationToken cancellationToken)
     {
-        var changed = GlAccountComparer.CollectDifferingCodes(masterChart, destChart);
-        if (changed.Count == 0)
-            return 0;
-
-        var ordered = GlAccountMapper.OrderCodesParentsFirst(changed, masterChart);
+        var ordered = GlAccountMapper.OrderCodesParentsFirst(changedCodes.ToList(), masterChart);
         var queued = 0;
         var failed = 0;
         foreach (var code in ordered)
         {
             var (jobId, msg) = await _sync.EnqueueMasterUpdateAsync(
                 master.DbId, dest.DbId, EntityCodes.Account, code,
-                "system:account-auto-push", cancellationToken).ConfigureAwait(false);
+                AutoPushJobRules.AccountUser, cancellationToken).ConfigureAwait(false);
             if (jobId > 0)
                 queued++;
             else
@@ -177,13 +179,12 @@ public sealed class AccountAutoPushService : IAccountAutoPushService
     private async Task<int> PushDeletedAsync(
         RegisteredDatabase master,
         RegisteredDatabase dest,
-        List<GlAccountRow> masterChart,
-        List<GlAccountRow> destChart,
+        IReadOnlyList<string> removedCodes,
         List<string> messages,
         CancellationToken cancellationToken)
     {
-        var masterCodes = masterChart
-            .Select(a => (a.Code ?? "").Trim())
+        var removed = removedCodes
+            .Select(c => c.Trim())
             .Where(c => c.Length > 0)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -192,17 +193,28 @@ public sealed class AccountAutoPushService : IAccountAutoPushService
         var candidates = maps
             .Where(m => string.Equals(m.Status, MappingStatuses.Mapped, StringComparison.OrdinalIgnoreCase))
             .Where(m => !string.IsNullOrWhiteSpace(m.SubKey))
-            .Where(m => !masterCodes.Contains((m.MasterCode ?? "").Trim()))
+            .Where(m => removed.Contains((m.MasterCode ?? "").Trim()))
             .ToList();
         if (candidates.Count == 0)
             return 0;
+
+        List<GlAccountRow> destChart;
+        try
+        {
+            destChart = await _read.GetGlChartAsync(dest, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Account auto-push: failed reading chart from {Db}", dest.DbCode);
+            messages.Add($"Skip {master.DbCode}→{dest.DbCode}: dest chart read failed");
+            return 0;
+        }
 
         var levelByCode = destChart.ToDictionary(
             a => (a.Code ?? "").Trim(),
             a => a.Level,
             StringComparer.OrdinalIgnoreCase);
 
-        // Children before parents so leaves are removed first.
         var ordered = candidates
             .OrderByDescending(m =>
                 levelByCode.TryGetValue((m.MasterCode ?? "").Trim(), out var lvl) ? lvl : EstimateLevel(m.MasterCode))
@@ -217,7 +229,7 @@ public sealed class AccountAutoPushService : IAccountAutoPushService
             var code = (map.MasterCode ?? "").Trim();
             var (jobId, msg) = await _sync.EnqueueMasterDeleteAsync(
                 master.DbId, dest.DbId, EntityCodes.Account, code, map.MappingId,
-                "system:account-auto-push", cancellationToken).ConfigureAwait(false);
+                AutoPushJobRules.AccountUser, cancellationToken).ConfigureAwait(false);
             if (jobId > 0)
                 queued++;
             else

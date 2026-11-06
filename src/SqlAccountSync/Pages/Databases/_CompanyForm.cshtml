@@ -30,8 +30,8 @@
                     <div>
                         <label>Role</label>
                         <select asp-for="Db.DbRole">
-                            <option>MASTER</option>
                             <option>SUB</option>
+                            <option>MASTER</option>
                         </select>
                     </div>
                 </div>
@@ -116,7 +116,7 @@
                                 </button>
                                 <input type="file" data-db-path-file accept=".dcf" hidden />
                             </div>
-                            <p class="field-hint" data-db-path-hint>Use the pin to choose the SQL Account .DCF (not the .FDB).</p>
+                            <p class="field-hint" data-db-path-hint>Use the pin for the Share folder list, or Open file explorer for another .DCF.</p>
                         </div>
                         <div>
                             <label asp-for="SdkDatabase">Company database name</label>
@@ -142,12 +142,13 @@
 <dialog id="dbPathMatches" class="accounts-modal db-path-modal" aria-labelledby="dbPathMatchesTitle">
     <div class="accounts-modal-form">
         <div class="accounts-modal-head">
-            <h3 id="dbPathMatchesTitle">Choose a path</h3>
+            <h3 id="dbPathMatchesTitle">Choose a file</h3>
             <button type="button" class="accounts-modal-close" data-db-path-close aria-label="Close">&times;</button>
         </div>
         <div class="accounts-modal-body">
-            <p class="field-hint">More than one file has that name. Pick the path to use.</p>
+            <p class="field-hint" data-db-path-folder>Pick the path to use.</p>
             <ul class="db-path-list" data-db-path-matches></ul>
+            <button type="button" class="btn secondary db-path-os" data-db-path-os>Open file explorer…</button>
         </div>
     </div>
 </dialog>

@@ -2,8 +2,10 @@
 using Amazon.SecretsManager;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HostFiltering;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using SqlAccountSync.Authorization;
 using SqlAccountSync.Data;
 using SqlAccountSync.Helpers;
@@ -11,6 +13,7 @@ using SqlAccountSync.Options;
 using SqlAccountSync.Services.Audit;
 using SqlAccountSync.Services.Auth;
 using SqlAccountSync.Services.Accounts;
+using SqlAccountSync.Services.Backup;
 using SqlAccountSync.Services.Connections;
 using SqlAccountSync.Services.Databases;
 using SqlAccountSync.Services.Mapping;
@@ -260,15 +263,21 @@ builder.Services.AddScoped<ITransactionEngine, TransactionEngine>();
 builder.Services.AddScoped<IAccountAutoPushService, AccountAutoPushService>();
 builder.Services.AddScoped<IAutoPushSettings, AutoPushSettings>();
 builder.Services.AddSingleton<IAutoPushSchedule, AutoPushSchedule>();
+builder.Services.AddScoped<IMasterFingerprintStore, MasterFingerprintStore>();
 builder.Services.AddScoped<IMasterMissingAutoPushService, MasterMissingAutoPushService>();
+builder.Services.AddScoped<ICentralDbBackupService, CentralDbBackupService>();
 builder.Services.AddHostedService<TenantConfigRefreshWorker>();
 builder.Services.AddHostedService<SyncWorker>();
 builder.Services.AddHostedService<AccountAutoPushWorker>();
 
 var sessionHours = builder.Configuration.GetValue("Sync:SessionHours", 8);
-var cookieSecure = builder.Environment.IsDevelopment()
-    ? CookieSecurePolicy.SameAsRequest
-    : CookieSecurePolicy.Always;
+// SameAsRequest so HTTP LAN (e.g. http://192.168.x.x:5030) can keep the auth cookie;
+// HTTPS still gets Secure cookies. Always-Secure breaks Production LAN over plain HTTP.
+var cookieSecure = CookieSecurePolicy.SameAsRequest;
+builder.Services.AddAntiforgery(options =>
+{
+    options.Cookie.SecurePolicy = cookieSecure;
+});
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
@@ -281,7 +290,6 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.Cookie.HttpOnly = true;
         options.Cookie.Name = "SqlAccountSync.Auth";
         options.Cookie.SameSite = SameSiteMode.Lax;
-        // Production: HTTPS-only auth cookie (requires TLS or a trusted proxy setting X-Forwarded-Proto).
         options.Cookie.SecurePolicy = cookieSecure;
         options.Events.OnValidatePrincipal = AuthCookieEvents.ValidatePrincipalAsync;
     });
@@ -305,8 +313,24 @@ var razorPages = builder.Services.AddRazorPages(options =>
 if (builder.Environment.IsDevelopment())
     razorPages.AddRazorRuntimeCompilation();
 
+HostHardening.RegisterLanAllowedHosts(builder.Services, builder.Configuration);
+
 var app = builder.Build();
 HostHardening.EnsureProductionAllowedHosts(app.Environment, app.Configuration, app.Logger);
+{
+    var allowed = app.Services.GetRequiredService<IOptions<HostFilteringOptions>>().Value.AllowedHosts;
+    app.Logger.LogInformation("AllowedHosts effective: {Hosts}", string.Join("; ", allowed));
+    var urls = Environment.GetEnvironmentVariable("ASPNETCORE_URLS") ?? "http://0.0.0.0:5030";
+    var port = 5030;
+    var portMatch = System.Text.RegularExpressions.Regex.Match(urls, @":(\d+)");
+    if (portMatch.Success && int.TryParse(portMatch.Groups[1].Value, out var parsedPort))
+        port = parsedPort;
+    foreach (var host in HostHardening.GetLocalLanHosts())
+    {
+        var label = System.Net.IPAddress.TryParse(host, out _) ? "LAN URL" : "LAN name URL";
+        Console.WriteLine($"{label}: http://{host}:{port}/Login");
+    }
+}
 
 app.UseForwardedHeaders();
 
@@ -347,11 +371,17 @@ if (app.Environment.IsDevelopment())
 // Public liveness only — no queue/SDK internals (master security hardening).
 app.MapGet("/health", () => Results.Json(new { status = "ok" })).AllowAnonymous();
 // Detailed health for authenticated admins.
-app.MapGet("/health/detail", async (HttpContext http, IJobQueue queue, ISdkSessionManager sdk, IConfiguration config) =>
+app.MapGet("/health/detail", async (
+    HttpContext http,
+    IJobQueue queue,
+    ISdkSessionManager sdk,
+    ISqlAccSessionManager writeSessions,
+    IConfiguration config) =>
 {
     var snap = await queue.GetHealthAsync();
     var lease = config.GetValue("Sync:ProcessingLeaseSeconds", 900);
     var sdkHealth = sdk.GetHealth();
+    var writeStatus = writeSessions.GetStatus();
     var status = "ok";
     if (!sdkHealth.ProgIdRegistered)
         status = "sdk-offline";
@@ -367,8 +397,9 @@ app.MapGet("/health/detail", async (HttpContext http, IJobQueue queue, ISdkSessi
         sdk = new
         {
             progIdRegistered = sdkHealth.ProgIdRegistered,
-            loggedIn = sdkHealth.LoggedIn,
-            currentCompany = sdkHealth.CurrentCompany
+            loggedIn = writeStatus.LoggedIn,
+            currentCompany = writeStatus.ActiveCompany,
+            attachedToUserWindow = writeStatus.AttachedToUserWindow
         },
         queue = new
         {

@@ -1,7 +1,7 @@
 @model DashboardDetailsModel
 <section class="card txn-summary pl-by-project" data-txn-summary>
     <div class="card-head">
-        <h3>PL by Project</h3>
+        <h3>Profit &amp; Loss by Project</h3>
     </div>
     <partial name="_PlByProjectFilters" />
     <div class="table-wrap txn-summary-scroll">
@@ -157,6 +157,11 @@
                 downloadReport(params);
             });
 
+            root.querySelector("[data-pl-refresh]")?.addEventListener("click", () => {
+                window.clearTimeout(refreshTimer);
+                refreshDetails();
+            });
+
             filters?.addEventListener("submit", (event) => {
                 event.preventDefault();
                 window.clearTimeout(refreshTimer);
@@ -164,7 +169,7 @@
             });
 
             document.addEventListener("click", (event) => {
-                root.querySelectorAll("details.txn-col-menu").forEach((menu) => {
+                root.querySelectorAll("details.txn-col-menu, details.report-load-warning").forEach((menu) => {
                     if (!menu.contains(event.target)) menu.removeAttribute("open");
                 });
             });
@@ -184,7 +189,8 @@
 
             root.addEventListener("keydown", (event) => {
                 if (event.key !== "Escape") return;
-                root.querySelectorAll("details.txn-col-menu").forEach((menu) => menu.removeAttribute("open"));
+                root.querySelectorAll("details.txn-col-menu, details.report-load-warning")
+                    .forEach((menu) => menu.removeAttribute("open"));
             });
 
             applyColumns();

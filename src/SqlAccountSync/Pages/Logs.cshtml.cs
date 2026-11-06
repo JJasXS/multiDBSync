@@ -221,17 +221,14 @@ public class LogsModel : SyncPageModel
     private LogRow ToAuditRow(AuditListItem row)
     {
         var entry = row.Entry;
-        var entity = string.IsNullOrWhiteSpace(entry.Entity) ? "" : SyncDisplayNames.TxnType(entry.Entity);
-        var who = string.IsNullOrWhiteSpace(row.DestName) ? entry.UserEmail : row.DestName;
-        var parts = new[] { SyncDisplayNames.AuditAction(entry.Action), entity, entry.RecordId, who }
-            .Where(p => !string.IsNullOrWhiteSpace(p));
+        var company = string.IsNullOrWhiteSpace(row.DestName) ? "" : row.DestName.Trim();
         var hideJob = !CanOperate && row.LinkLabel == "View job";
         return new LogRow
         {
             At = entry.AtUtc,
             Kind = "audit",
             KindLabel = "Audit",
-            Detail = string.Join(" · ", parts),
+            Detail = SyncDisplayNames.AuditDetail(entry.Action, entry.Entity, entry.RecordId, company),
             Status = row.DisplayResult,
             BadgeClass = SyncDisplayNames.AuditResultBadgeClass(row.DisplayResult),
             StatusTitle = row.StatusDetail,

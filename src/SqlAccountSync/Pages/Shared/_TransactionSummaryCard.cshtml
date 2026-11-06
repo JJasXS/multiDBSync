@@ -116,10 +116,16 @@
                     const grandReceipt = table.querySelector("[data-mom-foot='receipt-grand']");
                     if (grandInvoice) grandInvoice.textContent = formatMoney(sumAmounts(visibleInvoice));
                     if (grandReceipt) grandReceipt.textContent = formatMoney(sumAmounts(visibleReceipt));
-                    const labels = [...table.querySelectorAll("tfoot [data-mom-label]")];
-                    labels.forEach((cell) => { cell.textContent = ""; });
-                    const firstLabel = labels.find((cell) => !cell.hidden);
-                    if (firstLabel) firstLabel.textContent = "TOTAL";
+                    const labelSpan = table.querySelector("tfoot [data-mom-label-span]");
+                    if (labelSpan) {
+                        const labelKeys = ["database", "entities", "properties", "type", "project", "lot"];
+                        const selected = new Set(
+                            [...root.querySelectorAll("[data-txn-col-toggle]:checked")].map((box) => box.value));
+                        const visibleLabels = labelKeys.filter((key) => selected.has(key)).length;
+                        labelSpan.hidden = visibleLabels === 0;
+                        labelSpan.colSpan = Math.max(1, visibleLabels);
+                        labelSpan.textContent = "TOTAL";
+                    }
                 });
             };
 
@@ -132,6 +138,9 @@
                 const edge = [...stickyKeys].reverse().find((key) => selected.has(key));
                 if (edge) {
                     root.querySelectorAll(`[data-txn-col="${edge}"].mom-sticky`).forEach((cell) => {
+                        cell.classList.add("mom-sticky-edge");
+                    });
+                    root.querySelectorAll("tfoot [data-mom-label-span]").forEach((cell) => {
                         cell.classList.add("mom-sticky-edge");
                     });
                 }
@@ -217,6 +226,7 @@
             };
 
             const results = root.querySelector("[data-txn-results]");
+            const warningHost = root.querySelector("[data-txn-warning]");
             const refreshDelayMs = 300;
             let refreshTimer = 0;
             let refreshInFlight = false;
@@ -226,6 +236,14 @@
                 txnPreview.status = "loading";
                 applyStatus();
                 root.setAttribute("aria-busy", "true");
+            };
+
+            const parkWarning = () => {
+                if (!warningHost || !results) return;
+                warningHost.replaceChildren();
+                results.querySelectorAll(".report-load-warning-slot").forEach((slot) => {
+                    warningHost.appendChild(slot);
+                });
             };
 
             const refreshDetails = async () => {
@@ -244,6 +262,7 @@
                     });
                     if (!response.ok) throw new Error(String(response.status));
                     results.innerHTML = await response.text();
+                    parkWarning();
                     txnPreview.status = "ready";
                     applyStatus();
                     applyColumns();
@@ -253,6 +272,7 @@
                     pageUrl.search = pageQuery.toString();
                     history.replaceState(null, "", pageUrl);
                 } catch {
+                    if (warningHost) warningHost.replaceChildren();
                     txnPreview.status = "error";
                     applyStatus();
                     root.removeAttribute("aria-busy");
@@ -295,25 +315,37 @@
                 downloadReport(params);
             });
 
+            root.querySelector("[data-txn-refresh]")?.addEventListener("click", () => {
+                window.clearTimeout(refreshTimer);
+                refreshDetails();
+            });
+
             filters?.addEventListener("submit", (event) => {
                 event.preventDefault();
                 window.clearTimeout(refreshTimer);
                 refreshDetails();
             });
 
-            document.addEventListener("click", (event) => {
-                root.querySelectorAll("details.txn-col-menu").forEach((menu) => {
-                    if (!menu.contains(event.target)) menu.removeAttribute("open");
+            const closeOutsideDetails = (selector, target) => {
+                root.querySelectorAll(selector).forEach((menu) => {
+                    if (!menu.contains(target)) menu.removeAttribute("open");
                 });
+            };
+
+            document.addEventListener("click", (event) => {
+                closeOutsideDetails("details.txn-col-menu", event.target);
+                closeOutsideDetails("details.report-load-warning", event.target);
             });
 
             root.addEventListener("keydown", (event) => {
                 if (event.key !== "Escape") return;
-                root.querySelectorAll("details.txn-col-menu").forEach((menu) => menu.removeAttribute("open"));
+                root.querySelectorAll("details.txn-col-menu, details.report-load-warning")
+                    .forEach((menu) => menu.removeAttribute("open"));
             });
 
             applyColumns();
             applyDatabases();
+            parkWarning();
             applyStatus();
             window.addEventListener("resize", () => applyColumns());
         })();

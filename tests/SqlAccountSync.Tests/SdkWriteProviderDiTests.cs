@@ -197,6 +197,8 @@ public class SdkWriteProviderDiTests
         public Task<T> RunAsync<T>(RegisteredDatabase db, Func<ISqlAccComApp, T> action, CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("Test session must not run live COM.");
 
+        public SqlAccSessionStatus GetStatus() => new(false, null, false);
+
         private sealed class Noop : IDisposable
         {
             public void Dispose() { }

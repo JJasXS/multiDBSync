@@ -154,12 +154,10 @@
             }
             <tfoot>
                 <tr class="mom-row-total">
-                    <th class="mom-sticky mom-col-database" data-txn-col="database" data-mom-label scope="row">TOTAL</th>
-                    <td class="mom-sticky mom-col-entities mom-sticky-edge" data-txn-col="entities" data-mom-label></td>
-                    <td class="mom-col-properties" data-txn-col="properties" data-mom-label></td>
-                    <td class="mom-col-type" data-txn-col="type" data-mom-label></td>
-                    <td class="mom-col-project" data-txn-col="project" data-mom-label></td>
-                    <td class="mom-col-lot" data-txn-col="lot" data-mom-label></td>
+                    <th class="mom-sticky mom-total-label mom-sticky-edge"
+                        colspan="6"
+                        data-mom-label-span
+                        scope="row">TOTAL</th>
                     @for (var monthIndex = 0; monthIndex < months.Length; monthIndex++)
                     {
                         <td class="mom-money mom-invoice mom-group-edge" data-txn-col="@months[monthIndex].Key" data-mom-foot="invoice">@ReceiptAmount(invoiceTotals[monthIndex])</td>
