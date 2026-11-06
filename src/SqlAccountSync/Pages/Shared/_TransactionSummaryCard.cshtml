@@ -116,10 +116,16 @@
                     const grandReceipt = table.querySelector("[data-mom-foot='receipt-grand']");
                     if (grandInvoice) grandInvoice.textContent = formatMoney(sumAmounts(visibleInvoice));
                     if (grandReceipt) grandReceipt.textContent = formatMoney(sumAmounts(visibleReceipt));
-                    const labels = [...table.querySelectorAll("tfoot [data-mom-label]")];
-                    labels.forEach((cell) => { cell.textContent = ""; });
-                    const firstLabel = labels.find((cell) => !cell.hidden);
-                    if (firstLabel) firstLabel.textContent = "TOTAL";
+                    const labelSpan = table.querySelector("tfoot [data-mom-label-span]");
+                    if (labelSpan) {
+                        const labelKeys = ["database", "entities", "properties", "type", "project", "lot"];
+                        const selected = new Set(
+                            [...root.querySelectorAll("[data-txn-col-toggle]:checked")].map((box) => box.value));
+                        const visibleLabels = labelKeys.filter((key) => selected.has(key)).length;
+                        labelSpan.hidden = visibleLabels === 0;
+                        labelSpan.colSpan = Math.max(1, visibleLabels);
+                        labelSpan.textContent = "TOTAL";
+                    }
                 });
             };
 
@@ -132,6 +138,9 @@
                 const edge = [...stickyKeys].reverse().find((key) => selected.has(key));
                 if (edge) {
                     root.querySelectorAll(`[data-txn-col="${edge}"].mom-sticky`).forEach((cell) => {
+                        cell.classList.add("mom-sticky-edge");
+                    });
+                    root.querySelectorAll("tfoot [data-mom-label-span]").forEach((cell) => {
                         cell.classList.add("mom-sticky-edge");
                     });
                 }

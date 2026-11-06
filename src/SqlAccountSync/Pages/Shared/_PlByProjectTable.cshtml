@@ -51,8 +51,7 @@
     {
         <tfoot>
             <tr class="pl-row-total">
-                <th class="pl-col-code" scope="row">TOTAL</th>
-                <td class="pl-col-desc"></td>
+                <th class="pl-total-label" colspan="2" scope="row">TOTAL</th>
                 @foreach (var amount in columnTotals)
                 {
                     <td class="pl-col-company">@Money(amount)</td>
