@@ -145,16 +145,19 @@ ORDER BY LOGAT DESC, TXNPK DESC", MapTxn, MergeArgs(bounds, new
 
         var limit = Math.Clamp(take, 1, 500);
         var bounds = NormalizeBounds(fromInclusive, toExclusive);
-        var entries = await _db.QueryAsync($@"
+        var rows = await _db.QueryAsync($@"
 SELECT FIRST {limit}
-    AUDITID, ATUTC, USEREMAIL, ACTION, DBID, ENTITY, RECORDID, RESULT, IPADDR, SESSIONID, REQUESTID
-FROM SYNC_AUDIT
-WHERE (@HASFROM = 0 OR ATUTC >= @FROMAT)
-  AND (@HASTO = 0 OR ATUTC < @TOEX)
+    a.AUDITID, a.ATUTC, a.USEREMAIL, a.ACTION, a.DBID, a.ENTITY, a.RECORDID, a.RESULT,
+    a.IPADDR, a.SESSIONID, a.REQUESTID,
+    COALESCE(d.DISPLAYNAME, d.DBCODE, '') AS DESTNAME
+FROM SYNC_AUDIT a
+LEFT JOIN SYNC_DATABASE d ON d.DBID = a.DBID
+WHERE (@HASFROM = 0 OR a.ATUTC >= @FROMAT)
+  AND (@HASTO = 0 OR a.ATUTC < @TOEX)
   AND (@HASCURSOR = 0
-   OR ATUTC < @CURSORAT
-   OR (ATUTC = @CURSORAT AND @CURSORKIND = 'audit' AND AUDITID < @CURSORID))
-ORDER BY ATUTC DESC, AUDITID DESC", MapAudit, MergeArgs(bounds, new
+   OR a.ATUTC < @CURSORAT
+   OR (a.ATUTC = @CURSORAT AND @CURSORKIND = 'audit' AND a.AUDITID < @CURSORID))
+ORDER BY a.ATUTC DESC, a.AUDITID DESC", MapAuditWithDest, MergeArgs(bounds, new
         {
             HASCURSOR = before.HasValue ? 1 : 0,
             CURSORAT = before ?? DateTime.MinValue,
@@ -162,6 +165,7 @@ ORDER BY ATUTC DESC, AUDITID DESC", MapAudit, MergeArgs(bounds, new
             CURSORID = beforeId
         }), cancellationToken).ConfigureAwait(false);
 
+        var entries = rows.Select(r => r.Entry).ToList();
         var jobs = await LoadRecentJobsAsync(Math.Min(limit * 3, 500), cancellationToken).ConfigureAwait(false);
         jobs.AddRange(await LoadMissingJobsAsync(entries, jobs, cancellationToken).ConfigureAwait(false));
         var txns = await _db.QueryAsync($@"
@@ -179,7 +183,13 @@ FROM SYNC_TXN ORDER BY TXNPK DESC", MapAuditTxn, cancellationToken: cancellation
             .GroupBy(j => j.TxnPk)
             .ToDictionary(g => g.Key, g => g.OrderByDescending(j => j.JobId).First());
 
-        return entries.Select(e => ResolveItem(e, jobs, jobsById, jobsByTxnPk, txnById, txnByTxnId)).ToList();
+        return rows.Select(r =>
+        {
+            var item = ResolveItem(r.Entry, jobs, jobsById, jobsByTxnPk, txnById, txnByTxnId);
+            if (string.IsNullOrWhiteSpace(item.DestName) && !string.IsNullOrWhiteSpace(r.DestName))
+                item.DestName = r.DestName;
+            return item;
+        }).ToList();
     }
 
     public Task<List<ErrorEntry>> ListErrorsPageAsync(
@@ -418,6 +428,9 @@ LEFT JOIN SYNC_DATABASE d ON d.DBID = j.DESTDBID";
         SessionId = CentralDb.Str(r, "SESSIONID"),
         RequestId = CentralDb.Str(r, "REQUESTID"),
     };
+
+    private static (AuditEntry Entry, string DestName) MapAuditWithDest(FbDataReader r) =>
+        (MapAudit(r), Has(r, "DESTNAME") ? CentralDb.Str(r, "DESTNAME") : "");
 
     private static ErrorEntry MapError(FbDataReader r) => new()
     {
