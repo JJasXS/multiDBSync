@@ -164,6 +164,34 @@ public sealed class OtpAuthServiceTests
         HostHardening.EnsureProductionAllowedHosts(env, config, NullLogger.Instance);
     }
 
+    [Theory]
+    [InlineData("10.0.0.5", true)]
+    [InlineData("192.168.100.201", true)]
+    [InlineData("172.16.1.1", true)]
+    [InlineData("172.31.255.1", true)]
+    [InlineData("172.15.0.1", false)]
+    [InlineData("127.0.0.1", false)]
+    [InlineData("8.8.8.8", false)]
+    public void HostHardening_PrivateLanIpv4(string ip, bool expected) =>
+        Assert.Equal(expected, HostHardening.IsPrivateLanIpv4(System.Net.IPAddress.Parse(ip)));
+
+    [Fact]
+    public void HostHardening_GetLocalLanHosts_IncludesMachineAndPrivateIps()
+    {
+        var hosts = HostHardening.GetLocalLanHosts(
+            () => new[]
+            {
+                System.Net.IPAddress.Parse("192.168.1.10"),
+                System.Net.IPAddress.Parse("8.8.8.8"),
+                System.Net.IPAddress.Parse("127.0.0.1"),
+            },
+            machineName: "OFFICE-SERVER");
+        Assert.Contains("OFFICE-SERVER", hosts);
+        Assert.Contains("192.168.1.10", hosts);
+        Assert.DoesNotContain("8.8.8.8", hosts);
+        Assert.DoesNotContain("127.0.0.1", hosts);
+    }
+
     [Fact]
     public void ForwardedHeaders_ParsesCidr()
     {

@@ -2,8 +2,10 @@
 using Amazon.SecretsManager;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HostFiltering;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using SqlAccountSync.Authorization;
 using SqlAccountSync.Data;
 using SqlAccountSync.Helpers;
@@ -308,8 +310,14 @@ var razorPages = builder.Services.AddRazorPages(options =>
 if (builder.Environment.IsDevelopment())
     razorPages.AddRazorRuntimeCompilation();
 
+HostHardening.RegisterLanAllowedHosts(builder.Services, builder.Configuration);
+
 var app = builder.Build();
 HostHardening.EnsureProductionAllowedHosts(app.Environment, app.Configuration, app.Logger);
+{
+    var allowed = app.Services.GetRequiredService<IOptions<HostFilteringOptions>>().Value.AllowedHosts;
+    app.Logger.LogInformation("AllowedHosts effective: {Hosts}", string.Join("; ", allowed));
+}
 
 app.UseForwardedHeaders();
 
