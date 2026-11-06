@@ -50,12 +50,15 @@ public static class HostHardening
             if (extras.Count == 0)
                 return;
 
-            var existing = new HashSet<string>(options.AllowedHosts, StringComparer.OrdinalIgnoreCase);
+            // Config binding often uses a fixed-size array; replace with a mutable list.
+            var merged = new List<string>(options.AllowedHosts ?? Array.Empty<string>());
+            var existing = new HashSet<string>(merged, StringComparer.OrdinalIgnoreCase);
             foreach (var host in extras)
             {
                 if (existing.Add(host))
-                    options.AllowedHosts.Add(host);
+                    merged.Add(host);
             }
+            options.AllowedHosts = merged;
         });
     }
 
