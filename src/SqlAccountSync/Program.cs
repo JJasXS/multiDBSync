@@ -317,6 +317,16 @@ HostHardening.EnsureProductionAllowedHosts(app.Environment, app.Configuration, a
 {
     var allowed = app.Services.GetRequiredService<IOptions<HostFilteringOptions>>().Value.AllowedHosts;
     app.Logger.LogInformation("AllowedHosts effective: {Hosts}", string.Join("; ", allowed));
+    var urls = Environment.GetEnvironmentVariable("ASPNETCORE_URLS") ?? "http://0.0.0.0:5030";
+    var port = 5030;
+    var portMatch = System.Text.RegularExpressions.Regex.Match(urls, @":(\d+)");
+    if (portMatch.Success && int.TryParse(portMatch.Groups[1].Value, out var parsedPort))
+        port = parsedPort;
+    foreach (var host in HostHardening.GetLocalLanHosts())
+    {
+        var label = System.Net.IPAddress.TryParse(host, out _) ? "LAN URL" : "LAN name URL";
+        Console.WriteLine($"{label}: http://{host}:{port}/Login");
+    }
 }
 
 app.UseForwardedHeaders();
