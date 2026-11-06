@@ -271,9 +271,13 @@ builder.Services.AddHostedService<SyncWorker>();
 builder.Services.AddHostedService<AccountAutoPushWorker>();
 
 var sessionHours = builder.Configuration.GetValue("Sync:SessionHours", 8);
-var cookieSecure = builder.Environment.IsDevelopment()
-    ? CookieSecurePolicy.SameAsRequest
-    : CookieSecurePolicy.Always;
+// SameAsRequest so HTTP LAN (e.g. http://192.168.x.x:5030) can keep the auth cookie;
+// HTTPS still gets Secure cookies. Always-Secure breaks Production LAN over plain HTTP.
+var cookieSecure = CookieSecurePolicy.SameAsRequest;
+builder.Services.AddAntiforgery(options =>
+{
+    options.Cookie.SecurePolicy = cookieSecure;
+});
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
@@ -286,7 +290,6 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.Cookie.HttpOnly = true;
         options.Cookie.Name = "SqlAccountSync.Auth";
         options.Cookie.SameSite = SameSiteMode.Lax;
-        // Production: HTTPS-only auth cookie (requires TLS or a trusted proxy setting X-Forwarded-Proto).
         options.Cookie.SecurePolicy = cookieSecure;
         options.Events.OnValidatePrincipal = AuthCookieEvents.ValidatePrincipalAsync;
     });
