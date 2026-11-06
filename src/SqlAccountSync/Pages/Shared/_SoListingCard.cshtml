@@ -1,7 +1,7 @@
 @model SoListingDetails
 <section class="card txn-summary so-listing" data-so-summary data-so-status="@(string.IsNullOrWhiteSpace(Model.ErrorMessage) ? "loading" : "error")">
     <div class="card-head">
-        <h3>SO Listing &amp; Occupancy</h3>
+        <h3>Sales Order Listing &amp; Occupancy</h3>
     </div>
     <form method="get" asp-page="/Reports/SoListing" class="txn-summary-filters" data-so-filters>
         <div class="txn-filter so-filter-company">
