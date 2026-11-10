@@ -43,14 +43,21 @@ public class IndexModel : SyncPageModel
     }
 
     public List<RegisteredDatabase> Databases { get; set; } = [];
+    public List<RegisteredDatabase> FilteredDatabases { get; set; } = [];
     public List<DatabaseLink> Links { get; set; } = [];
     public bool IsSdkMode { get; private set; } = true;
     public Dictionary<string, SdkCompanyCredentials> SdkByCode { get; private set; } =
         new(StringComparer.OrdinalIgnoreCase);
 
+    [BindProperty(SupportsGet = true)]
+    public string Q { get; set; } = "";
+
     public async Task OnGetAsync()
     {
         Databases = await _registry.ListAsync(includeInactive: true);
+        FilteredDatabases = Databases
+            .Where(d => DatabaseListSearch.Matches(d.DisplayName, d.FbPath, Q))
+            .ToList();
         Links = await _registry.ListLinksAsync();
         IsSdkMode = SqlAccountingWriteProviders.IsSdk(await _writeProvider.GetAsync().ConfigureAwait(false));
         if (!IsSdkMode)

@@ -406,6 +406,35 @@ code {
   border-bottom: 1px solid var(--ice-border-soft);
 }
 .card-head h3 { margin: 0; }
+.db-companies-head {
+  flex-wrap: wrap;
+  gap: 10px 12px;
+}
+.db-companies-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 240px;
+  min-width: 0;
+  margin: 0;
+}
+.db-companies-search input[type="search"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 320px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--ice-border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ice-heading);
+  font-size: 13px;
+}
+.db-companies-search input[type="search"]:focus {
+  outline: none;
+  border-color: var(--ice-accent);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, .12);
+}
 .lede { margin: -4px 0 16px; }
 .empty { margin: 0; padding: 8px 0 4px; color: var(--ice-text-muted); font-size: 13px; }
 .empty-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }

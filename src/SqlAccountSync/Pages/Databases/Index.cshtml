@@ -1,24 +1,34 @@
 @page
 @model SqlAccountSync.Pages.Databases.IndexModel
+@using SqlAccountSync.Helpers
 @{
     ViewData["Title"] = "Databases";
     var dbError = TempData["DbError"] as string;
     var dbEditId = TempData["DbEditId"]?.ToString() ?? "";
-    string FdbFile(string? path)
-    {
-        var raw = (path ?? "").Trim().Replace('\\', '/');
-        if (raw.Length == 0) return "";
-        var i = raw.LastIndexOf('/');
-        return i >= 0 ? raw[(i + 1)..] : raw;
-    }
+    var searchQ = Model.Q ?? "";
 }
 @if (TempData["DbStatusError"] is string statusError)
 {
     <div class="flash flash-err">@statusError</div>
 }
 <div class="card">
-    <div class="card-head">
+    <div class="card-head db-companies-head">
         <h3>Companies</h3>
+        <form method="get" class="db-companies-search" role="search">
+            <label class="sr-only" for="dbCompaniesSearch">Search by name or database</label>
+            <input id="dbCompaniesSearch"
+                   type="search"
+                   name="q"
+                   value="@searchQ"
+                   placeholder="Search name or .FDB…"
+                   autocomplete="off"
+                   spellcheck="false" />
+            <button type="submit" class="btn small secondary">Search</button>
+            @if (!string.IsNullOrWhiteSpace(searchQ))
+            {
+                <a class="btn small btn-ghost" asp-page="./Index">Clear</a>
+            }
+        </form>
         @if (Model.IsAdmin)
         {
             <a class="btn small" asp-page="Create">+ Add database</a>
@@ -34,6 +44,10 @@
             }
         </p>
     }
+    else if (Model.FilteredDatabases.Count == 0)
+    {
+        <p class="empty">No companies match “@searchQ”.</p>
+    }
     else
     {
         <div class="table-wrap">
@@ -48,9 +62,9 @@
                     </tr>
                 </thead>
                 <tbody>
-                @foreach (var d in Model.Databases)
+                @foreach (var d in Model.FilteredDatabases)
                 {
-                    var fdbName = FdbFile(d.FbPath);
+                    var fdbName = DatabaseListSearch.FdbFileName(d.FbPath);
                     <tr>
                         <td><a asp-page="Details" asp-route-id="@d.DbId">@d.DisplayName</a></td>
                         <td class="db-fdb-col" title="@(string.IsNullOrWhiteSpace(d.FbPath) ? null : d.FbPath)">@(string.IsNullOrWhiteSpace(fdbName) ? "—" : @"\" + fdbName)</td>
@@ -83,7 +97,7 @@
                                         Model.SdkByCode.TryGetValue(d.DbCode ?? "", out var sdkCred);
                                         var sdkDb = !string.IsNullOrWhiteSpace(sdkCred?.Database)
                                             ? sdkCred!.Database
-                                            : FdbFile(d.FbPath);
+                                            : DatabaseListSearch.FdbFileName(d.FbPath);
                                         var sdkDcf = !string.IsNullOrWhiteSpace(sdkCred?.DcfPath)
                                             ? sdkCred!.DcfPath
                                             : @"C:\eStream\SQLAccounting\Share\SQLACC.DCF";
