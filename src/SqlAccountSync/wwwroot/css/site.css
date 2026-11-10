@@ -829,18 +829,72 @@ code {
     padding-top: 14px;
   }
 }
-.db-detail-status {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 0;
+.db-detail-page {
+  display: grid;
+  gap: 16px;
 }
-.db-detail-top {
+.db-detail-hero {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.db-detail-kicker {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--ice-text-muted);
+}
+.db-detail-title {
+  margin: 0;
+  font-size: 1.45rem;
+  line-height: 1.25;
+  color: var(--ice-heading);
+}
+.db-detail-company {
+  margin: 6px 0 0;
+  font-weight: 600;
+  color: var(--ice-heading);
+}
+.db-detail-code {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--ice-text-muted);
+}
+.db-detail-code span {
+  color: var(--ice-heading);
+  font-weight: 650;
+}
+.db-detail-hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.db-detail-test-form { margin: 0; }
+.db-detail-test-btn {
+  white-space: nowrap;
+}
+.db-detail-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ice-border-soft);
+}
+.db-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.db-detail-panel h3 {
+  margin: 0 0 14px;
+  font-size: 15px;
+  color: var(--ice-heading);
 }
 .db-detail .badge,
 .txn-detail .badge {
@@ -857,16 +911,14 @@ code {
 .db-detail .badge-master,
 .db-detail .badge-sub,
 .db-detail .badge-both { background: var(--ice-warn-soft); }
-.db-detail-company {
-  margin: -8px 0 14px;
-  font-weight: 600;
-  color: var(--ice-heading);
-}
 .db-detail-facts {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px 18px;
   margin: 0;
+}
+.db-detail-fact-wide {
+  grid-column: 1 / -1;
 }
 .db-detail-facts dt {
   margin: 0;
@@ -881,7 +933,13 @@ code {
   font-size: 14px;
   font-weight: 650;
   color: var(--ice-heading);
+  overflow-wrap: anywhere;
 }
+@media (max-width: 860px) {
+  .db-detail-grid { grid-template-columns: 1fr; }
+  .db-detail-hero { flex-direction: column; }
+}
+
 .kebab { position: relative; }
 .kebab summary {
   list-style: none;

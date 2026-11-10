@@ -727,6 +727,8 @@ public class DetailsModel : SyncPageModel
             Result = LastTest.Success ? "SUCCESS" : "FAIL",
             RequestId = RequestId.Current(HttpContext)
         });
+        // Reload so ConnStatus / LastConnOk reflect ONLINE immediately on this page.
+        await LoadAsync(id);
         Message = LastTest.Message;
         return Page();
     }

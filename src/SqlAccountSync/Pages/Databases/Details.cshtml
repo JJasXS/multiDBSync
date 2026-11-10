@@ -8,7 +8,7 @@
     ViewData["Title"] = Model.Db?.DisplayName ?? "Database";
     var d = Model.Db!;
     var showMappingsUi = FeatureOptions.Value.ShowMappingsUi;
-    var online = d.ConnStatus == "ONLINE";
+    var online = string.Equals(d.ConnStatus, "ONLINE", StringComparison.OrdinalIgnoreCase);
     var isMaster = d.DbRole is DatabaseRoles.Master or DatabaseRoles.Both;
     var statusSwitch = new ActiveSwitchView
     {
@@ -20,54 +20,84 @@
         ActiveSubCount = Model.ActiveSubCount,
         FormPage = "/Databases/Index"
     };
+    var pathShort = string.IsNullOrWhiteSpace(d.FbPath)
+        ? "—"
+        : System.IO.Path.GetFileName(d.FbPath.Replace('/', '\\'));
 }
 @if (!string.IsNullOrEmpty(Model.Message))
 {
     <div class="flash @(Model.LastTest?.Success == true ? "flash-ok" : "flash-err")">@Model.Message</div>
 }
-<div class="card db-detail">
-    <div class="db-detail-top">
-        <div class="db-detail-status">
+<div class="db-detail-page">
+    <div class="card db-detail">
+        <div class="db-detail-hero">
+            <div class="db-detail-hero-copy">
+                <p class="db-detail-kicker">Database</p>
+                <h2 class="db-detail-title">@d.DisplayName</h2>
+                @if (!string.IsNullOrWhiteSpace(d.CompanyName)
+                    && !string.Equals(d.CompanyName.Trim(), d.DisplayName.Trim(), StringComparison.OrdinalIgnoreCase))
+                {
+                    <p class="db-detail-company">@d.CompanyName</p>
+                }
+                <p class="db-detail-code">Code <span>@d.DbCode</span> · File <span title="@d.FbPath">@pathShort</span></p>
+            </div>
+            <div class="db-detail-hero-actions">
+                @if (Model.CanOperate)
+                {
+                    <form method="post" asp-page-handler="Test" class="db-detail-test-form">
+                        <button type="submit" class="btn db-detail-test-btn">Test connection</button>
+                    </form>
+                }
+                <details class="kebab">
+                    <summary aria-label="More actions">
+                        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="5" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="19" r="1.6" fill="currentColor"/></svg>
+                    </summary>
+                    <div class="kebab-menu">
+                        @if (Model.IsAdmin)
+                        {
+                            <button type="button" id="openEditDatabase">Edit</button>
+                        }
+                        @if (MenuFlags.ShowDocumentTransfer)
+                        {
+                            <a asp-page="/Transactions/Index">Document transfer</a>
+                        }
+                        <a asp-page="/Logs">View logs</a>
+                        @if (showMappingsUi)
+                        {
+                            <a asp-page="/Mappings/Index" asp-route-entity="ITEM">View mappings</a>
+                        }
+                    </div>
+                </details>
+            </div>
+        </div>
+
+        <div class="db-detail-status-row">
             <span class="badge badge-@(d.DbRole.ToLowerInvariant())">@d.DbRole</span>
             <span class="badge badge-@(online ? "online" : "offline")">@d.ConnStatus</span>
             <partial name="_ActiveSwitch" model="statusSwitch" />
         </div>
-        <details class="kebab">
-            <summary aria-label="Actions">
-                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="5" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="19" r="1.6" fill="currentColor"/></svg>
-            </summary>
-            <div class="kebab-menu">
-                <form method="post" asp-page-handler="Test">
-                    <button type="submit">Test connection</button>
-                </form>
-                @if (Model.IsAdmin)
-                {
-                    <button type="button" id="openEditDatabase">Edit</button>
-                }
-                @if (MenuFlags.ShowDocumentTransfer)
-                {
-                    <a asp-page="/Transactions/Index">Document transfer</a>
-                }
-                <a asp-page="/Logs">View logs</a>
-                @if (showMappingsUi)
-                {
-                    <a asp-page="/Mappings/Index" asp-route-entity="ITEM">View mappings</a>
-                }
-            </div>
-        </details>
     </div>
-    @if (!string.IsNullOrWhiteSpace(d.CompanyName)
-        && !string.Equals(d.CompanyName.Trim(), d.DisplayName.Trim(), StringComparison.OrdinalIgnoreCase))
-    {
-        <p class="db-detail-company">@d.CompanyName</p>
-    }
-    <dl class="db-detail-facts">
-        <div><dt>Host</dt><dd>@d.FbHost</dd></div>
-        <div><dt>Port</dt><dd>@d.FbPort</dd></div>
-        <div><dt>User</dt><dd>@d.FbUser</dd></div>
-        <div><dt>Last connection</dt><dd>@(d.LastConnOk?.ToString("yyyy-MM-dd HH:mm") ?? "—")</dd></div>
-        <div><dt>Last sync</dt><dd>@(d.LastSyncOk?.ToString("yyyy-MM-dd HH:mm") ?? "—")</dd></div>
-    </dl>
+
+    <div class="db-detail-grid">
+        <div class="card db-detail-panel">
+            <h3>Connection</h3>
+            <dl class="db-detail-facts">
+                <div><dt>Host</dt><dd>@d.FbHost</dd></div>
+                <div><dt>Port</dt><dd>@d.FbPort</dd></div>
+                <div><dt>User</dt><dd>@d.FbUser</dd></div>
+                <div class="db-detail-fact-wide"><dt>Database path</dt><dd title="@d.FbPath">@(string.IsNullOrWhiteSpace(d.FbPath) ? "—" : d.FbPath)</dd></div>
+            </dl>
+        </div>
+        <div class="card db-detail-panel">
+            <h3>Activity</h3>
+            <dl class="db-detail-facts">
+                <div><dt>Last connection</dt><dd>@(d.LastConnOk?.ToString("yyyy-MM-dd HH:mm") ?? "—")</dd></div>
+                <div><dt>Last sync</dt><dd>@(d.LastSyncOk?.ToString("yyyy-MM-dd HH:mm") ?? "—")</dd></div>
+                <div><dt>Links</dt><dd>@Model.Links.Count</dd></div>
+                <div><dt>Environment</dt><dd>@(string.IsNullOrWhiteSpace(d.Environment) ? "—" : d.Environment)</dd></div>
+            </dl>
+        </div>
+    </div>
 </div>
 @if (Model.IsAdmin)
 {
