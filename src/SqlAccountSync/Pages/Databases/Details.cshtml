@@ -101,8 +101,9 @@
 
     @if (Model.IsAdmin)
     {
-        var otherCount = Model.Attachments.Count(a => !a.IsOwn);
-        var sqlAccCount = Model.Attachments.Count(a => a.LooksLikeSqlAcc && !a.IsOwn);
+        var visible = Model.Attachments.Where(a => !a.IsSystem).ToList();
+        var otherCount = visible.Count(a => !a.IsOwn);
+        var sqlAccCount = visible.Count(a => a.LooksLikeSqlAcc && !a.IsOwn);
         <div class="card db-detail-panel db-detail-sessions">
             <div class="db-detail-sessions-head">
                 <div>
@@ -125,13 +126,17 @@
                     </button>
                 </form>
             </div>
-            @if (Model.Attachments.Count == 0)
+            @if (!string.IsNullOrWhiteSpace(Model.AttachmentsError))
             {
-                <p class="db-detail-sessions-empty">No sessions listed (database offline or monitor unavailable).</p>
+                <p class="db-detail-sessions-empty">@Model.AttachmentsError</p>
+            }
+            else if (visible.Count == 0)
+            {
+                <p class="db-detail-sessions-empty">No client sessions on this .FDB right now.</p>
             }
             else
             {
-                <p class="db-detail-sessions-meta">@Model.Attachments.Count total · @otherCount other · @sqlAccCount look like SQLACC</p>
+                <p class="db-detail-sessions-meta">@visible.Count client · @otherCount other · @sqlAccCount SQLACC</p>
                 <div class="db-detail-sessions-table-wrap">
                     <table class="db-detail-sessions-table">
                         <thead>
@@ -140,18 +145,20 @@
                                 <th>User</th>
                                 <th>Process</th>
                                 <th>Address</th>
+                                <th>PID</th>
                                 <th>Connected</th>
                                 <th></th>
                             </tr>
                         </thead>
                         <tbody>
-                        @foreach (var a in Model.Attachments)
+                        @foreach (var a in visible)
                         {
                             <tr class="@(a.IsOwn ? "is-own" : null)">
                                 <td>@a.AttachmentId</td>
                                 <td>@a.User</td>
                                 <td title="@a.RemoteProcess">@a.ProcessShort</td>
                                 <td>@a.RemoteAddress</td>
+                                <td>@(a.RemotePid?.ToString() ?? "—")</td>
                                 <td>@(a.ConnectedAt?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
                                 <td>
                                     @if (a.IsOwn)

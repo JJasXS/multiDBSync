@@ -12,7 +12,9 @@ public sealed record FirebirdAttachmentRow(
     string RemoteProcess,
     string ProcessShort,
     DateTime? ConnectedAt,
+    int? RemotePid,
     bool IsOwn,
+    bool IsSystem,
     bool LooksLikeSqlAcc);
 
 public sealed record FirebirdKickResult(
@@ -60,7 +62,7 @@ public sealed class FirebirdSessionKickService : IFirebirdSessionKickService
         var ownId = await ReadOwnAttachmentIdAsync(conn, cancellationToken).ConfigureAwait(false);
         var before = await ReadAttachmentsAsync(conn, ownId, cancellationToken).ConfigureAwait(false);
         var targets = FirebirdAttachmentKickRules.IdsToKick(
-            before.Select(r => r.AttachmentId), ownId);
+            before.Select(r => (r.AttachmentId, r.User)), ownId);
 
         if (targets.Count == 0)
         {
@@ -109,6 +111,7 @@ public sealed class FirebirdSessionKickService : IFirebirdSessionKickService
         FbConnection conn, long ownId, CancellationToken cancellationToken)
     {
         await using var cmd = conn.CreateCommand();
+        // CAST timestamp: FB 4 zoned MON$TIMESTAMP throws "Unknown time zone ID" in the .NET client.
         cmd.CommandText =
             """
             SELECT
@@ -116,7 +119,8 @@ public sealed class FirebirdSessionKickService : IFirebirdSessionKickService
               MON$USER,
               MON$REMOTE_ADDRESS,
               MON$REMOTE_PROCESS,
-              MON$TIMESTAMP
+              CAST(MON$TIMESTAMP AS TIMESTAMP) AS STARTED_AT,
+              MON$REMOTE_PID
             FROM MON$ATTACHMENTS
             ORDER BY MON$ATTACHMENT_ID
             """;
@@ -125,20 +129,24 @@ public sealed class FirebirdSessionKickService : IFirebirdSessionKickService
         await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
-            var id = reader.GetInt64(0);
-            var user = reader.IsDBNull(1) ? "" : reader.GetString(1).Trim();
-            var address = reader.IsDBNull(2) ? "" : reader.GetString(2).Trim();
-            var process = reader.IsDBNull(3) ? "" : reader.GetString(3).Trim();
-            DateTime? connected = reader.IsDBNull(4) ? null : reader.GetDateTime(4);
+            var id = Convert.ToInt64(reader.GetValue(0));
+            var user = reader.IsDBNull(1) ? "" : Convert.ToString(reader.GetValue(1))?.Trim() ?? "";
+            var address = reader.IsDBNull(2) ? "" : Convert.ToString(reader.GetValue(2))?.Trim() ?? "";
+            var process = reader.IsDBNull(3) ? "" : Convert.ToString(reader.GetValue(3))?.Trim() ?? "";
+            DateTime? connected = reader.IsDBNull(4) ? null : Convert.ToDateTime(reader.GetValue(4));
+            int? pid = reader.IsDBNull(5) ? null : Convert.ToInt32(reader.GetValue(5));
+            var isSystem = FirebirdAttachmentKickRules.IsSystemAttachment(user);
             rows.Add(new FirebirdAttachmentRow(
                 id,
                 user,
                 string.IsNullOrWhiteSpace(address) ? "—" : address,
                 process,
-                FirebirdAttachmentKickRules.ShortProcess(process),
+                isSystem ? user : FirebirdAttachmentKickRules.ShortProcess(process),
                 connected,
+                pid,
                 id == ownId,
-                FirebirdAttachmentKickRules.LooksLikeSqlAcc(process)));
+                isSystem,
+                !isSystem && FirebirdAttachmentKickRules.LooksLikeSqlAcc(process)));
         }
 
         return rows;

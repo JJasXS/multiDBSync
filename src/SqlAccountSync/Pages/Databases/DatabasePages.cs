@@ -711,6 +711,7 @@ public class DetailsModel : SyncPageModel
     public bool MessageOk { get; set; }
     public ConnectionTestResult? LastTest { get; set; }
     public IReadOnlyList<FirebirdAttachmentRow> Attachments { get; set; } = [];
+    public string AttachmentsError { get; set; } = "";
     public int ActiveSubCount { get; set; }
     public bool IsSdkMode { get; private set; } = true;
     public SdkCompanyCredentials? SdkCred { get; private set; }
@@ -783,11 +784,13 @@ public class DetailsModel : SyncPageModel
         try
         {
             Attachments = await _kick.ListAsync(Db).ConfigureAwait(false);
+            AttachmentsError = "";
         }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "Could not list Firebird attachments for db {DbId}", Db.DbId);
+            _logger.LogWarning(ex, "Could not list Firebird attachments for db {DbId}", Db.DbId);
             Attachments = [];
+            AttachmentsError = "Could not read Firebird sessions: " + CredentialRedactor.Redact(ex.Message);
         }
     }
 
