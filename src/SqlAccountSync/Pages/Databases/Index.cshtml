@@ -40,7 +40,7 @@
             <table>
                 <thead>
                     <tr>
-                        <th>Name</th><th>Role</th><th>Status</th><th>Last connection</th><th>Last sync</th>
+                        <th>Name</th><th>Database</th><th>Role</th><th>Status</th><th>Last connection</th><th>Last sync</th>
                         @if (Model.IsAdmin)
                         {
                             <th class="db-row-delete">Actions</th>
@@ -50,8 +50,10 @@
                 <tbody>
                 @foreach (var d in Model.Databases)
                 {
+                    var fdbName = FdbFile(d.FbPath);
                     <tr>
                         <td><a asp-page="Details" asp-route-id="@d.DbId">@d.DisplayName</a></td>
+                        <td class="db-fdb-col" title="@(string.IsNullOrWhiteSpace(d.FbPath) ? null : d.FbPath)">@(string.IsNullOrWhiteSpace(fdbName) ? "—" : @"\" + fdbName)</td>
                         <td><span class="badge badge-@(d.DbRole.ToLowerInvariant())">@d.DbRole</span></td>
                         <td>
                             @{
