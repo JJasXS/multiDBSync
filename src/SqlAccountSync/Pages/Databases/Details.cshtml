@@ -106,77 +106,184 @@
         var visible = Model.Attachments.Where(a => !a.IsSystem).ToList();
         var otherCount = visible.Count(a => !a.IsOwn);
         var sqlAccCount = visible.Count(a => a.LooksLikeSqlAcc && !a.IsOwn);
+        var kickCount = otherCount;
+        var subsTab = string.Equals(Model.Tab, "subs", StringComparison.OrdinalIgnoreCase);
+        var subOtherTotal = Model.SubSummaries.Sum(s => s.OtherCount);
         <div class="card db-detail-panel db-detail-sessions">
             <div class="db-detail-sessions-head">
                 <div>
                     <h3>Firebird sessions</h3>
                     <p class="db-detail-sessions-hint">
-                        Other attachments (often SQLACC.exe) can hold concurrent seats on this company.
-                        Kick others keeps your own connection.
+                        @if (Model.IsMaster)
+                        {
+                            <text>Kick other sessions on this master, or use Linked SUBs to clear other sessions on every linked company at once. Your own connection is never killed.</text>
+                        }
+                        else
+                        {
+                            <text>Other attachments (often SQLACC.exe) can hold concurrent seats. Kick others keeps your own connection.</text>
+                        }
                     </p>
                 </div>
-                <form method="post" asp-page-handler="KickOthers" class="db-detail-kick-form">
-                    <button type="submit"
-                            class="btn danger"
-                            @(otherCount == 0 ? "disabled" : null)
-                            data-confirm="Disconnect @otherCount other Firebird session(s) on @d.DisplayName? SQL Account users on this company may be forced offline."
-                            data-confirm-title="Kick other sessions"
-                            data-confirm-ok="Kick others"
-                            data-confirm-phrase="kick"
-                            data-confirm-danger>
-                        Kick other sessions (@otherCount)
-                    </button>
-                </form>
             </div>
-            @if (!string.IsNullOrWhiteSpace(Model.AttachmentsError))
+
+            @if (Model.IsMaster)
             {
-                <p class="db-detail-sessions-empty">@Model.AttachmentsError</p>
+                <div class="db-session-tabs" role="tablist" aria-label="Session scope">
+                    <a class="db-session-tab@(!subsTab ? " is-active" : null)"
+                       role="tab"
+                       aria-selected="@(!subsTab)"
+                       asp-page="./Details"
+                       asp-route-id="@d.DbId"
+                       asp-route-tab="this">This database</a>
+                    <a class="db-session-tab@(subsTab ? " is-active" : null)"
+                       role="tab"
+                       aria-selected="@subsTab"
+                       asp-page="./Details"
+                       asp-route-id="@d.DbId"
+                       asp-route-tab="subs">Linked SUBs (@Model.LinkedSubs.Count)</a>
+                </div>
             }
-            else if (visible.Count == 0)
+
+            @if (Model.IsMaster && subsTab)
             {
-                <p class="db-detail-sessions-empty">No client sessions on this .FDB right now.</p>
+                <div class="db-detail-sessions-head db-detail-sessions-subhead">
+                    <p class="db-detail-sessions-meta">
+                        @Model.LinkedSubs.Count linked SUB@(Model.LinkedSubs.Count == 1 ? "" : "s") · @subOtherTotal other session(s)
+                    </p>
+                    <form method="post" asp-page-handler="KickLinkedSubs" class="db-detail-kick-form">
+                        <input type="hidden" name="Tab" value="subs" />
+                        <button type="submit"
+                                class="btn danger"
+                                @(subOtherTotal == 0 ? "disabled" : null)
+                                data-confirm="Kick other Firebird sessions on all @Model.LinkedSubs.Count linked SUB database(s)? Your own connections on those SUBs are kept."
+                                data-confirm-title="Kick all linked SUBs"
+                                data-confirm-ok="Kick SUB others"
+                                data-confirm-phrase="kick"
+                                data-confirm-danger>
+                            Kick other sessions on all SUBs (@subOtherTotal)
+                        </button>
+                    </form>
+                </div>
+                @if (Model.LinkedSubs.Count == 0)
+                {
+                    <p class="db-detail-sessions-empty">No linked SUB databases.</p>
+                }
+                else if (Model.SubSummaries.Count == 0)
+                {
+                    <p class="db-detail-sessions-empty">Could not load SUB session summaries.</p>
+                }
+                else
+                {
+                    <div class="db-detail-sessions-table-wrap">
+                        <table class="db-detail-sessions-table">
+                            <thead>
+                                <tr>
+                                    <th>SUB</th>
+                                    <th>Database</th>
+                                    <th>Clients</th>
+                                    <th>Other</th>
+                                    <th>SQLACC</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            @foreach (var s in Model.SubSummaries)
+                            {
+                                <tr>
+                                    <td><a asp-page="./Details" asp-route-id="@s.DbId">@s.DisplayName</a></td>
+                                    <td class="db-fdb-col">@(string.IsNullOrWhiteSpace(s.FdbFile) ? "—" : @"\" + s.FdbFile)</td>
+                                    <td>@s.ClientCount</td>
+                                    <td>@s.OtherCount</td>
+                                    <td>@s.SqlAccCount</td>
+                                    <td>
+                                        @if (!string.IsNullOrWhiteSpace(s.Error))
+                                        {
+                                            <span class="db-detail-sessions-empty" title="@s.Error">Error</span>
+                                        }
+                                        else if (s.OtherCount == 0)
+                                        {
+                                            <span class="badge badge-own">Clear</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+                }
             }
             else
             {
-                <p class="db-detail-sessions-meta">@visible.Count client · @otherCount other · @sqlAccCount SQLACC</p>
-                <div class="db-detail-sessions-table-wrap">
-                    <table class="db-detail-sessions-table">
-                        <thead>
-                            <tr>
-                                <th>Id</th>
-                                <th>User</th>
-                                <th>Process</th>
-                                <th>Address</th>
-                                <th>PID</th>
-                                <th>Connected</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                        @foreach (var a in visible)
+                <div class="db-detail-sessions-head db-detail-sessions-subhead">
+                    <p class="db-detail-sessions-meta">
+                        @if (!string.IsNullOrWhiteSpace(Model.AttachmentsError))
                         {
-                            <tr class="@(a.IsOwn ? "is-own" : null)">
-                                <td>@a.AttachmentId</td>
-                                <td>@a.User</td>
-                                <td title="@a.RemoteProcess">@a.ProcessShort</td>
-                                <td>@a.RemoteAddress</td>
-                                <td>@(a.RemotePid?.ToString() ?? "—")</td>
-                                <td>@(a.ConnectedAt?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
-                                <td>
-                                    @if (a.IsOwn)
-                                    {
-                                        <span class="badge badge-own">You</span>
-                                    }
-                                    else if (a.LooksLikeSqlAcc)
-                                    {
-                                        <span class="badge badge-sqlacc">SQLACC</span>
-                                    }
-                                </td>
-                            </tr>
+                            @Model.AttachmentsError
                         }
-                        </tbody>
-                    </table>
+                        else if (visible.Count == 0)
+                        {
+                            <text>No client sessions on this .FDB right now.</text>
+                        }
+                        else
+                        {
+                            <text>@visible.Count client · @otherCount other · @sqlAccCount SQLACC</text>
+                        }
+                    </p>
+                    <form method="post" asp-page-handler="KickOthers" class="db-detail-kick-form">
+                        <input type="hidden" name="Tab" value="this" />
+                        <button type="submit"
+                                class="btn danger"
+                                @(kickCount == 0 ? "disabled" : null)
+                                data-confirm="Disconnect @kickCount other Firebird session(s) on @d.DisplayName? Your own connection is kept."
+                                data-confirm-title="Kick other sessions"
+                                data-confirm-ok="Kick others"
+                                data-confirm-phrase="kick"
+                                data-confirm-danger>
+                            Kick other sessions (@kickCount)
+                        </button>
+                    </form>
                 </div>
+                @if (string.IsNullOrWhiteSpace(Model.AttachmentsError) && visible.Count > 0)
+                {
+                    <div class="db-detail-sessions-table-wrap">
+                        <table class="db-detail-sessions-table">
+                            <thead>
+                                <tr>
+                                    <th>Id</th>
+                                    <th>User</th>
+                                    <th>Process</th>
+                                    <th>Address</th>
+                                    <th>PID</th>
+                                    <th>Connected</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            @foreach (var a in visible)
+                            {
+                                <tr class="@(a.IsOwn ? "is-own" : null)">
+                                    <td>@a.AttachmentId</td>
+                                    <td>@a.User</td>
+                                    <td title="@a.RemoteProcess">@a.ProcessShort</td>
+                                    <td>@a.RemoteAddress</td>
+                                    <td>@(a.RemotePid?.ToString() ?? "—")</td>
+                                    <td>@(a.ConnectedAt?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+                                    <td>
+                                        @if (a.IsOwn)
+                                        {
+                                            <span class="badge badge-own">You</span>
+                                        }
+                                        else if (a.LooksLikeSqlAcc)
+                                        {
+                                            <span class="badge badge-sqlacc">SQLACC</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+                }
             }
         </div>
     }

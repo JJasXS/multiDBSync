@@ -25,6 +25,25 @@ public sealed record FirebirdKickResult(
     int Failed,
     IReadOnlyList<FirebirdAttachmentRow> Remaining);
 
+public sealed record FirebirdDbSessionSummary(
+    int DbId,
+    string DisplayName,
+    string DbCode,
+    string FdbFile,
+    int ClientCount,
+    int OtherCount,
+    int SqlAccCount,
+    string? Error);
+
+public sealed record FirebirdMultiKickResult(
+    bool Success,
+    string Message,
+    int DatabasesOk,
+    int DatabasesFailed,
+    int Killed,
+    int Failed,
+    IReadOnlyList<FirebirdDbSessionSummary> Summaries);
+
 public interface IFirebirdSessionKickService
 {
     Task<IReadOnlyList<FirebirdAttachmentRow>> ListAsync(
@@ -32,6 +51,20 @@ public interface IFirebirdSessionKickService
 
     Task<FirebirdKickResult> KickOthersAsync(
         RegisteredDatabase db, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Kick client sessions. When <paramref name="includeOwn"/> is true, opens a second
+    /// connection so the listing attachment can also be deleted (Firebird forbids
+    /// deleting CURRENT_CONNECTION on the same connection).
+    /// </summary>
+    Task<FirebirdKickResult> KickAsync(
+        RegisteredDatabase db, bool includeOwn, CancellationToken cancellationToken = default);
+
+    Task<FirebirdDbSessionSummary> SummarizeAsync(
+        RegisteredDatabase db, CancellationToken cancellationToken = default);
+
+    Task<FirebirdMultiKickResult> KickOthersOnManyAsync(
+        IReadOnlyList<RegisteredDatabase> databases, CancellationToken cancellationToken = default);
 }
 
 public sealed class FirebirdSessionKickService : IFirebirdSessionKickService
@@ -55,47 +88,167 @@ public sealed class FirebirdSessionKickService : IFirebirdSessionKickService
         return await ReadAttachmentsAsync(conn, ownId, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<FirebirdKickResult> KickOthersAsync(
+    public Task<FirebirdKickResult> KickOthersAsync(
         RegisteredDatabase db, CancellationToken cancellationToken = default)
+        => KickAsync(db, includeOwn: false, cancellationToken);
+
+    public async Task<FirebirdKickResult> KickAsync(
+        RegisteredDatabase db, bool includeOwn, CancellationToken cancellationToken = default)
     {
-        await using var conn = await _factory.OpenAsync(db, cancellationToken).ConfigureAwait(false);
-        var ownId = await ReadOwnAttachmentIdAsync(conn, cancellationToken).ConfigureAwait(false);
-        var before = await ReadAttachmentsAsync(conn, ownId, cancellationToken).ConfigureAwait(false);
+        await using var probe = await _factory.OpenAsync(db, cancellationToken).ConfigureAwait(false);
+        var ownId = await ReadOwnAttachmentIdAsync(probe, cancellationToken).ConfigureAwait(false);
+        var before = await ReadAttachmentsAsync(probe, ownId, cancellationToken).ConfigureAwait(false);
         var targets = FirebirdAttachmentKickRules.IdsToKick(
-            before.Select(r => (r.AttachmentId, r.User)), ownId);
+            before.Select(r => (r.AttachmentId, r.User)), ownId, includeOwn);
 
         if (targets.Count == 0)
         {
             return new FirebirdKickResult(
                 true,
-                "No other Firebird sessions on this database.",
+                includeOwn
+                    ? "No client Firebird sessions on this database."
+                    : "No other Firebird sessions on this database.",
                 ownId,
                 0,
                 0,
                 before);
         }
 
+        var needsSecond = includeOwn && targets.Contains(ownId);
+        if (!needsSecond)
+            return await KickWithConnectionAsync(db, probe, ownId, targets, includeOwn, cancellationToken)
+                .ConfigureAwait(false);
+
+        await using var killer = await _factory.OpenAsync(db, cancellationToken).ConfigureAwait(false);
+        return await KickWithConnectionAsync(db, killer, ownId: 0, targets, includeOwn, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public async Task<FirebirdDbSessionSummary> SummarizeAsync(
+        RegisteredDatabase db, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var rows = await ListAsync(db, cancellationToken).ConfigureAwait(false);
+            var clients = rows.Where(r => !r.IsSystem).ToList();
+            return new FirebirdDbSessionSummary(
+                db.DbId,
+                db.DisplayName,
+                db.DbCode,
+                DatabaseListSearch.FdbFileName(db.FbPath),
+                clients.Count,
+                clients.Count(r => !r.IsOwn),
+                clients.Count(r => r.LooksLikeSqlAcc && !r.IsOwn),
+                null);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not summarize Firebird sessions for {DbCode}", db.DbCode);
+            return new FirebirdDbSessionSummary(
+                db.DbId,
+                db.DisplayName,
+                db.DbCode,
+                DatabaseListSearch.FdbFileName(db.FbPath),
+                0,
+                0,
+                0,
+                CredentialRedactor.Redact(ex.Message));
+        }
+    }
+
+    public async Task<FirebirdMultiKickResult> KickOthersOnManyAsync(
+        IReadOnlyList<RegisteredDatabase> databases, CancellationToken cancellationToken = default)
+    {
+        var summaries = new List<FirebirdDbSessionSummary>();
+        var killed = 0;
+        var failed = 0;
+        var dbOk = 0;
+        var dbFail = 0;
+
+        foreach (var db in databases)
+        {
+            try
+            {
+                var result = await KickOthersAsync(db, cancellationToken).ConfigureAwait(false);
+                killed += result.Killed;
+                failed += result.Failed;
+                if (result.Success)
+                    dbOk++;
+                else
+                    dbFail++;
+
+                var clients = result.Remaining.Where(r => !r.IsSystem).ToList();
+                summaries.Add(new FirebirdDbSessionSummary(
+                    db.DbId,
+                    db.DisplayName,
+                    db.DbCode,
+                    DatabaseListSearch.FdbFileName(db.FbPath),
+                    clients.Count,
+                    clients.Count(r => !r.IsOwn),
+                    clients.Count(r => r.LooksLikeSqlAcc && !r.IsOwn),
+                    result.Success ? null : result.Message));
+            }
+            catch (Exception ex)
+            {
+                dbFail++;
+                _logger.LogWarning(ex, "Kick others failed on linked DB {DbCode}", db.DbCode);
+                summaries.Add(new FirebirdDbSessionSummary(
+                    db.DbId,
+                    db.DisplayName,
+                    db.DbCode,
+                    DatabaseListSearch.FdbFileName(db.FbPath),
+                    0,
+                    0,
+                    0,
+                    CredentialRedactor.Redact(ex.Message)));
+            }
+        }
+
+        var ok = dbFail == 0;
+        var message = databases.Count == 0
+            ? "No linked SUB databases."
+            : ok
+                ? $"Kicked {killed} other session(s) across {dbOk} SUB database(s)."
+                : $"Kicked {killed} session(s) across {dbOk} SUB(s); {dbFail} database(s) had errors ({failed} session failures).";
+
+        return new FirebirdMultiKickResult(ok, message, dbOk, dbFail, killed, failed, summaries);
+    }
+
+    private async Task<FirebirdKickResult> KickWithConnectionAsync(
+        RegisteredDatabase db,
+        FbConnection killer,
+        long ownId,
+        IReadOnlyList<long> targets,
+        bool includeOwn,
+        CancellationToken cancellationToken)
+    {
         var killed = 0;
         var failed = 0;
         foreach (var id in targets)
         {
-            if (await TryDeleteAttachmentAsync(conn, id, cancellationToken).ConfigureAwait(false))
+            if (await TryDeleteAttachmentAsync(killer, id, cancellationToken).ConfigureAwait(false))
                 killed++;
             else
                 failed++;
         }
 
-        var remaining = await ReadAttachmentsAsync(conn, ownId, cancellationToken).ConfigureAwait(false);
+        var remainingOwn = ownId > 0
+            ? ownId
+            : await ReadOwnAttachmentIdAsync(killer, cancellationToken).ConfigureAwait(false);
+        var remaining = await ReadAttachmentsAsync(killer, remainingOwn, cancellationToken)
+            .ConfigureAwait(false);
         var ok = failed == 0;
         var message = ok
-            ? $"Kicked {killed} other session(s). Your connection was kept."
+            ? includeOwn
+                ? $"Kicked {killed} session(s), including this app’s connection if it was listed."
+                : $"Kicked {killed} other session(s). Your connection was kept."
             : $"Kicked {killed} session(s); {failed} could not be closed.";
 
         _logger.LogInformation(
-            "Firebird kick-others on {DbCode}: killed={Killed} failed={Failed} own={OwnId}",
-            db.DbCode, killed, failed, ownId);
+            "Firebird kick on {DbCode}: includeOwn={IncludeOwn} killed={Killed} failed={Failed}",
+            db.DbCode, includeOwn, killed, failed);
 
-        return new FirebirdKickResult(ok, message, ownId, killed, failed, remaining);
+        return new FirebirdKickResult(ok, message, remainingOwn, killed, failed, remaining);
     }
 
     private static async Task<long> ReadOwnAttachmentIdAsync(

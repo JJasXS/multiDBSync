@@ -418,10 +418,8 @@ code {
   min-width: 0;
   margin: 0;
 }
-.db-companies-search input[type="search"] {
-  flex: 1 1 auto;
-  min-width: 0;
-  max-width: 320px;
+.db-companies-search input[type="search"],
+.db-companies-role {
   height: 32px;
   padding: 0 10px;
   border: 1px solid var(--ice-border);
@@ -430,7 +428,17 @@ code {
   color: var(--ice-heading);
   font-size: 13px;
 }
-.db-companies-search input[type="search"]:focus {
+.db-companies-search input[type="search"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 320px;
+}
+.db-companies-role {
+  flex: 0 0 auto;
+  min-width: 118px;
+}
+.db-companies-search input[type="search"]:focus,
+.db-companies-role:focus {
   outline: none;
   border-color: var(--ice-accent);
   box-shadow: 0 0 0 3px rgba(37, 99, 235, .12);
@@ -992,7 +1000,42 @@ code {
   gap: 16px;
   margin-bottom: 12px;
 }
+.db-detail-sessions-subhead {
+  align-items: center;
+  margin-top: 4px;
+}
+.db-detail-sessions-subhead .db-detail-sessions-meta {
+  margin: 0;
+}
 .db-detail-sessions-head h3 { margin-bottom: 6px; }
+.db-session-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 0 0 14px;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--ice-surface-alt, #eef3f8);
+  width: fit-content;
+  max-width: 100%;
+}
+.db-session-tab {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--ice-text-muted);
+  text-decoration: none;
+}
+.db-session-tab:hover {
+  color: var(--ice-heading);
+}
+.db-session-tab.is-active {
+  background: #fff;
+  color: var(--ice-heading);
+  box-shadow: 0 1px 2px rgba(15, 40, 70, .08);
+}
 .db-detail-sessions-hint {
   margin: 0;
   max-width: 52ch;

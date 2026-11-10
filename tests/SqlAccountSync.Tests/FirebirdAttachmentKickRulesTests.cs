@@ -29,6 +29,20 @@ public class FirebirdAttachmentKickRulesTests
         Assert.Empty(ids);
     }
 
+    [Fact]
+    public void IdsToKick_includeOwn_keeps_own_excludes_system()
+    {
+        var ids = FirebirdAttachmentKickRules.IdsToKick(
+            [
+                (3, "SYSDBA"),
+                (8, "Cache Writer"),
+                (12, "SYSDBA"),
+            ],
+            ownAttachmentId: 3,
+            includeOwn: true);
+        Assert.Equal([3L, 12L], ids);
+    }
+
     [Theory]
     [InlineData(@"C:\SQL Accounting\SQLACC.EXE", "SQLACC.EXE")]
     [InlineData("/opt/app/SqlAccountSync.dll", "SqlAccountSync.dll")]

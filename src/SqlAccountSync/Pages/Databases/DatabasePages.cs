@@ -52,11 +52,14 @@ public class IndexModel : SyncPageModel
     [BindProperty(SupportsGet = true)]
     public string Q { get; set; } = "";
 
+    [BindProperty(SupportsGet = true)]
+    public string Role { get; set; } = "ALL";
+
     public async Task OnGetAsync()
     {
         Databases = await _registry.ListAsync(includeInactive: true);
         FilteredDatabases = Databases
-            .Where(d => DatabaseListSearch.Matches(d.DisplayName, d.FbPath, Q))
+            .Where(d => DatabaseListSearch.Matches(d.DisplayName, d.FbPath, d.DbRole, Q, Role))
             .ToList();
         Links = await _registry.ListLinksAsync();
         IsSdkMode = SqlAccountingWriteProviders.IsSdk(await _writeProvider.GetAsync().ConfigureAwait(false));
@@ -714,19 +717,27 @@ public class DetailsModel : SyncPageModel
 
     public RegisteredDatabase? Db { get; set; }
     public List<DatabaseLink> Links { get; set; } = [];
+    public List<RegisteredDatabase> LinkedSubs { get; set; } = [];
+    public IReadOnlyList<FirebirdDbSessionSummary> SubSummaries { get; set; } = [];
     public string Message { get; set; } = "";
     public bool MessageOk { get; set; }
     public ConnectionTestResult? LastTest { get; set; }
     public IReadOnlyList<FirebirdAttachmentRow> Attachments { get; set; } = [];
     public string AttachmentsError { get; set; } = "";
     public int ActiveSubCount { get; set; }
+    public bool IsMaster { get; private set; }
     public bool IsSdkMode { get; private set; } = true;
     public SdkCompanyCredentials? SdkCred { get; private set; }
+
+    [BindProperty(SupportsGet = true)]
+    public string Tab { get; set; } = "this";
 
     public async Task<IActionResult> OnGetAsync(int id)
     {
         if (!await LoadAsync(id)) return RedirectToPage("Index");
         await TryLoadAttachmentsAsync();
+        if (IsMaster && IsSubsTab())
+            await TryLoadSubSummariesAsync();
         return Page();
     }
 
@@ -756,9 +767,11 @@ public class DetailsModel : SyncPageModel
     {
         if (!IsAdmin) return Forbid();
         if (!await LoadAsync(id) || Db is null) return RedirectToPage("Index");
+        Tab = "this";
 
         try
         {
+            // Always keep our own attachment; only disconnect other clients.
             var result = await _kick.KickOthersAsync(Db).ConfigureAwait(false);
             Attachments = result.Remaining;
             Message = result.Message;
@@ -775,7 +788,7 @@ public class DetailsModel : SyncPageModel
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Kick other Firebird sessions failed for db {DbId}", id);
+            _logger.LogWarning(ex, "Kick Firebird sessions failed for db {DbId}", id);
             Message = "Could not list or kick Firebird sessions. Check the connection and SYSDBA rights.";
             MessageOk = false;
             await TryLoadAttachmentsAsync();
@@ -783,6 +796,46 @@ public class DetailsModel : SyncPageModel
 
         return Page();
     }
+
+    public async Task<IActionResult> OnPostKickLinkedSubsAsync(int id)
+    {
+        if (!IsAdmin) return Forbid();
+        if (!await LoadAsync(id) || Db is null) return RedirectToPage("Index");
+        Tab = "subs";
+        if (!IsMaster)
+            return Forbid();
+
+        try
+        {
+            var result = await _kick.KickOthersOnManyAsync(LinkedSubs).ConfigureAwait(false);
+            SubSummaries = result.Summaries;
+            Message = result.Message;
+            MessageOk = result.Success;
+            await _audit.WriteAsync(new AuditEntry
+            {
+                UserEmail = CurrentEmail,
+                Action = "USER KICKED LINKED SUB FIREBIRD SESSIONS",
+                DbId = id,
+                Result = result.Success ? "SUCCESS" : "PARTIAL",
+                AfterJson =
+                    $"{{\"dbsOk\":{result.DatabasesOk},\"dbsFailed\":{result.DatabasesFailed},\"killed\":{result.Killed},\"failed\":{result.Failed}}}",
+                RequestId = RequestId.Current(HttpContext)
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Kick linked SUB Firebird sessions failed for master {DbId}", id);
+            Message = "Could not kick linked SUB sessions. Check connections and SYSDBA rights.";
+            MessageOk = false;
+            await TryLoadSubSummariesAsync();
+        }
+
+        await TryLoadAttachmentsAsync();
+        return Page();
+    }
+
+    private bool IsSubsTab() =>
+        string.Equals(Tab, "subs", StringComparison.OrdinalIgnoreCase);
 
     private async Task TryLoadAttachmentsAsync()
     {
@@ -801,13 +854,35 @@ public class DetailsModel : SyncPageModel
         }
     }
 
+    private async Task TryLoadSubSummariesAsync()
+    {
+        if (!IsAdmin || !IsMaster)
+            return;
+        var list = new List<FirebirdDbSessionSummary>(LinkedSubs.Count);
+        foreach (var sub in LinkedSubs)
+            list.Add(await _kick.SummarizeAsync(sub).ConfigureAwait(false));
+        SubSummaries = list;
+    }
+
     private async Task<bool> LoadAsync(int id)
     {
         Db = await _registry.GetAsync(id);
         if (Db is null) return false;
         Links = (await _registry.ListLinksAsync()).Where(l => l.MasterDbId == id || l.SubDbId == id).ToList();
-        var activeIds = (await _registry.ListAsync()).Select(d => d.DbId).ToHashSet();
+        var all = await _registry.ListAsync(includeInactive: true);
+        var byId = all.ToDictionary(d => d.DbId);
+        var activeIds = all.Where(d => d.IsActive).Select(d => d.DbId).ToHashSet();
         ActiveSubCount = Links.Count(l => l.MasterDbId == id && activeIds.Contains(l.SubDbId));
+        IsMaster = Db.DbRole is DatabaseRoles.Master or DatabaseRoles.Both;
+        LinkedSubs = IsMaster
+            ? Links
+                .Where(l => l.MasterDbId == id)
+                .Select(l => byId.GetValueOrDefault(l.SubDbId))
+                .Where(d => d is not null)
+                .Cast<RegisteredDatabase>()
+                .OrderBy(d => d.DisplayName, StringComparer.OrdinalIgnoreCase)
+                .ToList()
+            : [];
         IsSdkMode = SqlAccountingWriteProviders.IsSdk(await _writeProvider.GetAsync().ConfigureAwait(false));
         if (IsSdkMode)
             SdkCred = await _sdkBundle.ResolveAsync(Db.DbCode).ConfigureAwait(false);

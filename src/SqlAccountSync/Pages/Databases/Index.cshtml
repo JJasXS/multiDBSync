@@ -6,6 +6,9 @@
     var dbError = TempData["DbError"] as string;
     var dbEditId = TempData["DbEditId"]?.ToString() ?? "";
     var searchQ = Model.Q ?? "";
+    var roleFilter = string.IsNullOrWhiteSpace(Model.Role) ? "ALL" : Model.Role.Trim();
+    var hasFilters = !string.IsNullOrWhiteSpace(searchQ)
+        || !roleFilter.Equals("ALL", StringComparison.OrdinalIgnoreCase);
 }
 @if (TempData["DbStatusError"] is string statusError)
 {
@@ -23,8 +26,35 @@
                    placeholder="Search name or .FDB…"
                    autocomplete="off"
                    spellcheck="false" />
+            <label class="sr-only" for="dbCompaniesRole">Filter by role</label>
+            <select id="dbCompaniesRole" name="role" class="db-companies-role" onchange="this.form.submit()">
+                @if (roleFilter.Equals("ALL", StringComparison.OrdinalIgnoreCase))
+                {
+                    <option value="ALL" selected>All roles</option>
+                }
+                else
+                {
+                    <option value="ALL">All roles</option>
+                }
+                @if (roleFilter.Equals("MASTER", StringComparison.OrdinalIgnoreCase))
+                {
+                    <option value="MASTER" selected>Master</option>
+                }
+                else
+                {
+                    <option value="MASTER">Master</option>
+                }
+                @if (roleFilter.Equals("SUB", StringComparison.OrdinalIgnoreCase))
+                {
+                    <option value="SUB" selected>Sub</option>
+                }
+                else
+                {
+                    <option value="SUB">Sub</option>
+                }
+            </select>
             <button type="submit" class="btn small secondary">Search</button>
-            @if (!string.IsNullOrWhiteSpace(searchQ))
+            @if (hasFilters)
             {
                 <a class="btn small btn-ghost" asp-page="./Index">Clear</a>
             }
@@ -46,7 +76,7 @@
     }
     else if (Model.FilteredDatabases.Count == 0)
     {
-        <p class="empty">No companies match “@searchQ”.</p>
+        <p class="empty">No companies match the current search/filter.</p>
     }
     else
     {

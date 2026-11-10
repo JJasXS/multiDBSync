@@ -2,8 +2,9 @@ namespace SqlAccountSync.Helpers;
 
 /// <summary>
 /// Pure rules for which Firebird MON$ATTACHMENTS rows may be killed.
-/// Own attachment is never included (Firebird also rejects deleting CURRENT_CONNECTION).
 /// System threads (Cache Writer / Garbage Collector) are never kick targets.
+/// Own attachment is excluded unless <paramref name="includeOwn"/> is true
+/// (caller must delete it from a different Firebird connection).
 /// </summary>
 public static class FirebirdAttachmentKickRules
 {
@@ -15,10 +16,13 @@ public static class FirebirdAttachmentKickRules
     }
 
     public static IReadOnlyList<long> IdsToKick(
-        IEnumerable<(long Id, string User)> attachments, long ownAttachmentId)
+        IEnumerable<(long Id, string User)> attachments,
+        long ownAttachmentId,
+        bool includeOwn = false)
     {
         return attachments
-            .Where(a => a.Id > 0 && a.Id != ownAttachmentId && !IsSystemAttachment(a.User))
+            .Where(a => a.Id > 0 && !IsSystemAttachment(a.User))
+            .Where(a => includeOwn || a.Id != ownAttachmentId)
             .Select(a => a.Id)
             .Distinct()
             .OrderBy(id => id)
