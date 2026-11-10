@@ -1,0 +1,75 @@
+@model IReadOnlyList<DashboardDetailRow>
+@{
+    var matrix = PnLByProjectMatrix.From(Model);
+    var projectCount = matrix.ProjectColumnCount;
+    var columnTotals = new decimal[projectCount];
+    decimal grandTotal = 0m;
+    foreach (var row in matrix.Rows)
+    {
+        for (var amountIndex = 0; amountIndex < columnTotals.Length; amountIndex++)
+            columnTotals[amountIndex] += row.Amounts[amountIndex];
+        grandTotal += row.Total;
+    }
+    string Money(decimal amount) => amount.ToString("N2", System.Globalization.CultureInfo.InvariantCulture);
+    string Text(string? value) => string.IsNullOrWhiteSpace(value) ? "---" : value;
+}
+<table class="txn-matrix pl-project-matrix" data-txn-panel="ready" aria-label="Profit and Loss by Project">
+    <thead>
+        <tr class="pl-head-companies">
+            <th class="pl-col-code pl-head-span" scope="col" rowspan="2">CODE</th>
+            <th class="pl-col-desc pl-head-span" scope="col" rowspan="2">ACCOUNT DESCRIPTION</th>
+            @foreach (var company in matrix.Companies)
+            {
+                <th class="pl-col-company-group" scope="colgroup" colspan="@company.Projects.Count" title="@company.Name">@company.Name</th>
+            }
+            <th class="pl-col-total pl-head-span" scope="col" rowspan="2">TOTAL AMOUNT</th>
+        </tr>
+        <tr class="pl-head-projects">
+            @foreach (var company in matrix.Companies)
+            {
+                foreach (var project in company.Projects)
+                {
+                    <th class="pl-col-company" scope="col" title="@project">@project</th>
+                }
+            }
+        </tr>
+    </thead>
+    <tbody>
+        @if (matrix.Rows.Count == 0)
+        {
+            <tr>
+                <td class="txn-no-records" colspan="@(projectCount + 3)">No transaction data to display.</td>
+            </tr>
+        }
+        else
+        {
+            foreach (var row in matrix.Rows)
+            {
+                <tr>
+                    <td class="pl-col-code" title="@row.Code">@Text(row.Code)</td>
+                    <td class="pl-col-desc" title="@row.Description">@Text(row.Description)</td>
+                    @foreach (var amount in row.Amounts)
+                    {
+                        <td class="pl-col-company">@Money(amount)</td>
+                    }
+                    <td class="pl-col-total">@Money(row.Total)</td>
+                </tr>
+            }
+        }
+    </tbody>
+    @if (matrix.Rows.Count > 0)
+    {
+        <tfoot>
+            <tr class="pl-row-total">
+                @* Split CODE+DESC instead of colspan=2 — sticky left is unreliable on colspan cells. *@
+                <th class="pl-col-code pl-total-code" scope="row">TOTAL</th>
+                <th class="pl-col-desc pl-total-desc" aria-hidden="true"></th>
+                @foreach (var amount in columnTotals)
+                {
+                    <td class="pl-col-company">@Money(amount)</td>
+                }
+                <td class="pl-col-total">@Money(grandTotal)</td>
+            </tr>
+        </tfoot>
+    }
+</table>

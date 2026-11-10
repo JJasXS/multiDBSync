@@ -1,0 +1,202 @@
+@model DashboardDetailsModel
+<section class="card txn-summary pl-by-project" data-txn-summary>
+    <div class="card-head">
+        <h3>Profit &amp; Loss by Project</h3>
+    </div>
+    <partial name="_PnLByProjectFilters" />
+    <div class="table-wrap txn-summary-scroll">
+        <div data-txn-results>
+            <partial name="_PnLByProjectResults" model="Model.Rows" />
+        </div>
+        <p class="empty txn-summary-status" data-txn-panel="loading" hidden>Loading transaction data.</p>
+        <p class="empty txn-summary-status" data-txn-panel="error" hidden>Transaction data could not be loaded.</p>
+    </div>
+    <script>
+        (() => {
+            const root = document.querySelector("[data-txn-summary]");
+            if (!root) return;
+
+            // Local preview only. Set showEmpty to true to preview the empty message.
+            // status accepts "ready", "empty", "loading", or "error".
+            const txnPreview = {
+                showEmpty: false,
+                status: "loading"
+            };
+
+            const filters = root.querySelector("[data-txn-filters]");
+            const panels = () => root.querySelectorAll("[data-txn-panel]");
+            const toggles = () => [...root.querySelectorAll("[data-txn-col-toggle]")];
+
+            const resolveStatus = () => txnPreview.showEmpty ? "empty" : txnPreview.status;
+
+            const applyStatus = () => {
+                const status = resolveStatus();
+                panels().forEach((panel) => {
+                    panel.hidden = panel.getAttribute("data-txn-panel") !== status;
+                });
+            };
+
+            const applyColumns = () => {
+                const boxes = toggles();
+                const selected = new Set(boxes.filter((box) => box.checked).map((box) => box.value));
+                root.querySelectorAll("[data-txn-col]").forEach((cell) => {
+                    cell.hidden = !selected.has(cell.getAttribute("data-txn-col"));
+                });
+                const count = selected.size;
+                root.querySelectorAll("[data-txn-record], [data-txn-empty]").forEach((cell) => {
+                    cell.hidden = count === 0;
+                    if (count > 0) cell.colSpan = count;
+                });
+                const subhead = root.querySelector("[data-txn-subhead]");
+                if (subhead) subhead.hidden = count === 0;
+                const summary = root.querySelector("[data-txn-col-summary]");
+                if (!summary) return;
+                if (count === boxes.length) summary.textContent = "All columns";
+                else if (count === 0) summary.textContent = "None";
+                else summary.textContent = boxes
+                    .filter((box) => box.checked)
+                    .map((box) => box.parentElement?.querySelector("span")?.textContent ?? box.value)
+                    .join(", ");
+            };
+
+            const dbBoxes = () => [...root.querySelectorAll("[data-txn-db]")];
+            const allDatabases = root.querySelector("[data-txn-db-all]");
+            let syncingDatabases = false;
+
+            const applyDatabases = () => {
+                const boxes = dbBoxes();
+                const selected = boxes.filter((box) => box.checked);
+                if (allDatabases) {
+                    syncingDatabases = true;
+                    allDatabases.checked = boxes.length > 0 && selected.length === boxes.length;
+                    syncingDatabases = false;
+                }
+                const summary = root.querySelector("[data-txn-db-summary]");
+                if (!summary) return;
+                if (boxes.length === 0 || selected.length === boxes.length) summary.textContent = "All companies";
+                else if (selected.length === 0) summary.textContent = "None";
+                else summary.textContent = selected
+                    .map((box) => box.getAttribute("data-txn-db-label") || box.value)
+                    .join(", ");
+            };
+
+            const results = root.querySelector("[data-txn-results]");
+            const refreshDelayMs = 300;
+            let refreshTimer = 0;
+            let requestSeq = 0;
+
+            const showLoading = () => {
+                txnPreview.status = "loading";
+                applyStatus();
+                root.setAttribute("aria-busy", "true");
+            };
+
+            const refreshDetails = async () => {
+                if (!filters || !results) return;
+                const seq = ++requestSeq;
+                showLoading();
+                const query = new URLSearchParams(new FormData(filters));
+                query.set("handler", "Details");
+                try {
+                    const response = await fetch(`${filters.getAttribute("action")}?${query}`, {
+                        headers: { "X-Requested-With": "fetch" }
+                    });
+                    if (seq !== requestSeq) return;
+                    if (!response.ok) throw new Error(String(response.status));
+                    results.innerHTML = await response.text();
+                    txnPreview.status = "ready";
+                    applyStatus();
+                    applyColumns();
+                    root.removeAttribute("aria-busy");
+                    const pageQuery = new URLSearchParams(new FormData(filters));
+                    const pageUrl = new URL(filters.getAttribute("action"), window.location.href);
+                    pageUrl.search = pageQuery.toString();
+                    history.replaceState(null, "", pageUrl);
+                } catch {
+                    if (seq !== requestSeq) return;
+                    txnPreview.status = "error";
+                    applyStatus();
+                    root.removeAttribute("aria-busy");
+                }
+            };
+
+            const scheduleRefresh = () => {
+                window.clearTimeout(refreshTimer);
+                refreshTimer = window.setTimeout(() => { refreshDetails(); }, refreshDelayMs);
+            };
+
+            allDatabases?.addEventListener("change", () => {
+                if (syncingDatabases) return;
+                dbBoxes().forEach((box) => { box.checked = allDatabases.checked; });
+                applyDatabases();
+                scheduleRefresh();
+            });
+            dbBoxes().forEach((box) => box.addEventListener("change", () => {
+                applyDatabases();
+                scheduleRefresh();
+            }));
+
+            toggles().forEach((box) => box.addEventListener("change", applyColumns));
+
+            root.querySelector("[data-txn-date-from]")?.addEventListener("change", scheduleRefresh);
+            root.querySelector("[data-txn-date-to]")?.addEventListener("change", scheduleRefresh);
+
+            const downloadReport = (params) => {
+                if (!filters) return;
+                const url = new URL(filters.getAttribute("action"), window.location.href);
+                url.search = params.toString();
+                const link = document.createElement("a");
+                link.href = url.toString();
+                link.click();
+            };
+
+            root.querySelector("[data-pl-export]")?.addEventListener("click", () => {
+                if (!filters) return;
+                const params = new URLSearchParams(new FormData(filters));
+                params.set("handler", "ExportExcel");
+                downloadReport(params);
+            });
+
+            root.querySelector("[data-pl-refresh]")?.addEventListener("click", () => {
+                window.clearTimeout(refreshTimer);
+                refreshDetails();
+            });
+
+            filters?.addEventListener("submit", (event) => {
+                event.preventDefault();
+                window.clearTimeout(refreshTimer);
+                refreshDetails();
+            });
+
+            document.addEventListener("click", (event) => {
+                root.querySelectorAll("details.txn-col-menu, details.report-load-warning").forEach((menu) => {
+                    if (!menu.contains(event.target)) menu.removeAttribute("open");
+                });
+            });
+
+            root.addEventListener("click", (event) => {
+                const toggle = event.target.closest("[data-txn-db-toggle]");
+                if (!toggle || !root.contains(toggle)) return;
+                const group = toggle.closest("[data-txn-db-group]");
+                const willOpen = toggle.getAttribute("aria-expanded") === "false";
+                root.querySelectorAll("[data-txn-db-group]").forEach((item) => {
+                    const button = item.querySelector("[data-txn-db-toggle]");
+                    const open = willOpen && item === group;
+                    item.classList.toggle("is-collapsed", !open);
+                    button?.setAttribute("aria-expanded", open ? "true" : "false");
+                });
+            });
+
+            root.addEventListener("keydown", (event) => {
+                if (event.key !== "Escape") return;
+                root.querySelectorAll("details.txn-col-menu, details.report-load-warning")
+                    .forEach((menu) => menu.removeAttribute("open"));
+            });
+
+            applyColumns();
+            applyDatabases();
+            applyStatus();
+            refreshDetails();
+        })();
+    </script>
+</section>

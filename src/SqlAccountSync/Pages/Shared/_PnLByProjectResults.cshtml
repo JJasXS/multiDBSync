@@ -1,0 +1,18 @@
+@model IReadOnlyList<DashboardDetailRow>
+@{
+    var failedCompanies = ViewData["PlLoadFailures"] as IReadOnlyList<string> ?? Array.Empty<string>();
+}
+@if (failedCompanies.Count > 0)
+{
+    <div class="report-load-warning-slot" role="status" data-txn-panel="ready">
+        <partial name="_ReportLoadWarning" model="failedCompanies" />
+    </div>
+}
+@if (Model.Count == 0)
+{
+    <p class="empty txn-summary-status" data-txn-panel="ready">No transaction data to display.</p>
+}
+else
+{
+    <partial name="_PnLByProjectTable" model="Model" />
+}

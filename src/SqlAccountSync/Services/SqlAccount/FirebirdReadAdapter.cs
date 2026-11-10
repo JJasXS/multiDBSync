@@ -698,8 +698,10 @@ ORDER BY CODE";
                 var descriptionSql = accCols.Contains("DESCRIPTION", StringComparer.OrdinalIgnoreCase)
                     ? "(SELECT FIRST 1 TRIM(a.DESCRIPTION) FROM GL_ACC a WHERE UPPER(TRIM(a.CODE)) = UPPER(TRIM(t.CODE)))"
                     : "CAST(NULL AS VARCHAR(1))";
+                // TRIM PROJECT so CHAR-padded default "----" and real project codes group cleanly.
+                // Keep PROJECT separate from ACCTDESC — amounts still use LOCALDR - LOCALCR.
                 var sql = $"""
-                    SELECT t.DOCDATE, t.REF1, {descriptionSql} AS ACCTDESC, t.LOCALDR, t.LOCALCR, t.CODE
+                    SELECT t.DOCDATE, t.REF1, {descriptionSql} AS ACCTDESC, TRIM(t.PROJECT) AS PROJECT, t.LOCALDR, t.LOCALCR, t.CODE
                     FROM GL_TRANS t
                     WHERE EXISTS (
                         SELECT 1 FROM GL_ACC a
@@ -738,13 +740,20 @@ ORDER BY CODE";
                     {
                         DocDate = ReadDate(reader, "DOCDATE"),
                         Ref1 = ReadText(reader, "REF1"),
-                        Project = ReadText(reader, "ACCTDESC"),
+                        Project = ReadProjectCode(reader, "PROJECT"),
+                        AccountDescription = ReadText(reader, "ACCTDESC"),
                         Amount = ReadDecimal(reader, "LOCALDR") - ReadDecimal(reader, "LOCALCR"),
                         AccountCode = ReadText(reader, "CODE")
                     });
                 }
                 return list;
         }, CancellationToken.None);
+
+    private static string ReadProjectCode(FbDataReader reader, string name)
+    {
+        var value = ReadText(reader, name);
+        return value.Replace("\0", "", StringComparison.Ordinal).Trim();
+    }
 
     private static readonly Dictionary<string, string> SoListingFilterSql = new(StringComparer.OrdinalIgnoreCase)
     {
