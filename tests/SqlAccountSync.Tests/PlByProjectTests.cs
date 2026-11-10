@@ -74,7 +74,7 @@ public class PlByProjectTests
     private static GlTransLine Line(string code, string description, decimal amount) => new()
     {
         AccountCode = code,
-        Project = description,
+        AccountDescription = description,
         Amount = amount
     };
 
