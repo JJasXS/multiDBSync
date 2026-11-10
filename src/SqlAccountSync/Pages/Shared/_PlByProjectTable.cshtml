@@ -12,7 +12,7 @@
     string Money(decimal amount) => amount.ToString("N2", System.Globalization.CultureInfo.InvariantCulture);
     string Text(string? value) => string.IsNullOrWhiteSpace(value) ? "---" : value;
 }
-<table class="txn-matrix" data-txn-panel="ready" aria-label="Profit and Loss by company">
+<table class="txn-matrix pl-company-matrix" data-txn-panel="ready" aria-label="Profit and Loss by company">
     <thead>
         <tr>
             <th class="pl-col-code" scope="col">CODE</th>
@@ -51,7 +51,9 @@
     {
         <tfoot>
             <tr class="pl-row-total">
-                <th class="pl-total-label" colspan="2" scope="row">TOTAL</th>
+                @* Split CODE+DESC instead of colspan=2 — sticky left is unreliable on colspan cells. *@
+                <th class="pl-col-code pl-total-code" scope="row">TOTAL</th>
+                <th class="pl-col-desc pl-total-desc" aria-hidden="true"></th>
                 @foreach (var amount in columnTotals)
                 {
                     <td class="pl-col-company">@Money(amount)</td>
