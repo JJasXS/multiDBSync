@@ -1,0 +1,55 @@
+@model DashboardDetailsModel
+<form method="get" asp-page="/Reports/PnLByProject" class="txn-summary-filters" data-txn-filters
+      data-default-date-from="@Model.DefaultDateFrom.ToString("yyyy-MM-dd")"
+      data-default-date-to="@Model.DefaultDateTo.ToString("yyyy-MM-dd")">
+    <input type="hidden" name="dbFilter" value="true" />
+    <div class="txn-filter txn-filter-date">
+        <label for="pnlDateFrom">Date From</label>
+        <input id="pnlDateFrom" name="dateFrom" type="date" data-txn-date-from value="@Model.DateFrom.ToString("yyyy-MM-dd")" />
+    </div>
+    <div class="txn-filter txn-filter-date">
+        <label for="pnlDateTo">Date To</label>
+        <input id="pnlDateTo" name="dateTo" type="date" data-txn-date-to value="@Model.DateTo.ToString("yyyy-MM-dd")" />
+    </div>
+    <div class="txn-filter txn-filter-databases">
+        <label id="pnlDatabasesLabel">Company</label>
+        <details class="txn-col-menu txn-db-menu">
+            <summary aria-labelledby="pnlDatabasesLabel">
+                <span data-txn-db-summary>@(Model.AllDatabases ? "All companies" : "Selected companies")</span>
+                <svg class="txn-col-chevron" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </summary>
+            <div class="txn-col-panel" role="group" aria-label="Companies">
+                <label class="txn-col-option">
+                    <input type="checkbox" data-txn-db-all @(Model.AllDatabases ? "checked" : null) />
+                    <span>All companies</span>
+                </label>
+                @foreach (var db in Model.Databases)
+                {
+                    var selected = Model.AllDatabases || Model.SelectedDbCodes.Contains(db.DbCode);
+                    var companyLabel = (db.DisplayName ?? "").Trim();
+                    <label class="txn-col-option">
+                        <input type="checkbox" name="db" value="@db.DbCode" data-txn-db data-txn-db-label="@companyLabel" @(selected ? "checked" : null) />
+                        <span>@companyLabel</span>
+                        @if (!string.IsNullOrWhiteSpace(db.DbRole))
+                        {
+                            <span class="badge badge-@db.DbRole.ToLowerInvariant()">@db.DbRole</span>
+                        }
+                    </label>
+                }
+            </div>
+        </details>
+    </div>
+    <div class="txn-filter-actions">
+        <button type="button"
+                class="btn secondary report-refresh-btn"
+                data-pl-refresh
+                title="Refresh data"
+                aria-label="Refresh data">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+                <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+                      d="M20 12a8 8 0 1 1-2.2-5.5M20 4v5h-5"/>
+            </svg>
+        </button>
+        <button type="button" class="btn secondary" data-pl-export>Export to Excel</button>
+    </div>
+</form>

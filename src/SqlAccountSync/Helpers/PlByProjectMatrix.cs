@@ -50,7 +50,9 @@ public sealed class PlByProjectMatrix
             {
                 var code = line.AccountCode ?? "";
                 var key = code.Trim();
-                var description = (line.Project ?? "").Trim();
+                var description = (line.AccountDescription ?? "").Trim();
+                if (description.Length == 0)
+                    description = (line.Project ?? "").Trim();
                 if (!index.TryGetValue(key, out var row))
                 {
                     row = new PlByProjectMatrixRow(code, description, new decimal[companies.Count]);
