@@ -407,41 +407,95 @@ code {
 }
 .card-head h3 { margin: 0; }
 .db-companies-head {
-  flex-wrap: wrap;
-  gap: 10px 12px;
-}
-.db-companies-search {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  flex: 1 1 240px;
+  gap: 12px 16px;
+}
+.db-companies-head h3 {
+  flex: 0 0 auto;
+}
+.db-companies-toolbar {
+  display: flex;
+  flex: 1 1 520px;
+  align-items: center;
+  gap: 10px;
   min-width: 0;
   margin: 0;
 }
-.db-companies-search input[type="search"],
-.db-companies-role {
-  height: 32px;
-  padding: 0 10px;
+.db-role-switch {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: stretch;
+  padding: 3px;
+  border: 1px solid var(--ice-border-soft);
+  border-radius: 999px;
+  background: #fff;
+  gap: 2px;
+}
+.db-role-switch-opt {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ice-text-muted);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.db-role-switch-opt input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.db-role-switch-opt:hover {
+  color: var(--ice-heading);
+}
+.db-role-switch-opt.is-active {
+  color: #fff;
+  background: var(--ice-accent);
+}
+.db-companies-search-input {
+  flex: 1 1 280px;
+  min-width: 200px;
+  height: 34px;
+  padding: 0 12px;
   border: 1px solid var(--ice-border);
   border-radius: 8px;
   background: #fff;
   color: var(--ice-heading);
   font-size: 13px;
 }
-.db-companies-search input[type="search"] {
-  flex: 1 1 auto;
-  min-width: 0;
-  max-width: 320px;
-}
-.db-companies-role {
-  flex: 0 0 auto;
-  min-width: 118px;
-}
-.db-companies-search input[type="search"]:focus,
-.db-companies-role:focus {
+.db-companies-search-input:focus {
   outline: none;
   border-color: var(--ice-accent);
   box-shadow: 0 0 0 3px rgba(37, 99, 235, .12);
+}
+.db-companies-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+@media (max-width: 900px) {
+  .db-companies-toolbar {
+    flex-wrap: wrap;
+    flex-basis: 100%;
+  }
+  .db-companies-search-input {
+    flex-basis: 100%;
+    min-width: 0;
+  }
+  .db-companies-actions {
+    margin-left: 0;
+    width: 100%;
+    justify-content: flex-end;
+  }
 }
 .lede { margin: -4px 0 16px; }
 .empty { margin: 0; padding: 8px 0 4px; color: var(--ice-text-muted); font-size: 13px; }

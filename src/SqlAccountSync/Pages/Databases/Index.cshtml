@@ -17,52 +17,42 @@
 <div class="card">
     <div class="card-head db-companies-head">
         <h3>Companies</h3>
-        <form method="get" class="db-companies-search" role="search">
+        <form method="get" class="db-companies-toolbar" role="search">
+            <div class="db-role-switch" role="group" aria-label="Filter by role">
+                <label class="db-role-switch-opt@(roleFilter.Equals("ALL", StringComparison.OrdinalIgnoreCase) ? " is-active" : null)">
+                    <input type="radio" name="role" value="ALL" @(roleFilter.Equals("ALL", StringComparison.OrdinalIgnoreCase) ? "checked" : null) onchange="this.form.submit()" />
+                    All
+                </label>
+                <label class="db-role-switch-opt@(roleFilter.Equals("MASTER", StringComparison.OrdinalIgnoreCase) ? " is-active" : null)">
+                    <input type="radio" name="role" value="MASTER" @(roleFilter.Equals("MASTER", StringComparison.OrdinalIgnoreCase) ? "checked" : null) onchange="this.form.submit()" />
+                    Master
+                </label>
+                <label class="db-role-switch-opt@(roleFilter.Equals("SUB", StringComparison.OrdinalIgnoreCase) ? " is-active" : null)">
+                    <input type="radio" name="role" value="SUB" @(roleFilter.Equals("SUB", StringComparison.OrdinalIgnoreCase) ? "checked" : null) onchange="this.form.submit()" />
+                    Sub
+                </label>
+            </div>
             <label class="sr-only" for="dbCompaniesSearch">Search by name or database</label>
             <input id="dbCompaniesSearch"
+                   class="db-companies-search-input"
                    type="search"
                    name="q"
                    value="@searchQ"
                    placeholder="Search name or .FDB…"
                    autocomplete="off"
                    spellcheck="false" />
-            <label class="sr-only" for="dbCompaniesRole">Filter by role</label>
-            <select id="dbCompaniesRole" name="role" class="db-companies-role" onchange="this.form.submit()">
-                @if (roleFilter.Equals("ALL", StringComparison.OrdinalIgnoreCase))
+            <div class="db-companies-actions">
+                <button type="submit" class="btn small secondary">Search</button>
+                @if (hasFilters)
                 {
-                    <option value="ALL" selected>All roles</option>
+                    <a class="btn small btn-ghost" asp-page="./Index">Clear</a>
                 }
-                else
+                @if (Model.IsAdmin)
                 {
-                    <option value="ALL">All roles</option>
+                    <a class="btn small" asp-page="Create">+ Add database</a>
                 }
-                @if (roleFilter.Equals("MASTER", StringComparison.OrdinalIgnoreCase))
-                {
-                    <option value="MASTER" selected>Master</option>
-                }
-                else
-                {
-                    <option value="MASTER">Master</option>
-                }
-                @if (roleFilter.Equals("SUB", StringComparison.OrdinalIgnoreCase))
-                {
-                    <option value="SUB" selected>Sub</option>
-                }
-                else
-                {
-                    <option value="SUB">Sub</option>
-                }
-            </select>
-            <button type="submit" class="btn small secondary">Search</button>
-            @if (hasFilters)
-            {
-                <a class="btn small btn-ghost" asp-page="./Index">Clear</a>
-            }
+            </div>
         </form>
-        @if (Model.IsAdmin)
-        {
-            <a class="btn small" asp-page="Create">+ Add database</a>
-        }
     </div>
     @if (Model.Databases.Count == 0)
     {
