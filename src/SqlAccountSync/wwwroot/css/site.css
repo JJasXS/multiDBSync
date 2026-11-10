@@ -4106,6 +4106,129 @@ input:focus, select:focus, textarea:focus {
   box-shadow: inset 0 1px 0 var(--ice-border), -1px 0 0 var(--ice-surface-muted);
 }
 
+/* ===== P&L by company matrix: horizontal sticky columns =====
+   Same stacking approach as the project matrix: freeze CODE/DESC/TOTAL with
+   opaque backgrounds and fixed widths. Scrolling company cells keep a low
+   z-index and no transform so they slide underneath without overlap. */
+.pl-by-project:has(.pl-company-matrix) .txn-summary-scroll > [data-txn-results] {
+  display: contents;
+}
+.pl-by-project .txn-matrix.pl-company-matrix .pl-col-code,
+.pl-by-project .txn-matrix.pl-company-matrix .pl-col-desc,
+.pl-by-project .txn-matrix.pl-company-matrix .pl-col-total {
+  position: sticky;
+  overflow: hidden;
+  background-clip: padding-box;
+  transform: translateZ(0);
+  box-sizing: border-box;
+  box-shadow: none;
+}
+.pl-by-project .txn-matrix.pl-company-matrix .pl-col-code {
+  left: 0;
+  width: var(--pl-code);
+  min-width: var(--pl-code);
+  max-width: var(--pl-code);
+  z-index: 6;
+}
+.pl-by-project .txn-matrix.pl-company-matrix .pl-col-desc {
+  left: var(--pl-code);
+  width: var(--pl-desc);
+  min-width: var(--pl-desc);
+  max-width: var(--pl-desc);
+  z-index: 5;
+  border-right: 1px solid var(--ice-border);
+}
+.pl-by-project .txn-matrix.pl-company-matrix .pl-col-total {
+  right: 0;
+  width: var(--pl-total);
+  min-width: var(--pl-total);
+  max-width: var(--pl-total);
+  z-index: 6;
+  border-left: 1px solid var(--ice-border);
+}
+.pl-by-project .txn-matrix.pl-company-matrix tbody td.pl-col-code,
+.pl-by-project .txn-matrix.pl-company-matrix tbody td.pl-col-desc,
+.pl-by-project .txn-matrix.pl-company-matrix tbody td.pl-col-total {
+  background: var(--ice-surface);
+}
+.pl-by-project .txn-matrix.pl-company-matrix tbody td.pl-col-desc {
+  overflow: hidden;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.pl-by-project .txn-matrix.pl-company-matrix tbody td.pl-col-company,
+.pl-by-project .txn-matrix.pl-company-matrix tfoot td.pl-col-company {
+  position: relative;
+  left: auto;
+  right: auto;
+  z-index: 0;
+  transform: none;
+}
+.pl-by-project .txn-matrix.pl-company-matrix thead th.pl-col-company {
+  position: sticky;
+  top: 0;
+  left: auto;
+  right: auto;
+  z-index: 20;
+  transform: translateZ(0);
+  background: var(--ice-surface-muted);
+  background-clip: border-box;
+  vertical-align: middle;
+  box-shadow: none;
+  border-right: 1px solid var(--ice-border);
+  border-bottom: 1px solid var(--ice-border);
+}
+.pl-by-project .txn-matrix.pl-company-matrix thead th.pl-col-code,
+.pl-by-project .txn-matrix.pl-company-matrix thead th.pl-col-desc,
+.pl-by-project .txn-matrix.pl-company-matrix thead th.pl-col-total {
+  top: 0;
+  z-index: 30;
+  background: var(--ice-surface-muted);
+  background-clip: border-box;
+  box-shadow: none;
+  border-bottom: 1px solid var(--ice-border);
+}
+.pl-by-project .txn-matrix.pl-company-matrix tbody tr:hover td.pl-col-code,
+.pl-by-project .txn-matrix.pl-company-matrix tbody tr:hover td.pl-col-desc,
+.pl-by-project .txn-matrix.pl-company-matrix tbody tr:hover td.pl-col-total {
+  background: var(--ice-surface-alt);
+}
+.pl-by-project .txn-matrix.pl-company-matrix tfoot .pl-row-total th,
+.pl-by-project .txn-matrix.pl-company-matrix tfoot .pl-row-total td {
+  position: sticky;
+  bottom: 0;
+  font-weight: 650;
+  color: var(--ice-heading);
+  background: var(--ice-surface-muted);
+  border-top: 1px solid var(--ice-border);
+}
+.pl-by-project .txn-matrix.pl-company-matrix tfoot .pl-row-total td.pl-col-company {
+  z-index: 1;
+  left: auto;
+  right: auto;
+  transform: none;
+}
+.pl-by-project .txn-matrix.pl-company-matrix tfoot .pl-row-total th.pl-total-code,
+.pl-by-project .txn-matrix.pl-company-matrix tfoot .pl-row-total th.pl-total-desc,
+.pl-by-project .txn-matrix.pl-company-matrix tfoot .pl-row-total td.pl-col-total {
+  z-index: 20;
+  background: var(--ice-surface-muted);
+  transform: translateZ(0);
+}
+.pl-by-project .txn-matrix.pl-company-matrix tfoot .pl-row-total th.pl-total-code {
+  left: 0;
+  text-align: left;
+  box-shadow: none;
+}
+.pl-by-project .txn-matrix.pl-company-matrix tfoot .pl-row-total th.pl-total-desc {
+  left: var(--pl-code);
+  box-shadow: none;
+}
+.pl-by-project .txn-matrix.pl-company-matrix tfoot .pl-row-total td.pl-col-total {
+  right: 0;
+  box-shadow: none;
+}
+
 /* ===== P&L by Project matrix: horizontal sticky columns =====
    Chrome paints later table-cells above earlier ones unless frozen cells create a
    stacking context (translateZ). Apply that ONLY on CODE/DESC/TOTAL.
