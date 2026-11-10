@@ -241,6 +241,7 @@ builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddScoped<IErrorLogService, ErrorLogService>();
 builder.Services.AddScoped<ILogsQueryService, LogsQueryService>();
 builder.Services.AddScoped<IConnectionTestService, ConnectionTestService>();
+builder.Services.AddScoped<IFirebirdSessionKickService, FirebirdSessionKickService>();
 builder.Services.AddScoped<ISqlAccountReadAdapter, FirebirdReadAdapter>();
 builder.Services.AddScoped<IItemPrerequisiteService, ItemPrerequisiteService>();
 builder.Services.AddScoped<IFirebirdPartyInsert, FirebirdPartyInsert>();

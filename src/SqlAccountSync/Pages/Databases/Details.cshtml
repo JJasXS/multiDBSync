@@ -26,7 +26,7 @@
 }
 @if (!string.IsNullOrEmpty(Model.Message))
 {
-    <div class="flash @(Model.LastTest?.Success == true ? "flash-ok" : "flash-err")">@Model.Message</div>
+    <div class="flash @(Model.MessageOk || Model.LastTest?.Success == true ? "flash-ok" : "flash-err")">@Model.Message</div>
 }
 <div class="db-detail-page">
     <div class="card db-detail">
@@ -98,6 +98,79 @@
             </dl>
         </div>
     </div>
+
+    @if (Model.IsAdmin)
+    {
+        var otherCount = Model.Attachments.Count(a => !a.IsOwn);
+        var sqlAccCount = Model.Attachments.Count(a => a.LooksLikeSqlAcc && !a.IsOwn);
+        <div class="card db-detail-panel db-detail-sessions">
+            <div class="db-detail-sessions-head">
+                <div>
+                    <h3>Firebird sessions</h3>
+                    <p class="db-detail-sessions-hint">
+                        Other attachments (often SQLACC.exe) can hold concurrent seats on this company.
+                        Kick others keeps your own connection.
+                    </p>
+                </div>
+                <form method="post" asp-page-handler="KickOthers" class="db-detail-kick-form">
+                    <button type="submit"
+                            class="btn danger"
+                            @(otherCount == 0 ? "disabled" : null)
+                            data-confirm="Disconnect @otherCount other Firebird session(s) on @d.DisplayName? SQL Account users on this company may be forced offline."
+                            data-confirm-title="Kick other sessions"
+                            data-confirm-ok="Kick others"
+                            data-confirm-phrase="kick"
+                            data-confirm-danger>
+                        Kick other sessions (@otherCount)
+                    </button>
+                </form>
+            </div>
+            @if (Model.Attachments.Count == 0)
+            {
+                <p class="db-detail-sessions-empty">No sessions listed (database offline or monitor unavailable).</p>
+            }
+            else
+            {
+                <p class="db-detail-sessions-meta">@Model.Attachments.Count total · @otherCount other · @sqlAccCount look like SQLACC</p>
+                <div class="db-detail-sessions-table-wrap">
+                    <table class="db-detail-sessions-table">
+                        <thead>
+                            <tr>
+                                <th>Id</th>
+                                <th>User</th>
+                                <th>Process</th>
+                                <th>Address</th>
+                                <th>Connected</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var a in Model.Attachments)
+                        {
+                            <tr class="@(a.IsOwn ? "is-own" : null)">
+                                <td>@a.AttachmentId</td>
+                                <td>@a.User</td>
+                                <td title="@a.RemoteProcess">@a.ProcessShort</td>
+                                <td>@a.RemoteAddress</td>
+                                <td>@(a.ConnectedAt?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+                                <td>
+                                    @if (a.IsOwn)
+                                    {
+                                        <span class="badge badge-own">You</span>
+                                    }
+                                    else if (a.LooksLikeSqlAcc)
+                                    {
+                                        <span class="badge badge-sqlacc">SQLACC</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    }
 </div>
 @if (Model.IsAdmin)
 {

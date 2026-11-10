@@ -681,28 +681,36 @@ public class DetailsModel : SyncPageModel
 {
     private readonly IDatabaseRegistry _registry;
     private readonly IConnectionTestService _test;
+    private readonly IFirebirdSessionKickService _kick;
     private readonly IAuditService _audit;
     private readonly ISdkConnectionBundle _sdkBundle;
     private readonly IWriteProviderSettings _writeProvider;
+    private readonly ILogger<DetailsModel> _logger;
 
     public DetailsModel(
         IDatabaseRegistry registry,
         IConnectionTestService test,
+        IFirebirdSessionKickService kick,
         IAuditService audit,
         ISdkConnectionBundle sdkBundle,
-        IWriteProviderSettings writeProvider)
+        IWriteProviderSettings writeProvider,
+        ILogger<DetailsModel> logger)
     {
         _registry = registry;
         _test = test;
+        _kick = kick;
         _audit = audit;
         _sdkBundle = sdkBundle;
         _writeProvider = writeProvider;
+        _logger = logger;
     }
 
     public RegisteredDatabase? Db { get; set; }
     public List<DatabaseLink> Links { get; set; } = [];
     public string Message { get; set; } = "";
+    public bool MessageOk { get; set; }
     public ConnectionTestResult? LastTest { get; set; }
+    public IReadOnlyList<FirebirdAttachmentRow> Attachments { get; set; } = [];
     public int ActiveSubCount { get; set; }
     public bool IsSdkMode { get; private set; } = true;
     public SdkCompanyCredentials? SdkCred { get; private set; }
@@ -710,6 +718,7 @@ public class DetailsModel : SyncPageModel
     public async Task<IActionResult> OnGetAsync(int id)
     {
         if (!await LoadAsync(id)) return RedirectToPage("Index");
+        await TryLoadAttachmentsAsync();
         return Page();
     }
 
@@ -729,8 +738,57 @@ public class DetailsModel : SyncPageModel
         });
         // Reload so ConnStatus / LastConnOk reflect ONLINE immediately on this page.
         await LoadAsync(id);
+        await TryLoadAttachmentsAsync();
         Message = LastTest.Message;
+        MessageOk = LastTest.Success;
         return Page();
+    }
+
+    public async Task<IActionResult> OnPostKickOthersAsync(int id)
+    {
+        if (!IsAdmin) return Forbid();
+        if (!await LoadAsync(id) || Db is null) return RedirectToPage("Index");
+
+        try
+        {
+            var result = await _kick.KickOthersAsync(Db).ConfigureAwait(false);
+            Attachments = result.Remaining;
+            Message = result.Message;
+            MessageOk = result.Success;
+            await _audit.WriteAsync(new AuditEntry
+            {
+                UserEmail = CurrentEmail,
+                Action = "USER KICKED FIREBIRD SESSIONS",
+                DbId = id,
+                Result = result.Success ? "SUCCESS" : "PARTIAL",
+                AfterJson = $"{{\"killed\":{result.Killed},\"failed\":{result.Failed}}}",
+                RequestId = RequestId.Current(HttpContext)
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Kick other Firebird sessions failed for db {DbId}", id);
+            Message = "Could not list or kick Firebird sessions. Check the connection and SYSDBA rights.";
+            MessageOk = false;
+            await TryLoadAttachmentsAsync();
+        }
+
+        return Page();
+    }
+
+    private async Task TryLoadAttachmentsAsync()
+    {
+        if (!IsAdmin || Db is null)
+            return;
+        try
+        {
+            Attachments = await _kick.ListAsync(Db).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Could not list Firebird attachments for db {DbId}", Db.DbId);
+            Attachments = [];
+        }
     }
 
     private async Task<bool> LoadAsync(int id)
