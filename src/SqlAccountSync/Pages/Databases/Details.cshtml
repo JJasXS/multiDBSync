@@ -6,6 +6,8 @@
 @inject SqlAccountSync.Services.Tenants.TenantMenuFlags MenuFlags
 @{
     ViewData["Title"] = Model.Db?.DisplayName ?? "Database";
+    ViewData["BackHref"] = Url.Page("/Databases/Index");
+    ViewData["BackLabel"] = "Back to Databases";
     var d = Model.Db!;
     var showMappingsUi = FeatureOptions.Value.ShowMappingsUi;
     var online = string.Equals(d.ConnStatus, "ONLINE", StringComparison.OrdinalIgnoreCase);

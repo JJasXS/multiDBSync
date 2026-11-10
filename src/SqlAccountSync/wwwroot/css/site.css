@@ -264,6 +264,24 @@ code {
   border-bottom: 1px solid var(--ice-border-soft);
 }
 .topbar-start { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1 1 auto; }
+.topbar-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  color: var(--ice-heading);
+  text-decoration: none;
+  border: 1px solid var(--ice-border-soft);
+  background: #fff;
+}
+.topbar-back:hover {
+  color: var(--ice-accent-hover);
+  border-color: var(--ice-border);
+  background: var(--ice-surface-soft, #f3f7fb);
+}
 .topbar h2 {
   margin: 0;
   color: var(--ice-heading);
